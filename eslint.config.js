@@ -1,4 +1,5 @@
 import prettier from 'eslint-config-prettier';
+import oxlint from 'eslint-plugin-oxlint';
 import path from 'node:path';
 import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
@@ -38,19 +39,10 @@ export default defineConfig(
 		// 'svelte/button-has-type': 'error'
 		rules: {
 			'svelte/no-navigation-without-resolve': 'off',
-			// ignore `_`-prefixed args, vars, caught errors and destructured siblings
-			'@typescript-eslint/no-unused-vars': [
-				'error',
-				{
-					args: 'all',
-					argsIgnorePattern: '^_',
-					caughtErrors: 'all',
-					caughtErrorsIgnorePattern: '^_',
-					destructuredArrayIgnorePattern: '^_',
-					varsIgnorePattern: '^_',
-					ignoreRestSiblings: true
-				}
-			]
+			// covered by oxlint (see oxlint.config.ts), which also handles the `_` ignore patterns
+			'@typescript-eslint/no-unused-vars': 'off'
 		}
-	}
+	},
+	// must stay last: disables the ESLint rules that oxlint already runs
+	...(await oxlint.buildFromConfigFile('./oxlint.config.ts'))
 );

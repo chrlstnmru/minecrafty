@@ -2,9 +2,12 @@ pre-commit:
   parallel: false
   jobs:
     - name: format
-      glob: '*.{js,ts,svelte,json,css,md,html,yml,yaml}'
-      run: bunx prettier --write --ignore-unknown {staged_files}
+      glob: '*.{js,ts,svelte,json,jsonc,css,md,html,yml,yaml}'
+      run: bunx oxfmt --no-error-on-unmatched-pattern {staged_files}
       stage_fixed: true
-    - name: lint
+    - name: oxlint
+      glob: '*.{js,ts,svelte}'
+      run: bunx oxlint {staged_files}
+    - name: eslint
       glob: '*.{js,ts,svelte}'
       run: bunx eslint {staged_files}
