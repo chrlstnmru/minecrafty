@@ -159,7 +159,25 @@ Build your own modpack on the panel and create instances from it.
 
 - Per instance: CPU and RAM of the Java process, uptime, status.
 - Players online and player list via RCON or server query (panel enables RCON with a random password on creation).
-- Host overview on the dashboard: CPU, RAM, disk.
+- Host overview and the per-instance numbers feed the dashboard (see Dashboard).
+
+### Dashboard
+
+The home page (`/`) replaces the placeholder content that came with the shadcn dashboard block. It shows how the host and the servers are doing, and lets you act on a server without opening it.
+
+- KPI cards, system metrics first:
+  - CPU: host usage now, with a short trend.
+  - RAM: used and total, and how much of it the running instances account for.
+  - Storage: used and free on the volume holding the data folder, and how much instances and backups take.
+  - Instances: running out of total, and how many are installing or failed.
+  - Players online: the total across running instances.
+  - More cards worth having once the data exists: last backup (and any instance with none), host and panel uptime, scheduled tasks due soon.
+- Instances table: every instance in one list, with quick actions and live statistics.
+  - Quick actions per row: start, restart, stop (kill stays on the instance page). Restart is a graceful stop followed by a start, and is only offered while running.
+  - Columns: name (links to the instance), status (including installing and failed), CPU and RAM of the Java process, storage used by the instance folder, players online out of the maximum, and the loader and Minecraft version.
+  - Sortable and filterable by status; the numbers update live (the same live-query mechanism as the instance list).
+- Sampling: CPU and RAM come from the operating system per process (the runner knows the Java PID), host figures from the OS, players from RCON or a server query. Storage is the slow one (walking a world folder), so folder sizes are computed in the background every few minutes and cached rather than on every refresh.
+- Only instances the signed-in user may view appear, matching the per-instance permissions.
 
 ### Users and permissions
 
@@ -197,7 +215,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager, logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, permissions UI.
+4. **Operations** (~3 weeks): file manager, logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
