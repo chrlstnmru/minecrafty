@@ -5,6 +5,7 @@
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Form from '#lib/components/form/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { packOptionsSchema } from '#lib/schemas/packs.js';
@@ -58,7 +59,15 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content class="grid gap-4">
-			{#if current.current?.pack}
+			{#if !current.current}
+				<div class="flex items-center gap-3" role="status" aria-label="Loading">
+					<Skeleton class="size-10 shrink-0" />
+					<div class="grid flex-1 gap-2">
+						<Skeleton class="h-3.5 w-1/3" />
+						<Skeleton class="h-3 w-1/5" />
+					</div>
+				</div>
+			{:else if current.current?.pack}
 				{@const pack = current.current.pack}
 				<div class="flex items-center gap-3">
 					{#if pack.iconUrl}

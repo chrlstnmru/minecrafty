@@ -13,6 +13,8 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { importModpackSchema } from '#lib/schemas/modpack.js';
 	import EulaCheckbox from './eula-checkbox.svelte';
@@ -94,6 +96,7 @@
 			<p class="text-sm text-destructive" role="alert">Search failed. Try again shortly.</p>
 		{/if}
 		<div class="-mx-1 min-h-0 min-w-0 flex-1 overflow-y-auto px-1">
+			{#if !results?.current && !results?.error}<SkeletonRows count={6} />{/if}
 			{#each results?.current?.hits ?? [] as hit (hit.project_id)}
 				<button
 					type="button"
@@ -178,8 +181,10 @@
 
 				<div class="rounded-lg border bg-muted/30 p-3 text-sm">
 					{#if preview?.loading && !preview.current}
-						<div class="flex items-center gap-2 text-muted-foreground">
-							<Spinner />Reading the modpack…
+						<div class="grid gap-2" role="status" aria-label="Reading the modpack">
+							<Skeleton class="h-4 w-1/2" />
+							<Skeleton class="h-4 w-2/3" />
+							<Skeleton class="h-4 w-1/3" />
 						</div>
 					{:else if preview?.error}
 						<p class="text-destructive" role="alert">Could not read this modpack version.</p>

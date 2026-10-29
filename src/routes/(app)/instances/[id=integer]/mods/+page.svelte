@@ -16,6 +16,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
 	const PAGE_SIZE = 20;
@@ -145,6 +146,7 @@
 				</Card.Description>
 			</Card.Header>
 			<Card.Content>
+				{#if !installed.current}<SkeletonRows count={3} icon="size-9" />{/if}
 				{#each installed.current ?? [] as mod (mod.id)}
 					{@const update = updateByMod.get(mod.id)}
 					<div class="flex items-center gap-3 border-b py-2 first:pt-0 last:border-b-0 last:pb-0">
@@ -185,7 +187,9 @@
 						</Button>
 					</div>
 				{:else}
-					<p class="text-sm text-muted-foreground">Nothing installed yet.</p>
+					{#if installed.current}
+						<p class="text-sm text-muted-foreground">Nothing installed yet.</p>
+					{/if}
 				{/each}
 			</Card.Content>
 		</Card.Root>
@@ -217,6 +221,7 @@
 					</p>
 				{/if}
 
+				{#if !results?.current && !results?.error}<SkeletonRows count={5} />{/if}
 				<div class="grid gap-1">
 					{#each results?.current?.hits ?? [] as hit (hit.project_id)}
 						<div class="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50">

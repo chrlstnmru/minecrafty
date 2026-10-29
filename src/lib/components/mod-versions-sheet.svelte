@@ -4,7 +4,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 
 	let {
 		open = $bindable(false),
@@ -60,8 +60,16 @@
 		</Sheet.Header>
 		<div class="flex-1 overflow-y-auto px-4 pb-4">
 			{#if versions?.loading && !versions.current}
-				<div class="flex items-center gap-2 py-4 text-sm text-muted-foreground">
-					<Spinner />Loading versions…
+				<div class="grid gap-3 py-2" role="status" aria-label="Loading versions">
+					{#each [0, 1, 2, 3, 4] as i (i)}
+						<div class="flex items-center gap-3 border-b pb-3">
+							<div class="grid flex-1 gap-2">
+								<Skeleton class="h-3.5 w-1/3" />
+								<Skeleton class="h-3 w-1/4" />
+							</div>
+							<Skeleton class="h-7 w-16" />
+						</div>
+					{/each}
 				</div>
 			{:else if versions?.error}
 				<p class="py-4 text-sm text-destructive" role="alert">Could not load versions.</p>

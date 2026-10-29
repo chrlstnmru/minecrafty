@@ -46,6 +46,7 @@
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -448,7 +449,17 @@
 						</Table.Cell>
 					</Table.Row>
 				{:else}
-					{#if listing.current}
+					{#if !listing.current && !listing.error}
+						{#each [0, 1, 2, 3, 4, 5] as i (i)}
+							<Table.Row>
+								<Table.Cell class="ps-6"><Skeleton class="size-4" /></Table.Cell>
+								<Table.Cell><Skeleton class="h-4 w-40" /></Table.Cell>
+								<Table.Cell><Skeleton class="ms-auto h-4 w-14" /></Table.Cell>
+								<Table.Cell class="hidden sm:table-cell"><Skeleton class="h-4 w-32" /></Table.Cell>
+								<Table.Cell></Table.Cell>
+							</Table.Row>
+						{/each}
+					{:else if listing.current}
 						<Table.Row>
 							<Table.Cell colspan={5} class="ps-6 text-muted-foreground">
 								This folder is empty.

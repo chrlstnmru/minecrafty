@@ -6,6 +6,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
 	let {
@@ -71,6 +72,7 @@
 			<p class="text-sm text-destructive" role="alert">Search failed. Try again shortly.</p>
 		{/if}
 
+		{#if !results.current && !results.error}<SkeletonRows count={5} />{/if}
 		<div class="grid gap-1">
 			{#each results.current?.hits ?? [] as hit (hit.project_id)}
 				<div class="flex items-center gap-3 rounded-lg p-2 hover:bg-muted/50">
