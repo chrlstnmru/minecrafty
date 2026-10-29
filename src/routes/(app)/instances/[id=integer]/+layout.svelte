@@ -87,5 +87,8 @@
 		{/each}
 	</nav>
 
-	{@render children()}
+	<!-- header and tabs stay put; the active module fills the rest and scrolls inside it -->
+	<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+		{@render children()}
+	</div>
 </div>

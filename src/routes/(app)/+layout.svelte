@@ -8,12 +8,14 @@
 </script>
 
 <Sidebar.Provider
+	class="h-svh"
 	style="--sidebar-width: calc(var(--spacing) * 72); --header-height: calc(var(--spacing) * 12);"
 >
 	<AppSidebar variant="inset" user={{ name: data.user.username, role: data.user.role }} />
-	<Sidebar.Inset>
+	<Sidebar.Inset class="min-h-0 overflow-hidden">
 		<SiteHeader />
-		<div class="flex flex-1 flex-col">
+		<!-- the app is exactly viewport-tall; this region scrolls, or a page bounds itself (console) -->
+		<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
 			<div class="@container/main flex flex-1 flex-col gap-2">
 				{@render children()}
 			</div>
