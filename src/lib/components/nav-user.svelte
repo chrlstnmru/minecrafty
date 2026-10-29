@@ -9,10 +9,13 @@
 	let { user }: { user: { name: string; role: string } } = $props();
 
 	const sidebar = Sidebar.useSidebar();
+
+	let logoutForm = $state<HTMLFormElement>();
 </script>
 
 <Sidebar.Menu>
 	<Sidebar.MenuItem>
+		<form {...logout} bind:this={logoutForm} hidden></form>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
@@ -58,16 +61,10 @@
 					</div>
 				</DropdownMenu.Label>
 				<DropdownMenu.Separator />
-				<form {...logout}>
-					<DropdownMenu.Item>
-						{#snippet child({ props })}
-							<button {...props} type="submit" class="w-full">
-								<LogoutIcon />
-								Log out
-							</button>
-						{/snippet}
-					</DropdownMenu.Item>
-				</form>
+				<DropdownMenu.Item onSelect={() => logoutForm?.requestSubmit()}>
+					<LogoutIcon />
+					Log out
+				</DropdownMenu.Item>
 			</DropdownMenu.Content>
 		</DropdownMenu.Root>
 	</Sidebar.MenuItem>
