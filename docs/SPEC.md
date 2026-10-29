@@ -23,7 +23,7 @@ Self-hosted web panel for running and managing Minecraft servers (vanilla and mo
 | Web      | SvelteKit (Svelte 5) with `@sveltejs/adapter-bun`, remote functions |
 | UI       | shadcn-svelte (+ extras) + Tailwind 4, `dashboard-01` app shell     |
 | Database | SQLite via `bun:sqlite` + Drizzle ORM                               |
-| Java     | Eclipse Temurin JDK 8 / 17 / 21, downloaded on demand               |
+| Java     | Eclipse Temurin JRE 8 / 17 / 21 / 25, downloaded on demand          |
 | Tooling  | oxfmt (format), oxlint + eslint (svelte only), lefthook hooks       |
 
 ## Architecture
@@ -67,7 +67,7 @@ Servers must keep running when the panel restarts or updates.
 - Create from: Vanilla, Paper, Purpur, Fabric, Quilt, Forge, NeoForge, or modpack import.
 - Version picker fed by each loader's official API/metadata. The loader build is not chosen: the newest build (stable channel for Paper) is used and recorded.
 - Server jar is downloaded and checksum-verified when the instance is created.
-- Settings: name, RAM min/max, JVM args, Java version (auto-picked from MC version, overridable), port, auto-start on boot. Ports are auto-assigned from 25565 upward and editable.
+- Settings: name, RAM min/max, JVM args, Java version (auto-picked from Mojang's `javaVersion` metadata for the Minecraft version, overridable), port, auto-start on boot. Ports are auto-assigned from 25565 upward and editable.
 - Actions: start, stop, restart, kill, delete.
 - Live console via `query.live` (streamed over HTTP, no WebSocket) with command input and history. Each frame repeats the most recent lines and clients merge by sequence number, because live queries only keep the latest pending value.
 - `server.properties` editor with form fields for common keys.
@@ -163,7 +163,7 @@ Console is the live server output with command input; Logs is the history of log
 | `install.ps1`    | Windows 10/11, Server      | Download panel binary, register Windows service (WinSW)                       |
 | `proxmox-lxc.sh` | Proxmox VE host            | Create Debian LXC (prompts for CPU/RAM/disk/storage), run `install.sh` inside |
 
-- Java is not installed by the scripts; the panel downloads the Temurin JDK each instance needs.
+- Java is not installed by the scripts; the panel downloads the Temurin JRE each instance needs.
 - Scripts print the panel URL and first-run setup link when done.
 - Re-running a script upgrades in place.
 

@@ -7,4 +7,5 @@ export const instancesDir = resolve(dataDir, 'instances');
 // the runner is a standalone Bun script started detached per instance (override for packaged builds)
 export const runnerEntry = resolve(process.env.MINECRAFTY_RUNNER ?? './runner/main.ts');
 
-export const javaCommand = process.env.MINECRAFTY_JAVA ?? 'java';
+// when set, every instance uses this Java instead of a managed Temurin download
+export const javaOverride = process.env.MINECRAFTY_JAVA;

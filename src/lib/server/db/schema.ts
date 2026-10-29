@@ -35,6 +35,8 @@ export const instances = sqliteTable('instances', {
 	port: integer('port').notNull().unique(),
 	ramMinMb: integer('ram_min_mb').notNull().default(1024),
 	ramMaxMb: integer('ram_max_mb').notNull().default(2048),
+	// null = pick from the Minecraft version
+	javaMajor: integer('java_major'),
 	jvmArgs: text('jvm_args').notNull().default(''),
 	autoStart: integer('auto_start', { mode: 'boolean' }).notNull().default(false),
 	eulaAccepted: integer('eula_accepted', { mode: 'boolean' }).notNull().default(false),

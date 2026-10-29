@@ -2,7 +2,8 @@ import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '../../../runner/protocol';
-import { instancesDir, javaCommand, runnerEntry } from './config';
+import { instancesDir, javaOverride, runnerEntry } from './config';
+import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
 import { downloadServerJar, type Loader } from './loaders';
@@ -94,6 +95,12 @@ function setProperties(file: string, values: Record<string, string | number>) {
 	writeFileSync(file, out.filter((l, i) => l || i < out.length - 1).join('\n') + '\n');
 }
 
+/** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */
+export async function javaFor(inst: Instance): Promise<JavaMajor> {
+	const chosen = JAVA_MAJORS.find((m) => m === inst.javaMajor);
+	return chosen ?? (await requiredJavaMajor(inst.mcVersion));
+}
+
 export async function startInstance(id: number) {
 	const inst = getInstance(id);
 	if (!inst) throw new Error('Instance not found');
@@ -115,7 +122,7 @@ export async function startInstance(id: number) {
 	setProperties(join(server, 'server.properties'), { 'server-port': inst.port });
 
 	const spec: LaunchSpec = {
-		command: javaCommand,
+		command: javaOverride ?? (await ensureJava(await javaFor(inst))),
 		args: [
 			`-Xms${inst.ramMinMb}M`,
 			`-Xmx${inst.ramMaxMb}M`,
@@ -163,7 +170,7 @@ export async function deleteInstance(id: number) {
 
 export type InstanceSettings = Pick<
 	Instance,
-	'name' | 'port' | 'ramMinMb' | 'ramMaxMb' | 'jvmArgs' | 'autoStart'
+	'name' | 'port' | 'ramMinMb' | 'ramMaxMb' | 'javaMajor' | 'jvmArgs' | 'autoStart'
 >;
 
 /** Changes apply on the next start; a running server keeps the values it launched with. */

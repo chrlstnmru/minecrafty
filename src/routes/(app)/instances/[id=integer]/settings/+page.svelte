@@ -8,11 +8,12 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(getInstance(id));
-	const { name, port, ramMinMb, ramMaxMb, jvmArgs, autoStart } = updateInstance.fields;
+	const { name, port, ramMinMb, ramMaxMb, javaMajor, jvmArgs, autoStart } = updateInstance.fields;
 
 	// load the stored values into the form when the instance changes or after a save
 	$effect(() => {
@@ -24,6 +25,7 @@
 			port: i.port,
 			ramMinMb: i.ramMinMb,
 			ramMaxMb: i.ramMaxMb,
+			javaMajor: (i.javaMajor ? String(i.javaMajor) : '') as '' | '8' | '17' | '21' | '25',
 			jvmArgs: i.jvmArgs,
 			autoStart: i.autoStart
 		});
@@ -78,6 +80,19 @@
 							<Field.Error errors={ramMaxMb.issues()} />
 						</Field.Field>
 					</div>
+					<Field.Field data-invalid={!!javaMajor.issues()?.length}>
+						<Field.Label for="java">Java</Field.Label>
+						<NativeSelect id="java" {...javaMajor.as('select')}>
+							<NativeSelectOption value="">Automatic (from Minecraft version)</NativeSelectOption>
+							{#each [8, 17, 21, 25] as v (v)}
+								<NativeSelectOption value={String(v)}>Java {v}</NativeSelectOption>
+							{/each}
+						</NativeSelect>
+						<Field.Description>
+							Temurin is downloaded the first time a server needs it.
+						</Field.Description>
+						<Field.Error errors={javaMajor.issues()} />
+					</Field.Field>
 					<Field.Field data-invalid={!!jvmArgs.issues()?.length}>
 						<Field.Label for="jvmArgs">JVM arguments</Field.Label>
 						<Input

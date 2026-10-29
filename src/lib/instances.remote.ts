@@ -87,6 +87,8 @@ export const updateInstance = form(
 			port: z.number().int().min(1024, 'Use a port from 1024').max(65535),
 			ramMinMb: z.number().int().min(256, 'At least 256 MB').max(131072),
 			ramMaxMb: z.number().int().min(512, 'At least 512 MB').max(131072),
+			// '' means auto: pick from the Minecraft version
+			javaMajor: z.enum(['', '8', '17', '21', '25']).transform((v) => (v ? Number(v) : null)),
 			jvmArgs: z
 				.string()
 				.max(1000)
