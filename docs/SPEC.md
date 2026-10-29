@@ -159,6 +159,12 @@ Build your own modpack on the panel and create instances from it.
 - Empty results use the `Empty` component: no logs yet, an empty log, a search with no match (as do empty folders, empty mod and pack lists, and the instance list).
 - Download goes through the file manager's download route. Only plain log names are accepted (never a path), and a log that is a symlink is not listed or read.
 
+### Properties
+
+- A form for the common `server.properties` keys in four groups (General, World, Gameplay, Access and network): checkboxes for booleans, number fields with their range, selects for game mode, difficulty and world type, and text for the rest. Keys in the file that have no field appear under "Other properties" and can be edited but not added. A select shows a value outside its options (`level-type=minecraft:custom`) rather than losing it.
+- Values come from the file, with Minecraft's defaults for keys it lacks (the file only exists after the server first runs). Saving writes just the keys that differ from what the server would use now, keeps comments, order and unknown lines, and is refused as a whole if any value is invalid (range, options, no line breaks, at most 1,000 characters), which the form also shows beside the field.
+- Keys the panel sets itself (`server-port`, the resource pack keys, RCON) are hidden and refused; the port lives in Settings and the pack in Resource packs. Changes apply when the server next starts, and a running server shows a notice saying so.
+
 ### Backups
 
 - Manual and scheduled zip backups of the instance root (configurable excludes).
@@ -232,7 +238,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features

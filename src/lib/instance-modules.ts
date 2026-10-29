@@ -80,7 +80,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'properties',
 		title: 'Properties',
 		icon: FileCodeIcon,
-		planned: 4,
 		description: 'Edit server.properties with form fields for the common keys.'
 	},
 	{
