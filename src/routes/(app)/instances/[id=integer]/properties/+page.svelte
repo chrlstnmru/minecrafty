@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
+	import { fly } from 'svelte/transition';
 	import { saveServerProperties, serverProperties } from '#lib/properties.remote.js';
 	import {
 		MANAGED_KEYS,
@@ -183,12 +184,21 @@
 
 {#if changed.length}
 	<div
-		class="sticky bottom-0 -mx-4 flex max-w-3xl items-center gap-3 border-t bg-background/95 px-4 py-3 backdrop-blur lg:-mx-6 lg:px-6"
+		class="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-3 rounded-xl border bg-popover px-4 py-2.5 text-popover-foreground shadow-lg"
+		role="status"
+		transition:fly={{ y: 24, duration: 150 }}
 	>
-		<span class="me-auto text-sm text-muted-foreground">
-			{changed.length} unsaved {changed.length === 1 ? 'change' : 'changes'}
+		<span class="text-sm">
+			{#if invalid}
+				Fix {Object.keys(errors).length}
+				{Object.keys(errors).length === 1 ? 'value' : 'values'} to save
+			{:else}
+				{changed.length} unsaved {changed.length === 1 ? 'change' : 'changes'}
+			{/if}
 		</span>
-		<Button variant="ghost" onclick={() => (draft = { ...saved })} disabled={saving}>Reset</Button>
-		<Button onclick={save} loading={saving} disabled={invalid}>Save changes</Button>
+		<Button variant="ghost" size="sm" onclick={() => (draft = { ...saved })} disabled={saving}>
+			Reset
+		</Button>
+		<Button size="sm" onclick={save} loading={saving} disabled={invalid}>Save changes</Button>
 	</div>
 {/if}
