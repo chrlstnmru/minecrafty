@@ -79,7 +79,7 @@ Each instance has a dedicated page, `/instances/[id]`, with a shared header (nam
 
 | Module         | Purpose                                                                                | Milestone |
 | -------------- | -------------------------------------------------------------------------------------- | --------- |
-| Console        | Live terminal with command input and history                                           | 1         |
+| Console        | Live server output with command input and history                                      | 1         |
 | Settings       | Name, RAM, JVM args, port, auto-start, delete                                          | 1         |
 | Mods           | Search, install, update, remove mods; track installed mods                             | 3         |
 | Resource packs | Browse and install resource packs (Modrinth/CurseForge), server resource-pack settings | 3         |
