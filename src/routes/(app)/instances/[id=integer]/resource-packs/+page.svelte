@@ -4,6 +4,7 @@
 	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import FormCheckbox from '#lib/components/form-checkbox.svelte';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -89,7 +90,7 @@
 				<input {...setPackOptions.fields.id.as('number')} type="hidden" />
 				<Field.Group>
 					<Field.Field orientation="horizontal">
-						<input id="required" class="size-4 accent-primary" {...required.as('checkbox')} />
+						<FormCheckbox id="required" field={required} />
 						<Field.Label for="required" class="font-normal">
 							Require the pack (players who decline are kicked)
 						</Field.Label>

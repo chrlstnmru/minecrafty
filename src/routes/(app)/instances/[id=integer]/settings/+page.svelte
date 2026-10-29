@@ -5,6 +5,7 @@
 	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import FormCheckbox from '#lib/components/form-checkbox.svelte';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
@@ -106,7 +107,7 @@
 						<Field.Error errors={jvmArgs.issues()} />
 					</Field.Field>
 					<Field.Field orientation="horizontal">
-						<input id="autoStart" class="size-4 accent-primary" {...autoStart.as('checkbox')} />
+						<FormCheckbox id="autoStart" field={autoStart} />
 						<Field.Label for="autoStart" class="font-normal">
 							Start automatically when the panel starts
 						</Field.Label>

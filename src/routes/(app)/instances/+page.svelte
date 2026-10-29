@@ -14,13 +14,14 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import FormCheckbox from '#lib/components/form-checkbox.svelte';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 
-	const instances = listInstances();
+	const instances = $derived(await listInstances());
 	const { name, loader, mcVersion, port, ramMaxMb, eulaAccepted } = createInstance.fields;
 
 	type LoaderId = 'vanilla' | 'paper' | 'purpur' | 'fabric' | 'quilt' | 'forge' | 'neoforge';
@@ -64,7 +65,7 @@
 		<Button onclick={openCreate}><PlusIcon />New instance</Button>
 	</div>
 
-	{#if !instances.current?.length}
+	{#if !instances.length}
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>No instances yet</Card.Title>
@@ -74,7 +75,7 @@
 	{/if}
 
 	<div class="grid gap-4 @3xl/main:grid-cols-2 @5xl/main:grid-cols-3">
-		{#each instances.current ?? [] as inst (inst.id)}
+		{#each instances ?? [] as inst (inst.id)}
 			{@const active = inst.state === 'running' || inst.state === 'stopping'}
 			<Card.Root>
 				<Card.Header>
@@ -169,7 +170,7 @@
 					</Field.Field>
 				</div>
 				<Field.Field orientation="horizontal" data-invalid={!!eulaAccepted.issues()?.length}>
-					<input id="eula" class="size-4 accent-primary" {...eulaAccepted.as('checkbox')} />
+					<FormCheckbox id="eula" field={eulaAccepted} />
 					<Field.Label for="eula" class="font-normal">
 						I accept the Minecraft EULA (aka.ms/MinecraftEULA)
 					</Field.Label>
