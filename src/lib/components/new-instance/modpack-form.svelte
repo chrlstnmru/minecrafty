@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -14,6 +15,7 @@
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { importModpackSchema } from '#lib/schemas/modpack.js';
@@ -125,7 +127,15 @@
 					</span>
 				</button>
 			{:else}
-				{#if results?.current}<p class="text-sm text-muted-foreground">No modpacks found.</p>{/if}
+				{#if results?.current}
+					<Empty.Root class="border">
+						<Empty.Header>
+							<Empty.Media variant="icon"><SearchOffIcon /></Empty.Media>
+							<Empty.Title>No modpacks found</Empty.Title>
+							<Empty.Description>Try a different search.</Empty.Description>
+						</Empty.Header>
+					</Empty.Root>
+				{/if}
 			{/each}
 			{#if results?.current && results.current.hits.length < results.current.total}
 				<div class="py-2">

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import { toast } from 'svelte-sonner';
 	import {
@@ -17,6 +19,7 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
 	const PAGE_SIZE = 20;
@@ -188,7 +191,13 @@
 					</div>
 				{:else}
 					{#if installed.current}
-						<p class="text-sm text-muted-foreground">Nothing installed yet.</p>
+						<Empty.Root class="border">
+							<Empty.Header>
+								<Empty.Media variant="icon"><PackageOffIcon /></Empty.Media>
+								<Empty.Title>Nothing installed yet</Empty.Title>
+								<Empty.Description>Search below to add {info.noun}s.</Empty.Description>
+							</Empty.Header>
+						</Empty.Root>
 					{/if}
 				{/each}
 			</Card.Content>
@@ -256,7 +265,13 @@
 						</div>
 					{:else}
 						{#if results?.current}
-							<p class="text-sm text-muted-foreground">No {info.noun}s found.</p>
+							<Empty.Root class="border">
+								<Empty.Header>
+									<Empty.Media variant="icon"><SearchOffIcon /></Empty.Media>
+									<Empty.Title>No {info.noun}s found</Empty.Title>
+									<Empty.Description>Try a different search.</Empty.Description>
+								</Empty.Header>
+							</Empty.Root>
 						{/if}
 					{/each}
 				</div>

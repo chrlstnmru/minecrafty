@@ -1,4 +1,5 @@
 <script lang="ts">
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import { searchPacks } from '#lib/packs.remote.js';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
@@ -6,6 +7,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
@@ -110,7 +112,15 @@
 				</div>
 			{:else}
 				{#if results.current}
-					<p class="text-sm text-muted-foreground">No {noun}s found for this Minecraft version.</p>
+					<Empty.Root class="border">
+						<Empty.Header>
+							<Empty.Media variant="icon"><SearchOffIcon /></Empty.Media>
+							<Empty.Title>No {noun}s found</Empty.Title>
+							<Empty.Description
+								>None match this search for this Minecraft version.</Empty.Description
+							>
+						</Empty.Header>
+					</Empty.Root>
 				{/if}
 			{/each}
 		</div>

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
+	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import {
 		deleteInstance,
@@ -13,6 +14,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 
 	const instances = $derived(await listInstances());
@@ -50,12 +52,16 @@
 	</div>
 
 	{#if !instances.length}
-		<Card.Root>
-			<Card.Header>
-				<Card.Title>No instances yet</Card.Title>
-				<Card.Description>Create your first server to get started.</Card.Description>
-			</Card.Header>
-		</Card.Root>
+		<Empty.Root class="border">
+			<Empty.Header>
+				<Empty.Media variant="icon"><ServerIcon /></Empty.Media>
+				<Empty.Title>No instances yet</Empty.Title>
+				<Empty.Description>Create your first server to get started.</Empty.Description>
+			</Empty.Header>
+			<Empty.Content>
+				<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
+			</Empty.Content>
+		</Empty.Root>
 	{/if}
 
 	<div class="grid gap-4 @3xl/main:grid-cols-2 @5xl/main:grid-cols-3">

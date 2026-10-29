@@ -8,6 +8,7 @@
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
 	import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
 	import FileZipIcon from '@tabler/icons-svelte/icons/file-zip';
+	import FolderOpenIcon from '@tabler/icons-svelte/icons/folder-open';
 	import FolderIcon from '@tabler/icons-svelte/icons/folder';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
 	import LockIcon from '@tabler/icons-svelte/icons/lock';
@@ -48,6 +49,7 @@
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
@@ -483,8 +485,16 @@
 						{/each}
 					{:else if listing.current}
 						<Table.Row>
-							<Table.Cell colspan={5} class="ps-6 text-muted-foreground">
-								This folder is empty.
+							<Table.Cell colspan={5}>
+								<Empty.Root class="border-0 py-10">
+									<Empty.Header>
+										<Empty.Media variant="icon"><FolderOpenIcon /></Empty.Media>
+										<Empty.Title>This folder is empty</Empty.Title>
+										<Empty.Description
+											>Upload files or create a new file or folder.</Empty.Description
+										>
+									</Empty.Header>
+								</Empty.Root>
 							</Table.Cell>
 						</Table.Row>
 					{/if}

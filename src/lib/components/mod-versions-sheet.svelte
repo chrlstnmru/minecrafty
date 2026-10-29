@@ -1,9 +1,11 @@
 <script lang="ts">
+	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
 	import { modVersions } from '#lib/mods.remote.js';
 	import { packVersions } from '#lib/packs.remote.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 
 	let {
@@ -95,7 +97,15 @@
 				</div>
 			{:else}
 				{#if versions?.current}
-					<p class="py-4 text-sm text-muted-foreground">No compatible versions.</p>
+					<Empty.Root class="border">
+						<Empty.Header>
+							<Empty.Media variant="icon"><PackageOffIcon /></Empty.Media>
+							<Empty.Title>No compatible versions</Empty.Title>
+							<Empty.Description
+								>Nothing here runs on this server's loader and Minecraft version.</Empty.Description
+							>
+						</Empty.Header>
+					</Empty.Root>
 				{/if}
 			{/each}
 		</div>

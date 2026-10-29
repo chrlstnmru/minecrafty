@@ -153,9 +153,10 @@ Build your own modpack on the panel and create instances from it.
 
 ### Logs
 
-- Lists `logs/latest.log` first, then rotated logs (`*.log`, `*.log.gz`, newest first), and shows the last 2,000 lines of the chosen file with line numbers; "Show 2,000 more" extends it to 20,000. WARN and ERROR lines are coloured. Rows have a fixed height (long lines scroll sideways) and are virtualized with TanStack Virtual, so a 20,000-line log keeps about 50 rows in the DOM.
+- Lists `logs/latest.log` first, then rotated logs (`*.log`, `*.log.gz`, newest first), and shows the last 2,000 lines of the chosen file with line numbers; "Show 2,000 more" extends it to 20,000. WARN and ERROR lines are coloured. Rows are virtualized with TanStack Virtual, so a 20,000-line log keeps about 50 rows in the DOM. The viewer is only as wide as the log's longest line (up to the page), long lines scroll sideways, and line numbers stay in view while scrolling. A Wrap toggle wraps long lines instead; rows are then measured, since their heights differ.
 - A Live toggle (on by default for `latest.log`) follows the file: the server watches it and streams new complete lines through a live query, and the view sticks to the bottom until you scroll up, when a "Jump to latest" button appears. When the server restarts and `latest.log` is replaced, the view reloads. Refresh reloads by hand; the Console remains the place for the server's own live output.
 - Search scans the whole file (rotated logs are decompressed as a stream, capped at 512 MB of text) and shows the first 500 matching lines with the match highlighted and the total count; "Aa" matches case.
+- Empty results use the `Empty` component: no logs yet, an empty log, a search with no match (as do empty folders, empty mod and pack lists, and the instance list).
 - Download goes through the file manager's download route. Only plain log names are accepted (never a path), and a log that is a symlink is not listed or read.
 
 ### Backups

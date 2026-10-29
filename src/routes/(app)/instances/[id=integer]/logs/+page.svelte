@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { tick, untrack } from 'svelte';
+	import { get } from 'svelte/store';
 	import { page } from '$app/state';
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
+	import TextWrapIcon from '@tabler/icons-svelte/icons/text-wrap';
+	import FileOffIcon from '@tabler/icons-svelte/icons/file-off';
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import { TAIL_LINES } from '#lib/log-files.js';
@@ -12,6 +16,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
 
@@ -49,6 +54,7 @@
 	const ROW = 20;
 
 	let follow = $state(true);
+	let wrap = $state(false);
 	const canFollow = $derived(name === 'latest.log' && !searching);
 	const live = $derived(follow && canFollow ? followLog(id) : null);
 
@@ -111,8 +117,30 @@
 		untrack(() => $virtualizer.setOptions({ count, getScrollElement: () => element ?? null }));
 	});
 
+	$effect(() => {
+		void wrap;
+		untrack(() => get(virtualizer).measure());
+	});
+
+	$effect(() => {
+		void $virtualizer.getTotalSize();
+		if (pinned) toBottom();
+	});
+
+	function measure(node: HTMLElement) {
+		get(virtualizer).measureElement(node);
+		return () => get(virtualizer).measureElement(null);
+	}
+
+	let lastTop = 0;
+
+	/** Only moving up leaves the bottom: layout changes (wrapping, measuring) never lower scrollTop. */
 	function onScroll() {
-		if (scroller) pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 40;
+		if (!scroller) return;
+		const top = scroller.scrollTop;
+		if (scroller.scrollHeight - top - scroller.clientHeight <= 40) pinned = true;
+		else if (top < lastTop) pinned = false;
+		lastTop = top;
 	}
 
 	function toBottom() {
@@ -121,7 +149,7 @@
 
 	$effect(() => {
 		if (!tail?.current && !found?.current) return;
-		pinned = true;
+		pinned = !stayAtTop;
 		void tick().then(() => {
 			if (!scroller) return;
 			scroller.scrollTop = stayAtTop ? 0 : scroller.scrollHeight;
@@ -202,6 +230,14 @@
 				>
 			</InputGroup.Addon>
 		</InputGroup.Root>
+		<Toggle
+			variant="outline"
+			bind:pressed={wrap}
+			aria-label="Wrap long lines"
+			title="Wrap long lines"
+		>
+			<TextWrapIcon />Wrap
+		</Toggle>
 		{#if canFollow}
 			<Toggle
 				variant="outline"
@@ -250,16 +286,25 @@
 		</p>
 	{/if}
 
-	<div class="relative min-h-80 flex-1">
+	<div
+		class="relative min-h-80 w-full flex-1 font-mono text-xs"
+		style={wrap || !rows.length ? '' : `max-width: calc(${widest}ch + 4.75rem + 2px)`}
+	>
 		<div
 			bind:this={scroller}
 			onscroll={onScroll}
-			class="absolute inset-0 overflow-auto rounded-lg border bg-muted/40 py-3 font-mono text-xs leading-5"
+			class="absolute inset-0 overflow-auto rounded-lg border bg-muted/40 py-3 leading-5"
 			role="log"
 			aria-live="off"
 		>
 			{#if files.current && !files.current.length}
-				<p class="px-3 text-muted-foreground">No logs yet. They appear once the server has run.</p>
+				<Empty.Root class="h-full font-sans">
+					<Empty.Header>
+						<Empty.Media variant="icon"><FileOffIcon /></Empty.Media>
+						<Empty.Title>No logs yet</Empty.Title>
+						<Empty.Description>They appear once the server has run.</Empty.Description>
+					</Empty.Header>
+				</Empty.Root>
 			{:else if !view?.current && !view?.error}
 				<div class="grid gap-2 px-3" role="status" aria-label="Loading the log">
 					{#each [60, 85, 40, 75, 55, 90, 45] as width, i (i)}
@@ -269,27 +314,45 @@
 			{:else if view?.error}
 				<p class="px-3 text-destructive" role="alert">Could not read this log.</p>
 			{:else if !rows.length}
-				<p class="px-3 text-muted-foreground">
-					{searching ? 'Nothing matches.' : 'This log is empty.'}
-				</p>
+				{#if searching}
+					<Empty.Root class="h-full font-sans">
+						<Empty.Header>
+							<Empty.Media variant="icon"><SearchOffIcon /></Empty.Media>
+							<Empty.Title>Nothing matches</Empty.Title>
+							<Empty.Description>No line in this log contains “{debounced}”.</Empty.Description>
+						</Empty.Header>
+					</Empty.Root>
+				{:else}
+					<Empty.Root class="h-full font-sans">
+						<Empty.Header>
+							<Empty.Media variant="icon"><FileOffIcon /></Empty.Media>
+							<Empty.Title>This log is empty</Empty.Title>
+						</Empty.Header>
+					</Empty.Root>
+				{/if}
 			{/if}
 			<div
 				class="relative min-w-full"
-				style="height: {$virtualizer.getTotalSize()}px; width: calc({widest}ch + 5rem)"
+				style="height: {$virtualizer.getTotalSize()}px;{wrap
+					? ''
+					: ` width: calc(${widest}ch + 4.75rem)`}"
 			>
 				{#each $virtualizer.getVirtualItems() as item (item.key)}
 					{@const row = rows[item.index]}
 					{#if row}
 						<div
-							class="absolute top-0 left-0 flex h-5 w-full gap-3 px-3 whitespace-pre {level(
-								row.text
-							)}"
+							class="absolute top-0 left-0 flex w-full {wrap
+								? 'whitespace-pre-wrap'
+								: 'h-5 whitespace-pre'} {level(row.text)}"
 							style="transform: translateY({item.start}px)"
+							data-index={item.index}
+							{@attach wrap ? measure : undefined}
 						>
-							<span class="w-12 shrink-0 text-end text-muted-foreground/70 select-none"
+							<span
+								class="sticky left-0 z-10 w-16 shrink-0 border-r bg-muted pr-2 pl-3 text-end text-muted-foreground/70 select-none"
 								>{row.n}</span
 							>
-							<span
+							<span class="min-w-0 flex-1 pr-3 pl-3 {wrap ? 'break-words' : ''}"
 								>{#each parts(row.text) as part, i (i)}{#if part.hit}<mark
 											class="rounded-sm bg-yellow-300/60 text-inherit dark:bg-yellow-400/30"
 											>{part.text}</mark
