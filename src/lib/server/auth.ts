@@ -1,3 +1,5 @@
+import { error } from '@sveltejs/kit';
+import { getRequestEvent } from '$app/server';
 import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
@@ -58,4 +60,12 @@ export function userFromCookies(cookies: Cookies): SessionUser | null {
 			.where(and(eq(sessions.id, hashToken(token)), gt(sessions.expiresAt, new Date())))
 			.get() ?? null
 	);
+}
+
+/** Guards remote functions. Per-instance permissions arrive with the permissions UI (M4). */
+export function requireAdmin() {
+	const { locals } = getRequestEvent();
+	if (!locals.user) error(401, 'Not signed in');
+	if (locals.user.role !== 'admin') error(403, 'Admin only');
+	return locals.user;
 }
