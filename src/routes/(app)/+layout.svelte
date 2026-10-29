@@ -16,7 +16,7 @@
 		<SiteHeader />
 		<!-- the app is exactly viewport-tall; this region scrolls, or a page bounds itself (console) -->
 		<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
-			<div class="@container/main flex flex-1 flex-col gap-2">
+			<div class="@container/main flex min-h-0 flex-1 flex-col gap-2">
 				{@render children()}
 			</div>
 		</div>
