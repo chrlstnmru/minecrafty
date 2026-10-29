@@ -456,7 +456,8 @@
 								<Table.Cell><Skeleton class="h-4 w-40" /></Table.Cell>
 								<Table.Cell><Skeleton class="ms-auto h-4 w-14" /></Table.Cell>
 								<Table.Cell class="hidden sm:table-cell"><Skeleton class="h-4 w-32" /></Table.Cell>
-								<Table.Cell></Table.Cell>
+								<!-- as tall as the action button, so rows do not change height when data arrives -->
+								<Table.Cell class="pe-6"><Skeleton class="size-7" /></Table.Cell>
 							</Table.Row>
 						{/each}
 					{:else if listing.current}
