@@ -40,7 +40,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'logs',
 		title: 'Logs',
 		icon: FileTextIcon,
-		planned: 4,
 		description: 'Browse current and rotated log files with search and download.'
 	},
 	{

@@ -151,6 +151,12 @@ Build your own modpack on the panel and create instances from it.
 - Path safety on every operation: `..`, absolute paths, Windows drive paths and NUL bytes are refused, and a path is checked through symlinks, so a link pointing outside the instance cannot be listed, read, written, created in, deleted from or uploaded into. New names are one plain name, never a path; the instance folder itself cannot be renamed or deleted.
 - Protected files: the files a server cannot start without (`server.jar`, `fabric-server-launch.jar`, `quilt-server-launch.jar`, `forge-*.jar`, `eula.txt`, `run.sh`, `run.bat` at the root, and the `libraries/` folder with everything in it) cannot be deleted, renamed, or replaced by an upload, a new file or a new folder, whichever route the request takes (names compare without case, trailing dots or spaces). The listing marks them locked: a lock icon, disabled Rename and Delete, and no selection checkbox. Text files among them, such as `eula.txt`, can still be edited. This guards against accidents; it is not a security boundary, since the console can do anything. Planned: warn before touching `world/`, `ops.json`, `whitelist.json` and `server.properties` while the server runs.
 
+### Logs
+
+- Lists `logs/latest.log` first, then rotated logs (`*.log`, `*.log.gz`, newest first), and shows the last 2,000 lines of the chosen file with line numbers; "Show 2,000 more" extends it to 20,000. WARN and ERROR lines are coloured. Refresh reloads; the live view is the Console.
+- Search scans the whole file (rotated logs are decompressed as a stream, capped at 512 MB of text) and shows the first 500 matching lines with the match highlighted and the total count; "Aa" matches case.
+- Download goes through the file manager's download route. Only plain log names are accepted (never a path), and a log that is a symlink is not listed or read.
+
 ### Backups
 
 - Manual and scheduled zip backups of the instance root (configurable excludes).
@@ -224,7 +230,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
