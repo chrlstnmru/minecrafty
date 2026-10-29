@@ -73,6 +73,26 @@ export const propertyGroups: PropertyGroup[] = [
 		]
 	},
 	{
+		title: 'Performance and limits',
+		description: 'How far players see and how much the server sends.',
+		fields: [
+			num('view-distance', 'View distance (chunks)', 10, 3, 32),
+			num('simulation-distance', 'Simulation distance (chunks)', 10, 3, 32),
+			num('spawn-protection', 'Spawn protection (blocks)', 16, 0, 29_999_984),
+			num('max-world-size', 'Max world radius (blocks)', 29_999_984, 1, 29_999_984),
+			num('entity-broadcast-range-percentage', 'Entity range (%)', 100, 10, 1000),
+			num(
+				'network-compression-threshold',
+				'Compression threshold (bytes)',
+				256,
+				-1,
+				1_000_000,
+				'-1 turns compression off.'
+			),
+			bool('sync-chunk-writes', 'Synchronous chunk writes', true)
+		]
+	},
+	{
 		title: 'World',
 		description: 'Applies when the world is created, except where noted.',
 		fields: [
@@ -90,11 +110,28 @@ export const propertyGroups: PropertyGroup[] = [
 				'minecraft:amplified'
 			]),
 			bool('generate-structures', 'Generate structures', true),
-			bool('allow-nether', 'Allow the Nether', true),
-			num('spawn-protection', 'Spawn protection (blocks)', 16, 0, 29_999_984),
-			num('max-world-size', 'Max world radius (blocks)', 29_999_984, 1, 29_999_984),
-			num('view-distance', 'View distance (chunks)', 10, 3, 32),
-			num('simulation-distance', 'Simulation distance (chunks)', 10, 3, 32)
+			bool('allow-nether', 'Allow the Nether', true)
+		]
+	},
+	{
+		title: 'Access',
+		description: 'Who can join and whether the server is listed.',
+		fields: [
+			bool(
+				'online-mode',
+				'Verify players with Mojang',
+				true,
+				'Turn off only behind a proxy that does its own verification.'
+			),
+			bool('white-list', 'Whitelist', false, 'Only whitelisted players can join.'),
+			bool(
+				'enforce-whitelist',
+				'Enforce whitelist',
+				false,
+				'Kick players who are removed from it.'
+			),
+			bool('enable-status', 'Show in the server list', true),
+			bool('hide-online-players', 'Hide the player list', false)
 		]
 	},
 	{
@@ -119,38 +156,7 @@ export const propertyGroups: PropertyGroup[] = [
 				1_000_000,
 				'0 never kicks idle players.'
 			),
-			num('op-permission-level', 'Operator level', 4, 1, 4),
-			num('entity-broadcast-range-percentage', 'Entity range (%)', 100, 10, 1000)
-		]
-	},
-	{
-		title: 'Access and network',
-		description: 'Who can join and how the server talks to clients.',
-		fields: [
-			bool(
-				'online-mode',
-				'Verify players with Mojang',
-				true,
-				'Turn off only behind a proxy that does its own verification.'
-			),
-			bool('white-list', 'Whitelist', false, 'Only whitelisted players can join.'),
-			bool(
-				'enforce-whitelist',
-				'Enforce whitelist',
-				false,
-				'Kick players who are removed from it.'
-			),
-			bool('enable-status', 'Show in the server list', true),
-			bool('hide-online-players', 'Hide the player list', false),
-			num(
-				'network-compression-threshold',
-				'Compression threshold (bytes)',
-				256,
-				-1,
-				1_000_000,
-				'-1 turns compression off.'
-			),
-			bool('sync-chunk-writes', 'Synchronous chunk writes', true)
+			num('op-permission-level', 'Operator level', 4, 1, 4)
 		]
 	}
 ];

@@ -112,7 +112,7 @@
 		{/each}
 
 		{#if others.length}
-			<Card.Root class="mb-4 [column-span:all]">
+			<Card.Root class="mt-4 mb-4 [column-span:all]">
 				<Card.Header>
 					<Card.Title>Other properties</Card.Title>
 					<Card.Description>

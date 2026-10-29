@@ -161,7 +161,7 @@ Build your own modpack on the panel and create instances from it.
 
 ### Properties
 
-- A form for the common `server.properties` keys in four groups (General, World, Gameplay, Access and network): checkboxes for booleans, number fields with their range, selects for game mode, difficulty and world type, and text for the rest. Keys in the file that have no field appear under "Other properties" and can be edited but not added. A select shows a value outside its options (`level-type=minecraft:custom`) rather than losing it.
+- A form for the common `server.properties` keys in five groups (General, Performance and limits, World, Access, Gameplay, ordered so the two columns come out about equally tall): checkboxes for booleans, number fields with their range, selects for game mode, difficulty and world type, and text for the rest. Keys in the file that have no field appear under "Other properties" and can be edited but not added. A select shows a value outside its options (`level-type=minecraft:custom`) rather than losing it.
 - Values come from the file, with Minecraft's defaults for keys it lacks (the file only exists after the server first runs). Saving writes just the keys that differ from what the server would use now, keeps comments, order and unknown lines, and is refused as a whole if any value is invalid (range, options, no line breaks, at most 1,000 characters), which the form also shows beside the field.
 - Keys the panel sets itself (`server-port`, the resource pack keys, RCON) are hidden and refused; the port lives in Settings and the pack in Resource packs. Changes apply when the server next starts, and a running server shows a notice saying so.
 
