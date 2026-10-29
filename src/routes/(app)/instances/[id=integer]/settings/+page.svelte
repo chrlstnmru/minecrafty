@@ -5,11 +5,10 @@
 	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import FormCheckbox from '#lib/components/form-checkbox.svelte';
+	import * as Form from '#lib/components/form/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import { updateInstanceSchema } from '#lib/schemas/instance.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -32,6 +31,11 @@
 		});
 	});
 
+	const javaOptions = [
+		{ value: '', label: 'Automatic (from Minecraft version)' },
+		...[8, 17, 21, 25].map((v) => ({ value: String(v), label: `Java ${v}` }))
+	];
+
 	let confirmDelete = $state(false);
 
 	async function remove() {
@@ -51,73 +55,43 @@
 			<Card.Description>Changes apply the next time the server starts.</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			<form
-				{...updateInstance.enhance(async ({ submit }) => {
-					await submit();
-					if (!updateInstance.fields.allIssues()?.length) toast.success('Settings saved');
-				})}
+			<Form.Root
+				schema={updateInstanceSchema}
+				remoteFunction={updateInstance}
+				onSubmitted={(succeeded) => {
+					if (succeeded) toast.success('Settings saved');
+				}}
 			>
-				<input {...updateInstance.fields.id.as('number')} type="hidden" />
-				<Field.Group>
-					<Field.Field data-invalid={!!name.issues()?.length}>
-						<Field.Label for="name">Name</Field.Label>
-						<Input id="name" {...name.as('text')} />
-						<Field.Error errors={name.issues()} />
-					</Field.Field>
-					<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-						<Field.Field data-invalid={!!port.issues()?.length}>
-							<Field.Label for="port">Port</Field.Label>
-							<Input id="port" {...port.as('number')} />
-							<Field.Error errors={port.issues()} />
-						</Field.Field>
-						<Field.Field data-invalid={!!ramMinMb.issues()?.length}>
-							<Field.Label for="ramMin">Min RAM (MB)</Field.Label>
-							<Input id="ramMin" {...ramMinMb.as('number')} />
-							<Field.Error errors={ramMinMb.issues()} />
-						</Field.Field>
-						<Field.Field data-invalid={!!ramMaxMb.issues()?.length}>
-							<Field.Label for="ramMax">Max RAM (MB)</Field.Label>
-							<Input id="ramMax" {...ramMaxMb.as('number')} />
-							<Field.Error errors={ramMaxMb.issues()} />
-						</Field.Field>
-					</div>
-					<Field.Field data-invalid={!!javaMajor.issues()?.length}>
-						<Field.Label for="java">Java</Field.Label>
-						<NativeSelect id="java" {...javaMajor.as('select')}>
-							<NativeSelectOption value="">Automatic (from Minecraft version)</NativeSelectOption>
-							{#each [8, 17, 21, 25] as v (v)}
-								<NativeSelectOption value={String(v)}>Java {v}</NativeSelectOption>
-							{/each}
-						</NativeSelect>
-						<Field.Description>
-							Temurin is downloaded the first time a server needs it.
-						</Field.Description>
-						<Field.Error errors={javaMajor.issues()} />
-					</Field.Field>
-					<Field.Field data-invalid={!!jvmArgs.issues()?.length}>
-						<Field.Label for="jvmArgs">JVM arguments</Field.Label>
-						<Input
-							id="jvmArgs"
+				{#snippet children({ pending })}
+					<input {...updateInstance.fields.id.as('number')} type="hidden" />
+					<Field.Group>
+						<Form.Input label="Name" field={name} />
+						<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+							<Form.Input label="Port" type="number" field={port} />
+							<Form.Input label="Min RAM (MB)" type="number" field={ramMinMb} />
+							<Form.Input label="Max RAM (MB)" type="number" field={ramMaxMb} />
+						</div>
+						<Form.Select
+							label="Java"
+							field={javaMajor}
+							description="Temurin is downloaded the first time a server needs it."
+							options={javaOptions}
+						/>
+						<Form.Input
+							label="JVM arguments"
+							field={jvmArgs}
 							class="font-mono"
 							placeholder="-XX:+UseG1GC"
-							{...jvmArgs.as('text')}
+							description="Added after the memory flags, separated by spaces."
 						/>
-						<Field.Description>Added after the memory flags, separated by spaces.</Field.Description
-						>
-						<Field.Error errors={jvmArgs.issues()} />
-					</Field.Field>
-					<Field.Field orientation="horizontal">
-						<FormCheckbox id="autoStart" field={autoStart} />
-						<Field.Label for="autoStart" class="font-normal">
-							Start automatically when the panel starts
-						</Field.Label>
-					</Field.Field>
-					<Field.Error errors={updateInstance.fields.allIssues()} />
-					<div>
-						<Button type="submit" loading={updateInstance.pending > 0}>Save changes</Button>
-					</div>
-				</Field.Group>
-			</form>
+						<Form.Checkbox field={autoStart} label="Start automatically when the panel starts" />
+						<Form.Errors form={updateInstance} />
+						<div>
+							<Button type="submit" loading={pending > 0}>Save changes</Button>
+						</div>
+					</Field.Group>
+				{/snippet}
+			</Form.Root>
 		</Card.Content>
 	</Card.Root>
 

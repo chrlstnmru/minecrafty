@@ -3,16 +3,8 @@ import { rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { downloadFile, type Download, type Hash } from './download';
 
-export const LOADERS = [
-	'vanilla',
-	'paper',
-	'purpur',
-	'fabric',
-	'quilt',
-	'forge',
-	'neoforge'
-] as const;
-export type Loader = (typeof LOADERS)[number];
+export { LOADERS, type Loader } from '../loader-list';
+import type { Loader } from '../loader-list';
 
 const MOJANG_MANIFEST = 'https://piston-meta.mojang.com/mc/game/version_manifest_v2.json';
 const PAPER = 'https://fill.papermc.io/v3/projects/paper';

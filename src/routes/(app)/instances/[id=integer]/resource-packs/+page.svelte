@@ -4,10 +4,10 @@
 	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import FormCheckbox from '#lib/components/form-checkbox.svelte';
+	import * as Form from '#lib/components/form/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
+	import { packOptionsSchema } from '#lib/schemas/packs.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -81,36 +81,32 @@
 				<p class="text-sm text-muted-foreground">No server resource pack is set.</p>
 			{/if}
 
-			<form
-				{...setPackOptions.enhance(async ({ submit }) => {
-					await submit();
-					if (!setPackOptions.fields.allIssues()?.length) toast.success('Options saved');
-				})}
+			<Form.Root
+				schema={packOptionsSchema}
+				remoteFunction={setPackOptions}
+				onSubmitted={(succeeded) => {
+					if (succeeded) toast.success('Options saved');
+				}}
 			>
-				<input {...setPackOptions.fields.id.as('number')} type="hidden" />
-				<Field.Group>
-					<Field.Field orientation="horizontal">
-						<FormCheckbox id="required" field={required} />
-						<Field.Label for="required" class="font-normal">
-							Require the pack (players who decline are kicked)
-						</Field.Label>
-					</Field.Field>
-					<Field.Field data-invalid={!!prompt.issues()?.length}>
-						<Field.Label for="prompt">Prompt message</Field.Label>
-						<Input
-							id="prompt"
-							placeholder="Shown with the download prompt"
-							{...prompt.as('text')}
+				{#snippet children({ pending })}
+					<input {...setPackOptions.fields.id.as('number')} type="hidden" />
+					<Field.Group>
+						<Form.Checkbox
+							field={required}
+							label="Require the pack (players who decline are kicked)"
 						/>
-						<Field.Error errors={prompt.issues()} />
-					</Field.Field>
-					<div>
-						<Button type="submit" variant="outline" loading={setPackOptions.pending > 0}>
-							Save options
-						</Button>
-					</div>
-				</Field.Group>
-			</form>
+						<Form.Input
+							label="Prompt message"
+							field={prompt}
+							placeholder="Shown with the download prompt"
+						/>
+						<Form.Errors form={setPackOptions} />
+						<div>
+							<Button type="submit" variant="outline" loading={pending > 0}>Save options</Button>
+						</div>
+					</Field.Group>
+				{/snippet}
+			</Form.Root>
 		</Card.Content>
 	</Card.Root>
 

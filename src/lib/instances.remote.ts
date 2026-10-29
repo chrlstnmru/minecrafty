@@ -1,13 +1,15 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { requireAdmin } from '#lib/server/auth.js';
+import { idSchema } from '#lib/schemas/common.js';
+import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
 import * as runner from '#lib/server/runner-client.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
 
-const id = z.number().int().positive();
+const id = idSchema;
 
 // there is no runner event for "instance changed", so the stream samples the panel's view of them
 export const listInstances = query.live(async function* () {
@@ -31,7 +33,7 @@ export const getInstance = query(id, async (instanceId) => {
 	return row;
 });
 
-const loader = z.enum(LOADERS);
+const loader = v.picklist(LOADERS);
 
 export const minecraftVersions = query(loader, async (l) => {
 	requireAdmin();
@@ -43,57 +45,28 @@ export const nextPort = query(() => {
 	return instances.nextFreePort();
 });
 
-export const createInstance = form(
-	z.object({
-		name: z.string().trim().min(1, 'Enter a name').max(64),
-		loader,
-		mcVersion: z.string().trim().min(1, 'Choose a Minecraft version'),
-		port: z.number().int().min(1024, 'Use a port from 1024').max(65535),
-		ramMaxMb: z.number().int().min(512, 'At least 512 MB').max(131072),
-		eulaAccepted: z.boolean().default(false)
-	}),
-	async (data, issue) => {
-		requireAdmin();
-		if (!data.eulaAccepted) invalid(issue.eulaAccepted('You must accept the Minecraft EULA'));
-		if (!(await isKnownVersion(data.loader, data.mcVersion)))
-			invalid(issue.mcVersion('Unknown Minecraft version'));
-		const loaderVersion = await latestBuild(data.loader, data.mcVersion);
-		if (data.loader !== 'vanilla' && !loaderVersion)
-			invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
-		try {
-			await instances.createInstance({
-				...data,
-				loaderVersion: loaderVersion ?? null,
-				ramMinMb: Math.min(1024, data.ramMaxMb)
-			});
-		} catch (e) {
-			if (String(e).includes('UNIQUE'))
-				invalid(issue.port('Port is already used by another instance'));
-			invalid(e instanceof Error ? e.message : 'Could not create the instance');
-		}
+export const createInstance = form(createInstanceSchema, async (data, issue) => {
+	requireAdmin();
+	if (!(await isKnownVersion(data.loader, data.mcVersion)))
+		invalid(issue.mcVersion('Unknown Minecraft version'));
+	const loaderVersion = await latestBuild(data.loader, data.mcVersion);
+	if (data.loader !== 'vanilla' && !loaderVersion)
+		invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
+	try {
+		await instances.createInstance({
+			...data,
+			loaderVersion: loaderVersion ?? null,
+			ramMinMb: Math.min(1024, data.ramMaxMb)
+		});
+	} catch (e) {
+		if (String(e).includes('UNIQUE'))
+			invalid(issue.port('Port is already used by another instance'));
+		invalid(e instanceof Error ? e.message : 'Could not create the instance');
 	}
-);
+});
 
 export const updateInstance = form(
-	z
-		.object({
-			id,
-			name: z.string().trim().min(1, 'Enter a name').max(64),
-			port: z.number().int().min(1024, 'Use a port from 1024').max(65535),
-			ramMinMb: z.number().int().min(256, 'At least 256 MB').max(131072),
-			ramMaxMb: z.number().int().min(512, 'At least 512 MB').max(131072),
-			// '' means auto: pick from the Minecraft version
-			javaMajor: z.enum(['', '8', '17', '21', '25']).transform((v) => (v ? Number(v) : null)),
-			jvmArgs: z
-				.string()
-				.max(1000)
-				.regex(/^[^\r\n]*$/, 'Use a single line'),
-			autoStart: z.boolean().default(false)
-		})
-		.refine((d) => d.ramMinMb <= d.ramMaxMb, {
-			path: ['ramMinMb'],
-			message: 'Minimum cannot exceed maximum'
-		}),
+	updateInstanceSchema,
 	async ({ id: instanceId, ...settings }, issue) => {
 		requireAdmin();
 		if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
@@ -194,7 +167,7 @@ export const consoleStream = query.live(id, async function* (instanceId) {
 });
 
 export const sendCommand = command(
-	z.object({ id, line: z.string().max(1000) }),
+	v.object({ id, line: v.pipe(v.string(), v.maxLength(1000)) }),
 	async ({ id: instanceId, line }) => {
 		requireAdmin();
 		const sent = await runner.send(instances.instanceDir(instanceId), instanceId, {

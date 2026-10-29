@@ -1,11 +1,17 @@
 import { command, query } from '$app/server';
-import { z } from 'zod';
+import * as v from 'valibot';
+import {
+	idSchema,
+	projectIdSchema,
+	searchArgsSchema,
+	versionIdSchema
+} from '#lib/schemas/common.js';
 import { requireAdmin } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import { getInstance } from '#lib/server/instances.js';
 import * as mods from '#lib/server/mods.js';
 
-const id = z.number().int().positive();
+const id = idSchema;
 
 /** What the Mods tab should call itself and whether the loader supports it at all. */
 export const modsInfo = query(id, async (instanceId) => {
@@ -27,19 +33,14 @@ export const modUpdates = query(id, async (instanceId) => {
 	return userFacing(() => mods.checkUpdates(instanceId));
 });
 
-export const searchMods = query(
-	z.object({ id, query: z.string().max(100), limit: z.number().int().min(1).max(100) }),
-	async ({ id: instanceId, query, limit }) => {
-		requireAdmin();
-		return userFacing(() => mods.search(instanceId, query.trim(), limit));
-	}
-);
-
-const versionId = z.string().min(1).max(64);
+export const searchMods = query(searchArgsSchema, async ({ id: instanceId, query, limit }) => {
+	requireAdmin();
+	return userFacing(() => mods.search(instanceId, query.trim(), limit));
+});
 
 /** Versions of a project that run on this instance, for the version picker. */
 export const modVersions = query(
-	z.object({ id, projectId: z.string().min(1).max(64) }),
+	v.object({ id, projectId: projectIdSchema }),
 	async ({ id: instanceId, projectId }) => {
 		requireAdmin();
 		return userFacing(() => mods.listModVersions(instanceId, projectId));
@@ -47,7 +48,7 @@ export const modVersions = query(
 );
 
 export const installMod = command(
-	z.object({ id, projectId: z.string().min(1).max(64), versionId: versionId.optional() }),
+	v.object({ id, projectId: projectIdSchema, versionId: versionIdSchema }),
 	async ({ id: instanceId, projectId, versionId }) => {
 		requireAdmin();
 		const result = await userFacing(() => mods.install(instanceId, projectId, versionId));
@@ -57,7 +58,7 @@ export const installMod = command(
 );
 
 export const removeMod = command(
-	z.object({ id, modId: z.number().int().positive() }),
+	v.object({ id, modId: idSchema }),
 	async ({ id: instanceId, modId }) => {
 		requireAdmin();
 		await userFacing(async () => mods.remove(instanceId, modId));
@@ -66,7 +67,7 @@ export const removeMod = command(
 );
 
 export const updateMod = command(
-	z.object({ id, modId: z.number().int().positive(), versionId: versionId.optional() }),
+	v.object({ id, modId: idSchema, versionId: versionIdSchema }),
 	async ({ id: instanceId, modId, versionId }) => {
 		requireAdmin();
 		const result = await userFacing(() => mods.update(instanceId, modId, versionId));

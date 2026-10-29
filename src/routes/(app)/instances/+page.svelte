@@ -14,12 +14,11 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import FormCheckbox from '#lib/components/form-checkbox.svelte';
+	import * as Form from '#lib/components/form/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { createInstanceSchema } from '#lib/schemas/instance.js';
 	import ExternalLink from '@tabler/icons-svelte/icons/external-link';
 
 	const instances = $derived(await listInstances());
@@ -34,7 +33,18 @@
 		if (list?.length && !list.includes(mcVersion.value() ?? '')) mcVersion.set(list[0]);
 	});
 
+	const loaderOptions: { value: LoaderId; label: string }[] = [
+		{ value: 'vanilla', label: 'Vanilla' },
+		{ value: 'paper', label: 'Paper' },
+		{ value: 'purpur', label: 'Purpur' },
+		{ value: 'fabric', label: 'Fabric' },
+		{ value: 'quilt', label: 'Quilt' },
+		{ value: 'forge', label: 'Forge' },
+		{ value: 'neoforge', label: 'NeoForge' }
+	];
+
 	let createOpen = $state(false);
+	const creating = $derived(createInstance.pending > 0);
 	let deleting = $state<{ id: number; name: string } | null>(null);
 
 	async function openCreate() {
@@ -116,63 +126,41 @@
 </div>
 
 <Sheet.Root bind:open={createOpen}>
-	<Sheet.Content>
+	<!-- while creating, the sheet stays: leaving would hide the progress and any error -->
+	<Sheet.Content
+		showCloseButton={!creating}
+		onEscapeKeydown={(e) => creating && e.preventDefault()}
+		onInteractOutside={(e) => creating && e.preventDefault()}
+	>
 		<Sheet.Header>
 			<Sheet.Title>New instance</Sheet.Title>
 			<Sheet.Description>
 				The server jar is downloaded from the loader's official source.
 			</Sheet.Description>
 		</Sheet.Header>
-		<form
+		<Form.Root
+			schema={createInstanceSchema}
+			remoteFunction={createInstance}
 			class="flex flex-col gap-4 px-4"
-			{...createInstance.enhance(async ({ submit }) => {
-				await submit();
-				if (!createInstance.fields.allIssues()?.length) createOpen = false;
-			})}
+			onSubmitted={(succeeded) => {
+				if (succeeded) createOpen = false;
+			}}
 		>
-			<Field.Group>
-				<Field.Field data-invalid={!!name.issues()?.length}>
-					<Field.Label for="name">Name</Field.Label>
-					<Input id="name" {...name.as('text')} />
-					<Field.Error errors={name.issues()} />
-				</Field.Field>
-				<Field.Field data-invalid={!!loader.issues()?.length}>
-					<Field.Label for="loader">Loader</Field.Label>
-					<NativeSelect id="loader" {...loader.as('select')}>
-						<NativeSelectOption value="vanilla">Vanilla</NativeSelectOption>
-						<NativeSelectOption value="paper">Paper</NativeSelectOption>
-						<NativeSelectOption value="purpur">Purpur</NativeSelectOption>
-						<NativeSelectOption value="fabric">Fabric</NativeSelectOption>
-						<NativeSelectOption value="quilt">Quilt</NativeSelectOption>
-						<NativeSelectOption value="forge">Forge</NativeSelectOption>
-						<NativeSelectOption value="neoforge">NeoForge</NativeSelectOption>
-					</NativeSelect>
-					<Field.Error errors={loader.issues()} />
-				</Field.Field>
-				<Field.Field data-invalid={!!mcVersion.issues()?.length}>
-					<Field.Label for="mcVersion">Minecraft version</Field.Label>
-					<NativeSelect id="mcVersion" disabled={!versions.current} {...mcVersion.as('select')}>
-						{#each versions.current ?? [] as v (v)}
-							<NativeSelectOption value={v}>{v}</NativeSelectOption>
-						{/each}
-					</NativeSelect>
-					<Field.Error errors={mcVersion.issues()} />
-				</Field.Field>
-				<div class="grid grid-cols-2 gap-4">
-					<Field.Field data-invalid={!!port.issues()?.length}>
-						<Field.Label for="port">Port</Field.Label>
-						<Input id="port" {...port.as('number')} />
-						<Field.Error errors={port.issues()} />
-					</Field.Field>
-					<Field.Field data-invalid={!!ramMaxMb.issues()?.length}>
-						<Field.Label for="ram">Max RAM (MB)</Field.Label>
-						<Input id="ram" {...ramMaxMb.as('number')} />
-						<Field.Error errors={ramMaxMb.issues()} />
-					</Field.Field>
-				</div>
-				<Field.Field orientation="horizontal" data-invalid={!!eulaAccepted.issues()?.length}>
-					<FormCheckbox id="eula" field={eulaAccepted} />
-					<Field.Label for="eula" class="font-normal">
+			{#snippet children({ pending })}
+				<Field.Group>
+					<Form.Input label="Name" field={name} />
+					<Form.Select label="Loader" field={loader} options={loaderOptions} />
+					<Form.Select
+						label="Minecraft version"
+						field={mcVersion}
+						disabled={!versions.current}
+						options={(versions.current ?? []).map((v) => ({ value: v, label: v }))}
+					/>
+					<div class="grid grid-cols-2 gap-4">
+						<Form.Input label="Port" type="number" field={port} />
+						<Form.Input label="Max RAM (MB)" type="number" field={ramMaxMb} />
+					</div>
+					<Form.Checkbox field={eulaAccepted}>
 						I accept the
 						<a
 							href="https://www.minecraft.net/eula"
@@ -183,15 +171,14 @@
 							Minecraft EULA
 							<ExternalLink class="inline size-5" />
 						</a>
-					</Field.Label>
-				</Field.Field>
-				<Field.Error errors={eulaAccepted.issues()} />
-				<Field.Error errors={createInstance.fields.allIssues()} />
-			</Field.Group>
-			<Sheet.Footer class="p-0">
-				<Button type="submit" loading={createInstance.pending > 0}>Create instance</Button>
-			</Sheet.Footer>
-		</form>
+					</Form.Checkbox>
+					<Form.Errors form={createInstance} />
+				</Field.Group>
+				<Sheet.Footer class="p-0">
+					<Button type="submit" loading={pending > 0}>Create instance</Button>
+				</Sheet.Footer>
+			{/snippet}
+		</Form.Root>
 	</Sheet.Content>
 </Sheet.Root>
 

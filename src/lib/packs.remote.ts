@@ -1,23 +1,27 @@
 import { command, form, query } from '$app/server';
-import { z } from 'zod';
+import * as v from 'valibot';
 import { requireAdmin } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
+import {
+	idSchema,
+	projectIdSchema,
+	searchArgsSchema,
+	versionIdSchema
+} from '#lib/schemas/common.js';
+import { packOptionsSchema } from '#lib/schemas/packs.js';
 import * as packs from '#lib/server/packs.js';
 
-const id = z.number().int().positive();
-const projectId = z.string().min(1).max(64);
-const versionId = z.string().min(1).max(64).optional();
+const id = idSchema;
+const projectId = projectIdSchema;
+const versionId = versionIdSchema;
 
-export const searchPacks = query(
-	z.object({ id, query: z.string().max(100), limit: z.number().int().min(1).max(100) }),
-	async ({ id: instanceId, query, limit }) => {
-		requireAdmin();
-		return userFacing(() => packs.search(instanceId, query.trim(), limit));
-	}
-);
+export const searchPacks = query(searchArgsSchema, async ({ id: instanceId, query, limit }) => {
+	requireAdmin();
+	return userFacing(() => packs.search(instanceId, query.trim(), limit));
+});
 
 export const packVersions = query(
-	z.object({ id, projectId }),
+	v.object({ id, projectId }),
 	async ({ id: instanceId, projectId }) => {
 		requireAdmin();
 		return userFacing(() => packs.listPackVersions(instanceId, projectId));
@@ -30,7 +34,7 @@ export const serverPack = query(id, async (instanceId) => {
 });
 
 export const useResourcePack = command(
-	z.object({ id, projectId, versionId }),
+	v.object({ id, projectId, versionId }),
 	async ({ id: instanceId, projectId, versionId }) => {
 		requireAdmin();
 		const result = await userFacing(() => packs.useAsServerPack(instanceId, projectId, versionId));
@@ -40,7 +44,7 @@ export const useResourcePack = command(
 );
 
 export const removePack = command(
-	z.object({ id, rowId: z.number().int().positive() }),
+	v.object({ id, rowId: idSchema }),
 	async ({ id: instanceId, rowId }) => {
 		requireAdmin();
 		await userFacing(async () => packs.removePack(instanceId, rowId));
@@ -49,7 +53,7 @@ export const removePack = command(
 );
 
 export const setPackOptions = form(
-	z.object({ id, required: z.boolean().default(false), prompt: z.string().max(200) }),
+	packOptionsSchema,
 	async ({ id: instanceId, required, prompt }) => {
 		requireAdmin();
 		await userFacing(async () => packs.setServerPackOptions(instanceId, { required, prompt }));
