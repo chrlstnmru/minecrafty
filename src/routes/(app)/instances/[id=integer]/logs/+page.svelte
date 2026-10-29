@@ -286,10 +286,7 @@
 		</p>
 	{/if}
 
-	<div
-		class="relative min-h-80 w-full flex-1 font-mono text-xs"
-		style={wrap || !rows.length ? '' : `max-width: calc(${widest}ch + 4.75rem + 2px)`}
-	>
+	<div class="relative min-h-80 w-full flex-1 font-mono text-xs">
 		<div
 			bind:this={scroller}
 			onscroll={onScroll}
