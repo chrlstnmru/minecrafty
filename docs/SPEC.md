@@ -116,13 +116,25 @@ Console is the live server output with command input; Logs is the history of log
 - Search Modrinth and CurseForge from the instance page, filtered by the instance's loader and MC version. Quilt also accepts Fabric mods, and Purpur also accepts Paper/Spigot/Bukkit plugins. Paper-family instances show the tab as Plugins and install into `plugins/`; vanilla has no mods tab content.
 - Install, update, remove; resolve required dependencies. Any compatible version can be chosen when installing, and an installed mod can be moved to a chosen version (including older ones). Update checks use file hashes in one request and only offer stable releases.
 - Track installed mods (source, project ID, file ID, hash) in the DB so updates can be checked.
-- Modpack import: Modrinth modpacks first, from the "From modpack" tab of the New Instance sheet (a pack decides the loader and Minecraft version, so it is not a separate screen). Search Modrinth, pick a version, see a summary (Minecraft version, loader and build, files to download, client-only files skipped, config files copied), then name, port, RAM and EULA.
+- Modpack import: Modrinth modpacks first, from the "From modpack" tab of the New Instance sheet, next to "From scratch" and "From local" (a pack decides the loader and Minecraft version, so it is not a separate screen). Search Modrinth, pick a version, see a summary (Minecraft version, loader and build, files to download, client-only files skipped, config files copied), then name, port, RAM and EULA.
   - The instance is created at once in an "installing" state and finishes in the background with visible progress, since a pack can be hundreds of downloads. It cannot start or be deleted while installing; an interrupted or failed install is marked failed with the reason.
   - Install: the loader's server, every file the pack lists for the server (checksum-verified, only from the hosts the `.mrpack` format allows), then `overrides/` and `server-overrides/` copied into the server folder. Mods Modrinth knows are recorded, so they appear in the Mods tab and can be updated.
-  - CurseForge manifest zips and uploading an `.mrpack` file are later.
+  - CurseForge manifest zips and uploading an `.mrpack` file are later (see Future features).
 - CurseForge files with third-party downloads disabled: list them for manual download and accept uploads.
 - CurseForge API key: entered by the admin in Settings. No key ships with the project. Modrinth needs no key.
 - Server-side only: skip client-only mods where metadata says so.
+
+### Modpack builder
+
+Build your own modpack on the panel and create instances from it.
+
+- Entry point: the sidebar's "Mods" item (a placeholder that never had a page) is replaced by "Modpack builder" at `/modpacks`. Managing the mods of one server stays on that instance's Mods tab.
+- A pack has a name, a loader and build, a Minecraft version, and a list of mods. Each mod is pinned to an exact version and file hash, and required dependencies are resolved the same way as on an instance. Mods are added with the same Modrinth search and version picker as the instance Mods tab, filtered to the pack's loader and Minecraft version. Each entry keeps Modrinth's client/server flags, so the pack can later be exported as a proper `.mrpack`.
+- Optional config files (`overrides/`: configs, scripts, datapacks) are stored with the pack and copied into every instance made from it.
+- Pages follow the instance page pattern: `/modpacks` lists packs (create, duplicate, delete); `/modpacks/[id]` is the editor with Mods, Configs and Settings tabs. Changing the Minecraft version first re-checks every mod and lists those with no compatible version, and only applies once that is resolved.
+- Revisions: each saved change gets a revision number, and an instance remembers the revision it was created from.
+- "From local" is a third tab in the New Instance sheet, after "From scratch" and "From modpack". It lists the packs from the builder; picking one shows the same summary and the same name, port, RAM and EULA form, and creates the instance with the same background install as a Modrinth modpack: the loader's server, each mod checksum-verified (from a shared download cache), then the pack's config files.
+- For now "From local" only offers packs made with the builder. Importing someone else's pack file is a later step (see Custom modpack upload).
 
 ### File manager
 
@@ -184,6 +196,7 @@ Estimates assume one developer working part-time (evenings).
 1. **Core** (~2 weeks): Bun adapter, Drizzle schema, auth + first-run setup, runner process, start/stop, live console, Vanilla + Paper/Purpur, auto-start on boot, instance page shell with Console and Settings.
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
+   - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
 4. **Operations** (~3 weeks): file manager, logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
@@ -212,7 +225,17 @@ Drop in a `.jar` that is not on Modrinth or CurseForge (private mods, forks, plu
 - Handle name clashes with existing files, and removal.
 - Uploads need the same raised request limit as resource packs.
 
+### Custom modpack upload
+
+Bring an existing modpack file into "From local" (and into the builder, to edit it).
+
+- Formats: `.mrpack` and CurseForge manifest zips. The Modrinth importer already reads `.mrpack` (index parsing, host allowlist, overrides, its own zip reader), so what is missing is an upload path and a way to keep the file as a local pack.
+- Uploads need the adapter's request limit raised (it defaults to 512 KB, and packs can be hundreds of MB; the importer caps a pack at 600 MB) or a streaming upload endpoint that writes straight to disk, because a form upload is read into memory.
+- Open decision: do imported packs become editable builder packs (parsed into pinned mod entries) or stay read-only files?
+
 ### Other ideas
+
+- Builder: export a pack as `.mrpack`; CurseForge mods in the builder; snapshot an existing instance into a builder pack; apply a newer pack revision to an instance created from it.
 
 - CurseForge integration: API key entered by the admin in Settings (the `settings` table already exists for it), then the same search, install and update flow as Modrinth.
 - Pack-only listener port (see above), which also suits future features that need a public download.
