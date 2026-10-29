@@ -42,6 +42,11 @@ export const instances = sqliteTable('instances', {
 	jvmArgs: text('jvm_args').notNull().default(''),
 	autoStart: integer('auto_start', { mode: 'boolean' }).notNull().default(false),
 	eulaAccepted: integer('eula_accepted', { mode: 'boolean' }).notNull().default(false),
+	// a modpack import installs in the background; the instance cannot start until it is ready
+	installState: text('install_state', { enum: ['ready', 'installing', 'failed'] })
+		.notNull()
+		.default('ready'),
+	installMessage: text('install_message'),
 	createdAt: createdAt()
 });
 

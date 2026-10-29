@@ -1,12 +1,13 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '../../../runner/protocol';
 import { instancesDir, javaOverride, runnerEntry } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
+import { getProgress } from './install-progress';
 import * as runner from './runner-client';
 import { setProperties } from './server-properties';
 
@@ -31,29 +32,28 @@ export function nextFreePort() {
 	return port;
 }
 
-export async function createInstance(
-	input: Omit<typeof instances.$inferInsert, 'id' | 'createdAt'>
-) {
+export type NewInstance = Omit<typeof instances.$inferInsert, 'id' | 'createdAt'>;
+
+/** Adds the database row and the folder; the server itself is installed by `installBase`. */
+export function insertInstance(input: NewInstance) {
 	const row = db.insert(instances).values(input).returning().get();
 	mkdirSync(serverDir(row.id), { recursive: true });
-	try {
-		const mc = row.mcVersion;
-		const java = needsJavaToInstall(row.loader as Loader)
-			? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
-			: undefined;
-		await installServer({
-			serverDir: serverDir(row.id),
-			loader: row.loader as Loader,
-			mc,
-			build: row.loaderVersion ?? undefined,
-			java
-		});
-	} catch (e) {
-		// don't leave a half-created instance behind
-		db.delete(instances).where(eq(instances.id, row.id)).run();
-		rmSync(instanceDir(row.id), { recursive: true, force: true });
-		throw e;
-	}
+	return row;
+}
+
+/** Installs the loader's server files and writes instance.json. */
+export async function installBase(row: Instance) {
+	const mc = row.mcVersion;
+	const java = needsJavaToInstall(row.loader as Loader)
+		? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
+		: undefined;
+	await installServer({
+		serverDir: serverDir(row.id),
+		loader: row.loader as Loader,
+		mc,
+		build: row.loaderVersion ?? undefined,
+		java
+	});
 	writeFileSync(
 		join(instanceDir(row.id), 'instance.json'),
 		JSON.stringify(
@@ -67,6 +67,23 @@ export async function createInstance(
 			2
 		)
 	);
+}
+
+/** Removes a half-created instance: its row (and anything cascading from it) and its folder. */
+export function discardInstance(id: number) {
+	db.delete(instances).where(eq(instances.id, id)).run();
+	rmSync(instanceDir(id), { recursive: true, force: true });
+}
+
+export async function createInstance(input: NewInstance) {
+	const row = insertInstance(input);
+	try {
+		await installBase(row);
+	} catch (e) {
+		// don't leave a half-created instance behind
+		discardInstance(row.id);
+		throw e;
+	}
 	return row;
 }
 
@@ -79,7 +96,12 @@ export async function listInstances() {
 	return Promise.all(
 		rows.map(async (row) => {
 			const s = await runner.status(instanceDir(row.id), row.id);
-			return { ...row, state: (s?.state ?? 'stopped') as InstanceState, pid: s?.pid ?? null };
+			return {
+				...row,
+				state: (s?.state ?? 'stopped') as InstanceState,
+				pid: s?.pid ?? null,
+				progress: getProgress(row.id)
+			};
 		})
 	);
 }
@@ -93,6 +115,9 @@ export async function javaFor(inst: Instance): Promise<JavaMajor> {
 export async function startInstance(id: number) {
 	const inst = getInstance(id);
 	if (!inst) throw new Error('Instance not found');
+	if (inst.installState === 'installing') throw new Error('Still installing');
+	if (inst.installState === 'failed')
+		throw new Error(`The install failed: ${inst.installMessage ?? 'unknown error'}`);
 
 	const dir = instanceDir(id);
 	let live = await runner.status(dir, id);
@@ -167,7 +192,11 @@ export function updateSettings(id: number, settings: InstanceSettings) {
 
 /** Starts every instance flagged auto-start; failures are logged, never thrown. */
 export async function autoStartInstances() {
-	const rows = db.select().from(instances).where(eq(instances.autoStart, true)).all();
+	const rows = db
+		.select()
+		.from(instances)
+		.where(and(eq(instances.autoStart, true), eq(instances.installState, 'ready')))
+		.all();
 	for (const row of rows) {
 		try {
 			await startInstance(row.id);
@@ -179,4 +208,12 @@ export async function autoStartInstances() {
 				console.error(`[autostart] "${row.name}" (#${row.id}): ${message}`);
 		}
 	}
+}
+
+/** An install that was running when the panel stopped cannot continue; mark it failed. */
+export function failInterruptedInstalls() {
+	db.update(instances)
+		.set({ installState: 'failed', installMessage: 'Interrupted by a panel restart' })
+		.where(eq(instances.installState, 'installing'))
+		.run();
 }

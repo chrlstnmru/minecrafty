@@ -50,6 +50,13 @@
       "when": 1793300062040,
       "tag": "0006_cooing_demogoblin",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "6",
+      "when": 1793302212634,
+      "tag": "0007_exotic_rhodey",
+      "breakpoints": true
     }
   ]
 }

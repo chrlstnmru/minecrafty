@@ -2,7 +2,7 @@ import { redirect } from '@sveltejs/kit';
 import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
-import { autoStartInstances } from '#lib/server/instances.js';
+import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 
 const PUBLIC = ['/login', '/setup'];
 
@@ -34,6 +34,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
 	if (building) return;
+	failInterruptedInstalls();
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
 };
