@@ -1,8 +1,8 @@
 @import 'tailwindcss';
-@import "tw-animate-css";
-@import "shadcn-svelte/tailwind.css";
-@import "@fontsource-variable/figtree";
-@import "@fontsource-variable/public-sans";
+@import 'tw-animate-css';
+@import 'shadcn-svelte/tailwind.css';
+@import '@fontsource-variable/figtree';
+@import '@fontsource-variable/public-sans';
 
 @custom-variant dark (&:is(.dark *));
 
