@@ -67,36 +67,42 @@
 
 <svelte:head><title>Properties · Minecrafty</title></svelte:head>
 
-<div class="grid max-w-3xl gap-4 pb-4">
+<div class="pb-4 @3xl/main:columns-2 @3xl/main:gap-4">
 	{#if properties.current && !properties.current.exists}
-		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
+		<p
+			class="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground [column-span:all]"
+			role="status"
+		>
 			This server has not created its server.properties yet. Values you save are written now, and
 			the server fills in the rest the first time it starts.
 		</p>
 	{:else if properties.current?.running}
-		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
+		<p
+			class="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground [column-span:all]"
+			role="status"
+		>
 			The server is running. Changes apply the next time it starts.
 		</p>
 	{/if}
 
 	{#if !properties.current}
-		{#each [0, 1, 2] as i (i)}
-			<Card.Root>
+		{#each [0, 1, 2, 3] as i (i)}
+			<Card.Root class="mb-4 break-inside-avoid">
 				<Card.Header><Skeleton class="h-5 w-32" /></Card.Header>
-				<Card.Content class="grid gap-4 sm:grid-cols-2">
+				<Card.Content class="grid gap-4">
 					{#each [0, 1, 2, 3] as j (j)}<Skeleton class="h-9" />{/each}
 				</Card.Content>
 			</Card.Root>
 		{/each}
 	{:else}
 		{#each propertyGroups as group (group.title)}
-			<Card.Root>
+			<Card.Root class="mb-4 break-inside-avoid">
 				<Card.Header>
 					<Card.Title>{group.title}</Card.Title>
 					<Card.Description>{group.description}</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<Field.Group class="grid gap-4 sm:grid-cols-2">
+					<Field.Group class="grid gap-4">
 						{#each group.fields as field (field.key)}
 							{@render control(field)}
 						{/each}
@@ -106,7 +112,7 @@
 		{/each}
 
 		{#if others.length}
-			<Card.Root>
+			<Card.Root class="mb-4 [column-span:all]">
 				<Card.Header>
 					<Card.Title>Other properties</Card.Title>
 					<Card.Description>
@@ -115,7 +121,7 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<Field.Group class="grid gap-4 sm:grid-cols-2">
+					<Field.Group class="grid gap-4 sm:grid-cols-2 @5xl/main:grid-cols-3">
 						{#each others as key (key)}
 							<Field.Field data-invalid={!!errors[key]}>
 								<Field.Label for="prop-{key}" class="font-mono text-xs">{key}</Field.Label>
@@ -139,7 +145,7 @@
 {#snippet control(field: PropertyField)}
 	{@const id = `prop-${field.key}`}
 	{#if field.type === 'boolean'}
-		<Field.Field orientation="horizontal" class="sm:col-span-2">
+		<Field.Field orientation="horizontal">
 			<Checkbox
 				{id}
 				checked={draft[field.key] === 'true'}
