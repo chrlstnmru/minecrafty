@@ -175,6 +175,14 @@
 	const [sorting, setSorting] = createTableState<SortingState>([{ id: 'name', desc: false }]);
 	type Row = { original: FileEntry };
 
+	// changing a world under a running server corrupts it, so those entries are read-only until it stops
+	const running = $derived(listing.current?.running ?? false);
+	const blocked = (entry: FileEntry) => entry.locked || (running && entry.inWorld);
+	const worldShown = $derived(listing.current?.entries.some((e) => e.inWorld) ?? false);
+	const editingEntry = $derived(
+		listing.current?.entries.find((e) => editing !== null && join(e.name) === editing)
+	);
+
 	// folders stay on top in either direction: the table flips the result of a descending sort,
 	// so the folder rule is flipped first to cancel that out
 	const foldersFirst = (compare: (a: FileEntry, b: FileEntry) => number) => (a: Row, b: Row) => {
@@ -202,7 +210,7 @@
 			return listing.current?.entries ?? [];
 		},
 		getRowId: (entry: FileEntry) => entry.name,
-		enableRowSelection: (row: { original: FileEntry }) => !row.original.locked,
+		enableRowSelection: (row: { original: FileEntry }) => !blocked(row.original),
 		enableMultiSort: false,
 		enableSortingRemoval: false,
 		state: {
@@ -341,6 +349,14 @@
 		</Card.Action>
 	</Card.Header>
 	<Card.Content class="flex min-h-0 flex-1 flex-col px-0">
+		{#if running && worldShown}
+			<p
+				class="shrink-0 border-b bg-muted/40 px-6 py-2 text-sm text-muted-foreground"
+				role="status"
+			>
+				The server is running, so the world is read-only. Stop the server to change it.
+			</p>
+		{/if}
 		<!-- the table scrolls inside its own container so the header can stick to it -->
 		<Table.Root containerClass="min-h-0 flex-1 overflow-y-auto">
 			<Table.Header class="sticky top-0 z-10 bg-card">
@@ -373,7 +389,7 @@
 							<Checkbox
 								aria-label="Select {entry.name}"
 								checked={row.getIsSelected()}
-								disabled={entry.locked}
+								disabled={blocked(entry)}
 								onCheckedChange={(value) => row.toggleSelected(!!value)}
 							/>
 						</Table.Cell>
@@ -439,7 +455,7 @@
 										</DropdownMenu.Item>
 									{/if}
 									<DropdownMenu.Item
-										disabled={entry.locked}
+										disabled={blocked(entry)}
 										onSelect={() => ask({ kind: 'rename', target: to, value: entry.name })}
 									>
 										<PencilIcon />Rename
@@ -447,7 +463,7 @@
 									<DropdownMenu.Separator />
 									<DropdownMenu.Item
 										variant="destructive"
-										disabled={entry.locked}
+										disabled={blocked(entry)}
 										onSelect={() => {
 											deleting = { path: to, name: entry.name, kind: entry.kind };
 											deleteOpen = true;
@@ -557,6 +573,15 @@
 			</Sheet.Description>
 		</Sheet.Header>
 		<div class="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
+			{#if running && editingEntry?.rewritten}
+				<p
+					class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+					role="status"
+				>
+					The server is running and writes this file back when it stops, so changes made now can be
+					lost. Stop the server first.
+				</p>
+			{/if}
 			{#if file?.error}
 				<p class="text-sm text-destructive" role="alert">
 					{message(file.error, 'Could not open this file.')}

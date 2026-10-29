@@ -4,7 +4,7 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import { makeInstance } from '../../test/instance';
 import * as F from './files';
 import { serverDir } from './instances';
-import { isProtected } from './protected-files';
+import { assertWorldIdle, isProtected, isRewrittenOnStop, isWorldPath } from './protected-files';
 import * as uploads from './uploads';
 
 describe('isProtected', () => {
@@ -101,5 +101,50 @@ describe('the file manager refuses to touch them', () => {
 		);
 		expect(names).toMatchObject({ 'server.jar': true, libraries: true, mods: false });
 		expect(F.listDirectory(id, 'libraries').entries.every((e) => e.locked)).toBe(true);
+	});
+});
+
+describe('while the server runs', () => {
+	it('recognises the world folders by level-name, case-insensitively', () => {
+		for (const p of ['world', 'World/region/r.0.0.mca', 'world_nether', 'world_the_end/DIM1'])
+			expect(isWorldPath(p, 'world'), p).toBe(true);
+		for (const p of ['worlds', 'mods/world', 'world.txt', 'world_backup', ''])
+			expect(isWorldPath(p, 'world'), p).toBe(false);
+		expect(isWorldPath('survival_nether/x', 'survival')).toBe(true);
+		expect(isWorldPath('world', 'survival')).toBe(false);
+	});
+
+	it('refuses to change a world only while running', () => {
+		expect(() => assertWorldIdle('world/level.dat', 'world', true, 'deleting from')).toThrow(
+			/Stop the server before deleting from the world/
+		);
+		expect(() => assertWorldIdle('world/level.dat', 'world', false, 'deleting from')).not.toThrow();
+		expect(() => assertWorldIdle('mods/a.jar', 'world', true, 'deleting from')).not.toThrow();
+	});
+
+	it('knows which files the server writes back', () => {
+		for (const p of ['server.properties', 'OPS.json', 'whitelist.json', 'banned-ips.json'])
+			expect(isRewrittenOnStop(p), p).toBe(true);
+		expect(isRewrittenOnStop('config/server.properties')).toBe(false);
+		expect(isRewrittenOnStop('usercache.json')).toBe(false);
+	});
+
+	it('marks them in a listing, using the level-name from server.properties', () => {
+		writeFileSync(join(root, 'server.properties'), 'level-name=survival\n');
+		writeFileSync(join(root, 'ops.json'), '[]');
+		mkdirSync(join(root, 'survival'));
+		mkdirSync(join(root, 'world'));
+		const byName = Object.fromEntries(F.listDirectory(id, '').entries.map((e) => [e.name, e]));
+		expect(byName.survival.inWorld).toBe(true);
+		expect(byName.world.inWorld).toBe(false);
+		expect(byName['ops.json'].rewritten).toBe(true);
+		expect(byName['server.properties'].rewritten).toBe(true);
+		expect(byName.mods.rewritten).toBe(false);
+	});
+
+	it('a stopped instance can be changed (no runner is attached)', async () => {
+		mkdirSync(join(root, 'world'));
+		expect(await F.isRunning(id)).toBe(false);
+		await F.assertWorldStopped(id, 'world/level.dat', 'deleting from');
 	});
 });

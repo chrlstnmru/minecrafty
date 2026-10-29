@@ -12,7 +12,10 @@ const location = v.object({ id, path: filePathSchema });
 
 export const listFiles = query(location, async ({ id: instanceId, path }) => {
 	requireAdmin();
-	return userFacing(async () => files.listDirectory(instanceId, path));
+	return userFacing(async () => ({
+		...files.listDirectory(instanceId, path),
+		running: await files.isRunning(instanceId)
+	}));
 });
 
 export const readFile = query(location, async ({ id: instanceId, path }) => {
@@ -30,6 +33,7 @@ export const saveFile = command(
 );
 
 // the folder that holds the entry, so the listing on screen can be refreshed after a change
+const joinPath = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
 
 export const newFolder = command(
@@ -54,7 +58,10 @@ export const renameFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
 		requireAdmin();
-		await userFacing(async () => files.renameEntry(instanceId, path, name));
+		await userFacing(async () => {
+			await files.assertWorldStopped(instanceId, path, 'renaming');
+			files.renameEntry(instanceId, path, name);
+		});
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
 	}
 );
@@ -63,7 +70,10 @@ export const removeFile = command(
 	v.object({ id, path: filePathSchema }),
 	async ({ id: instanceId, path }) => {
 		requireAdmin();
-		await userFacing(async () => files.deleteEntry(instanceId, path));
+		await userFacing(async () => {
+			await files.assertWorldStopped(instanceId, path, 'deleting from');
+			files.deleteEntry(instanceId, path);
+		});
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
 	}
 );
@@ -71,8 +81,10 @@ export const removeFile = command(
 export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, path, items }) => {
 	requireAdmin();
 	await userFacing(async () => {
-		for (const { file, path: relPath } of items)
+		for (const { file, path: relPath } of items) {
+			await files.assertWorldStopped(instanceId, joinPath(path, relPath), 'uploading into');
 			await files.saveUpload(instanceId, path, file, relPath);
+		}
 	});
 	await listFiles({ id: instanceId, path }).refresh();
 });
@@ -90,9 +102,16 @@ export const beginUpload = command(
 	}),
 	async ({ id: instanceId, path, name, size }) => {
 		const user = requireAdmin();
-		return userFacing(async () =>
-			uploads.beginUpload({ instanceId, userId: user.id, dirRel: path, relPath: name, size })
-		);
+		return userFacing(async () => {
+			await files.assertWorldStopped(instanceId, joinPath(path, name), 'uploading into');
+			return uploads.beginUpload({
+				instanceId,
+				userId: user.id,
+				dirRel: path,
+				relPath: name,
+				size
+			});
+		});
 	}
 );
 

@@ -12,8 +12,16 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { SMALL_FILE_BYTES } from '../upload-limits';
-import { getInstance, serverDir } from './instances';
-import { assertMutable, isProtected } from './protected-files';
+import { getInstance, instanceDir, serverDir } from './instances';
+import {
+	assertMutable,
+	assertWorldIdle,
+	isProtected,
+	isRewrittenOnStop,
+	isWorldPath
+} from './protected-files';
+import * as runner from './runner-client';
+import { readProperties } from './server-properties';
 import type { ZipEntry } from './zip-writer';
 
 // Everything the file manager does stays inside an instance's server folder. Every path is
@@ -26,6 +34,10 @@ export type FileEntry = {
 	modified: number;
 	/** part of the server install: it cannot be deleted, renamed or replaced */
 	locked: boolean;
+	/** inside a world folder: changing it under a running server corrupts it */
+	inWorld: boolean;
+	/** the server writes this file back when it stops, so edits made while it runs are lost */
+	rewritten: boolean;
 };
 
 export const MAX_EDIT_BYTES = 2 * 1024 * 1024;
@@ -66,10 +78,34 @@ export function resolveSafe(instanceId: number, rel: string) {
 	return { base, absolute, rel: relative(base, absolute).split(sep).join('/') };
 }
 
+/** The world folder's name from server.properties (`world` when unset). */
+function levelName(instanceId: number) {
+	try {
+		return (
+			readProperties(join(serverDir(instanceId), 'server.properties'))['level-name'] || 'world'
+		);
+	} catch {
+		return 'world';
+	}
+}
+
+export async function isRunning(instanceId: number) {
+	const live = await runner.status(instanceDir(instanceId), instanceId);
+	return !!live && live.state !== 'exited';
+}
+
+/** Refuses to change the world (delete, rename, replace files in it) while the server runs. */
+export async function assertWorldStopped(instanceId: number, rel: string, action: string) {
+	const { rel: normalized } = resolveSafe(instanceId, rel);
+	if (!isWorldPath(normalized, levelName(instanceId))) return;
+	assertWorldIdle(normalized, levelName(instanceId), await isRunning(instanceId), action);
+}
+
 export function listDirectory(instanceId: number, rel: string) {
 	const { absolute, rel: normalized } = resolveSafe(instanceId, rel);
 	if (!statSync(absolute).isDirectory()) throw new Error('Not a folder');
 
+	const level = levelName(instanceId);
 	const entries: FileEntry[] = readdirSync(absolute).map((name) => {
 		const stat = lstatSync(join(absolute, name));
 		return {
@@ -77,7 +113,9 @@ export function listDirectory(instanceId: number, rel: string) {
 			kind: stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'dir' : 'file',
 			size: stat.isDirectory() ? 0 : stat.size,
 			modified: stat.mtimeMs,
-			locked: isProtected(join(normalized, name))
+			locked: isProtected(join(normalized, name)),
+			inWorld: isWorldPath(join(normalized, name), level),
+			rewritten: isRewrittenOnStop(join(normalized, name))
 		};
 	});
 	entries.sort(

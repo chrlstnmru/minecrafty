@@ -35,3 +35,33 @@ export function assertMutable(rel: string, action: string) {
 			`${rel.split('/').filter(Boolean)[0]} is part of the server install and cannot be ${action}`
 		);
 }
+
+// --- things that are only dangerous while the server runs ---
+
+// the server keeps these in memory and writes them back, so an edit made while it runs is lost
+const REWRITTEN_ON_STOP = new Set([
+	'server.properties',
+	'ops.json',
+	'whitelist.json',
+	'banned-players.json',
+	'banned-ips.json'
+]);
+
+export const isRewrittenOnStop = (rel: string) => {
+	const parts = rel.replaceAll('\\', '/').split('/').filter(Boolean);
+	return parts.length === 1 && REWRITTEN_ON_STOP.has(fold(parts[0]));
+};
+
+/** Whether a path is, or is inside, one of the world folders (`level-name`, plus its Nether and End). */
+export function isWorldPath(rel: string, levelName: string) {
+	const [first] = rel.replaceAll('\\', '/').split('/').filter(Boolean).map(fold);
+	if (!first) return false;
+	const level = fold(levelName);
+	return first === level || first === `${level}_nether` || first === `${level}_the_end`;
+}
+
+/** Changing a world under a running server corrupts it; refuse until the server is stopped. */
+export function assertWorldIdle(rel: string, levelName: string, running: boolean, action: string) {
+	if (running && isWorldPath(rel, levelName))
+		throw new Error(`Stop the server before ${action} the world`);
+}
