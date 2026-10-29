@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { modVersions } from '#lib/mods.remote.js';
+	import { packVersions } from '#lib/packs.remote.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
@@ -11,6 +12,7 @@
 		projectId,
 		title,
 		noun,
+		kind = 'mod',
 		currentVersionId,
 		onSelect
 	}: {
@@ -19,13 +21,20 @@
 		projectId: string;
 		title: string;
 		noun: string;
+		kind?: 'mod' | 'resourcepack' | 'shader';
 		/** set when changing an installed mod; that version is marked and not selectable */
 		currentVersionId?: string;
 		onSelect: (versionId: string) => Promise<void>;
 	} = $props();
 
 	// only ask Modrinth while the sheet is open
-	const versions = $derived(open ? modVersions({ id: instanceId, projectId }) : null);
+	const versions = $derived(
+		!open
+			? null
+			: kind === 'mod'
+				? modVersions({ id: instanceId, projectId })
+				: packVersions({ id: instanceId, kind, projectId })
+	);
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
 	const typeVariant = { release: 'secondary', beta: 'outline', alpha: 'outline' } as const;

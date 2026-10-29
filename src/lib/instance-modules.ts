@@ -61,14 +61,14 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'resource-packs',
 		title: 'Resource packs',
 		icon: PaletteIcon,
-		planned: 3,
+
 		description: 'Install resource packs and configure the server resource pack.'
 	},
 	{
 		slug: 'shader-packs',
 		title: 'Shader packs',
 		icon: BrushIcon,
-		planned: 3,
+
 		description: 'Install shader packs from Modrinth and CurseForge.'
 	},
 	{

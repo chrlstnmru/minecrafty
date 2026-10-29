@@ -55,19 +55,24 @@ async function get<T>(path: string, params: Record<string, string> = {}): Promis
 
 export async function searchProjects(opts: {
 	query: string;
+	/** empty means no loader filter (resource packs, shader packs) */
 	loaders: string[];
 	mc: string;
+	/** Modrinth project type: mod, resourcepack, shader */
+	type?: string;
 	/** plugins have no `mod` project type on Modrinth, so the type facet is left out for them */
 	plugins?: boolean;
+	/** false for projects used on the client side (resource packs, shaders) */
+	serverSide?: boolean;
 	offset?: number;
 	limit?: number;
 }) {
 	const facets = [
-		...(opts.plugins ? [] : [['project_type:mod']]),
-		opts.loaders.map((l) => `categories:${l}`),
+		...(opts.plugins ? [] : [[`project_type:${opts.type ?? 'mod'}`]]),
+		...(opts.loaders.length ? [opts.loaders.map((l) => `categories:${l}`)] : []),
 		[`versions:${opts.mc}`],
 		// skip projects that only work on the client
-		['server_side:required', 'server_side:optional']
+		...(opts.serverSide === false ? [] : [['server_side:required', 'server_side:optional']])
 	];
 	return get<{ hits: ModrinthHit[]; total_hits: number }>('/search', {
 		query: opts.query,
@@ -80,7 +85,7 @@ export async function searchProjects(opts: {
 /** Versions of a project for these loaders and Minecraft version, newest first. */
 export function listVersions(projectId: string, loaders: string[], mc: string) {
 	return get<ModrinthVersion[]>(`/project/${encodeURIComponent(projectId)}/version`, {
-		loaders: JSON.stringify(loaders),
+		...(loaders.length ? { loaders: JSON.stringify(loaders) } : {}),
 		game_versions: JSON.stringify([mc])
 	});
 }

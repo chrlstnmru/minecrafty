@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '../../../runner/protocol';
@@ -8,6 +8,7 @@ import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import * as runner from './runner-client';
+import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;
 export type InstanceState = 'stopped' | RunnerStatus['state'];
@@ -81,23 +82,6 @@ export async function listInstances() {
 			return { ...row, state: (s?.state ?? 'stopped') as InstanceState, pid: s?.pid ?? null };
 		})
 	);
-}
-
-/** Merge `key=value` pairs into a .properties file, keeping other lines as they are. */
-function setProperties(file: string, values: Record<string, string | number>) {
-	const lines = existsSync(file) ? readFileSync(file, 'utf8').split(/\r?\n/) : [];
-	const pending = new Map(Object.entries(values).map(([k, v]) => [k, String(v)]));
-	const out = lines.map((line) => {
-		const key = line.split('=')[0];
-		if (pending.has(key)) {
-			const value = pending.get(key);
-			pending.delete(key);
-			return `${key}=${value}`;
-		}
-		return line;
-	});
-	for (const [k, v] of pending) out.push(`${k}=${v}`);
-	writeFileSync(file, out.filter((l, i) => l || i < out.length - 1).join('\n') + '\n');
 }
 
 /** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */
