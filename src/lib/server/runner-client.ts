@@ -6,7 +6,7 @@ import { socketPath } from '../../../runner/protocol';
 type Handler = (msg: ServerMessage) => void;
 
 /** Opens a connection to the instance's runner; null when no runner is listening. */
-async function connect(dir: string, id: number, onMessage: Handler) {
+async function connect(dir: string, id: number, onMessage: Handler, onClose?: () => void) {
 	let buf = '';
 	try {
 		return await Bun.connect({
@@ -18,6 +18,7 @@ async function connect(dir: string, id: number, onMessage: Handler) {
 					buf = lines.pop() ?? '';
 					for (const line of lines) if (line) onMessage(JSON.parse(line));
 				},
+				close: onClose,
 				error() {}
 			}
 		});
@@ -54,4 +55,58 @@ export async function status(dir: string, id: number): Promise<RunnerStatus | nu
 			setTimeout(() => socket.end(), 100);
 		});
 	});
+}
+
+export type Subscription = {
+	/**
+	 * Waits for output, gives a burst a moment to arrive, then returns it all at once.
+	 * Returns null once the runner has closed the connection and everything was read.
+	 */
+	nextBatch(coalesceMs?: number): Promise<ServerMessage[] | null>;
+	close(): void;
+};
+
+/** Streams console output and status from a live runner. Null when no runner is listening. */
+export async function subscribe(
+	dir: string,
+	id: number,
+	resume: { after?: number; run?: number } = {}
+): Promise<Subscription | null> {
+	const queue: ServerMessage[] = [];
+	let closed = false;
+	let wake: (() => void) | null = null;
+	const notify = () => wake?.();
+
+	const socket = await connect(
+		dir,
+		id,
+		(msg) => {
+			queue.push(msg);
+			notify();
+		},
+		() => {
+			closed = true;
+			notify();
+		}
+	);
+	if (!socket) return null;
+	socket.write(JSON.stringify({ type: 'subscribe', ...resume } satisfies ClientMessage) + '\n');
+	socket.flush();
+
+	return {
+		async nextBatch(coalesceMs = 100) {
+			while (!queue.length) {
+				if (closed) return null;
+				await new Promise<void>((resolve) => (wake = resolve));
+				wake = null;
+			}
+			await Bun.sleep(coalesceMs);
+			return queue.splice(0);
+		},
+		close() {
+			closed = true;
+			socket.end();
+			notify();
+		}
+	};
 }

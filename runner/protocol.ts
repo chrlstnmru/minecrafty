@@ -15,9 +15,12 @@ export type ClientMessage =
 	| { type: 'stop' }
 	| { type: 'kill' }
 	| { type: 'status' }
-	| { type: 'subscribe' };
+	// replay buffered lines newer than `after`, but only if `run` is still the same runner
+	| { type: 'subscribe'; after?: number; run?: number };
 
-export type ServerMessage = ({ type: 'status' } & RunnerStatus) | { type: 'log'; line: string };
+export type ServerMessage =
+	| ({ type: 'status' } & RunnerStatus)
+	| { type: 'log'; seq: number; line: string };
 
 // what the panel writes to <instance>/launch.json before spawning a runner
 export type LaunchSpec = {

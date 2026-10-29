@@ -20,7 +20,8 @@ const spec: LaunchSpec = JSON.parse(readFileSync(join(dir, 'launch.json'), 'utf8
 const sock = socketPath(dir, id);
 const pidFile = join(dir, 'runner.pid');
 
-const history: string[] = [];
+const history: { seq: number; line: string }[] = [];
+let seq = 0;
 const subscribers = new Set<Socket<{ buf: string; subscribed: boolean }>>();
 
 const send = (s: Socket<unknown>, msg: ServerMessage) => s.write(JSON.stringify(msg) + '\n');
@@ -29,9 +30,10 @@ const broadcast = (msg: ServerMessage) => {
 };
 
 function log(line: string) {
-	history.push(line);
+	const entry = { seq: ++seq, line };
+	history.push(entry);
 	if (history.length > HISTORY_LINES) history.shift();
-	broadcast({ type: 'log', line });
+	broadcast({ type: 'log', ...entry });
 }
 
 const child = Bun.spawn([spec.command, ...spec.args], {
@@ -98,7 +100,11 @@ function handle(s: Socket<{ buf: string; subscribed: boolean }>, msg: ClientMess
 		case 'subscribe':
 			s.data.subscribed = true;
 			subscribers.add(s);
-			for (const line of history) send(s, { type: 'log', line });
+			// a different run means the client's sequence numbers belong to an older runner
+			for (const entry of history) {
+				if (msg.run === status.startedAt && entry.seq <= (msg.after ?? 0)) continue;
+				send(s, { type: 'log', ...entry });
+			}
 			send(s, { type: 'status', ...status });
 			break;
 	}

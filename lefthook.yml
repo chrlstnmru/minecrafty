@@ -8,6 +8,6 @@ pre-commit:
     - name: oxlint
       glob: '*.{js,ts,svelte}'
       run: bunx oxlint {staged_files}
-    - name: eslint
-      glob: '*.{js,ts,svelte}'
+    - name: eslint (svelte)
+      glob: '*.svelte'
       run: bunx eslint {staged_files}

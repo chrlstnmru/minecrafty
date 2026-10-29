@@ -3,6 +3,7 @@ import { command, form, query } from '$app/server';
 import { z } from 'zod';
 import { requireAdmin } from '#lib/server/auth.js';
 import * as instances from '#lib/server/instances.js';
+import * as runner from '#lib/server/runner-client.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
 
 const id = z.number().int().positive();
@@ -16,9 +17,26 @@ async function userFacing(fn: () => Promise<void>) {
 	}
 }
 
-export const listInstances = query(async () => {
+// there is no runner event for "instance changed", so the stream samples the panel's view of them
+export const listInstances = query.live(async function* () {
 	requireAdmin();
-	return instances.listInstances();
+	let last = '';
+	while (true) {
+		const rows = await instances.listInstances();
+		const json = JSON.stringify(rows);
+		if (json !== last) {
+			last = json;
+			yield rows;
+		}
+		await Bun.sleep(1000);
+	}
+});
+
+export const getInstance = query(id, async (instanceId) => {
+	requireAdmin();
+	const row = instances.getInstance(instanceId);
+	if (!row) error(404, 'Instance not found');
+	return row;
 });
 
 const loader = z.enum(LOADERS);
@@ -58,7 +76,6 @@ export const createInstance = form(
 				invalid(issue.port('Port is already used by another instance'));
 			invalid(e instanceof Error ? e.message : 'Could not create the instance');
 		}
-		await listInstances().refresh();
 	}
 );
 
@@ -81,3 +98,80 @@ export const deleteInstance = command(id, async (instanceId) => {
 	requireAdmin();
 	await userFacing(() => instances.deleteInstance(instanceId));
 });
+
+export type ConsoleLine = { seq: number; line: string };
+
+export type ConsoleFrame = {
+	state: instances.InstanceState;
+	/** identifies one runner process; sequence numbers restart when it changes */
+	run: number | null;
+	/** recent lines, overlapping with earlier frames so a skipped frame loses nothing */
+	lines: ConsoleLine[];
+};
+
+const OVERLAP_LINES = 200;
+
+/**
+ * Live console for one instance. Live queries only keep the latest pending value, so every
+ * frame repeats the most recent lines and clients merge them by sequence number.
+ */
+export const consoleStream = query.live(id, async function* (instanceId) {
+	requireAdmin();
+	if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
+
+	const dir = instances.instanceDir(instanceId);
+	let state: ConsoleFrame['state'] = 'stopped';
+	let run: number | null = null;
+	let after = 0;
+	let tail: ConsoleLine[] = [];
+
+	yield { state, run, lines: tail } satisfies ConsoleFrame;
+
+	// the runner may not exist yet (or exit and be replaced), so keep looking for one
+	while (true) {
+		const sub = await runner.subscribe(dir, instanceId, { after, run: run ?? undefined });
+		if (!sub) {
+			if (state !== 'stopped') {
+				state = 'stopped';
+				yield { state, run, lines: tail } satisfies ConsoleFrame;
+			}
+			await Bun.sleep(1000);
+			continue;
+		}
+		try {
+			let batch;
+			while ((batch = await sub.nextBatch())) {
+				const fresh: ConsoleLine[] = [];
+				for (const msg of batch) {
+					if (msg.type === 'log') {
+						fresh.push({ seq: msg.seq, line: msg.line });
+						after = msg.seq;
+					} else {
+						state = msg.state;
+						if (msg.startedAt !== run) {
+							run = msg.startedAt;
+							tail = [];
+						}
+					}
+				}
+				tail = [...tail, ...fresh].slice(-OVERLAP_LINES - fresh.length);
+				yield { state, run, lines: tail } satisfies ConsoleFrame;
+				tail = tail.slice(-OVERLAP_LINES);
+			}
+		} finally {
+			sub.close();
+		}
+	}
+});
+
+export const sendCommand = command(
+	z.object({ id, line: z.string().max(1000) }),
+	async ({ id: instanceId, line }) => {
+		requireAdmin();
+		const sent = await runner.send(instances.instanceDir(instanceId), instanceId, {
+			type: 'stdin',
+			line
+		});
+		if (!sent) error(400, 'Instance is not running');
+	}
+);

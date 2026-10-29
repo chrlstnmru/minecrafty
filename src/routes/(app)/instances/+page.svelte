@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import {
@@ -36,12 +35,6 @@
 	let createOpen = $state(false);
 	let deleting = $state<{ id: number; name: string } | null>(null);
 
-	// the panel is the only observer of runner state, so poll it
-	onMount(() => {
-		const timer = setInterval(() => instances.refresh(), 2000);
-		return () => clearInterval(timer);
-	});
-
 	async function openCreate() {
 		createInstance.fields.set({ loader: 'vanilla', ramMaxMb: 2048, port: await nextPort() });
 		createOpen = true;
@@ -53,7 +46,6 @@
 		} catch (e) {
 			toast.error((e as { body?: { message?: string } }).body?.message ?? 'Action failed');
 		}
-		await instances.refresh();
 	}
 
 	const badge = {
@@ -94,6 +86,7 @@
 					<Card.Action><Badge variant={badge[inst.state]}>{inst.state}</Badge></Card.Action>
 				</Card.Header>
 				<Card.Footer class="flex flex-wrap gap-2">
+					<Button variant="secondary" size="sm" href="/instances/{inst.id}">Console</Button>
 					{#if active}
 						<Button
 							variant="outline"

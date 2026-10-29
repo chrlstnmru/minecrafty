@@ -18,6 +18,8 @@ export default defineConfig(
 	svelte.configs.prettier,
 	{
 		languageOptions: { globals: { ...globals.browser, ...globals.node } },
+		// oxlint reads the same disable comments, so eslint can't tell when they're still needed
+		linterOptions: { reportUnusedDisableDirectives: 'off' },
 		rules: {
 			// typescript-eslint strongly recommend that you do not use the no-undef lint rule on TypeScript projects.
 			// see: https://typescript-eslint.io/troubleshooting/faqs/eslint/#i-get-errors-from-the-no-undef-rule-about-global-variables-not-being-defined-even-though-there-are-no-typescript-errors
@@ -28,7 +30,9 @@ export default defineConfig(
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
 		languageOptions: {
 			parserOptions: {
-				projectService: true,
+				// no type-aware rules are enabled, and building the TS program for every
+				// .svelte file is what made eslint take ~45s instead of ~2s
+				projectService: false,
 				extraFileExtensions: ['.svelte'],
 				parser: ts.parser
 			}
