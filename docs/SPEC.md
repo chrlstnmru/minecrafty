@@ -17,18 +17,19 @@ Self-hosted web panel for running and managing Minecraft servers (vanilla and mo
 
 ## Stack
 
-| Layer    | Choice                                                          |
-| -------- | --------------------------------------------------------------- |
-| Runtime  | Bun                                                             |
-| Web      | SvelteKit (Svelte 5) with a Bun adapter (needed for WebSockets) |
-| UI       | shadcn-svelte + Tailwind 4, `dashboard-01` block as app shell   |
-| Database | SQLite via `bun:sqlite` + Drizzle ORM                           |
-| Java     | Eclipse Temurin JDK 8 / 17 / 21, downloaded on demand           |
+| Layer    | Choice                                                              |
+| -------- | ------------------------------------------------------------------- |
+| Runtime  | Bun                                                                 |
+| Web      | SvelteKit (Svelte 5) with `@sveltejs/adapter-bun`, remote functions |
+| UI       | shadcn-svelte (+ extras) + Tailwind 4, `dashboard-01` app shell     |
+| Database | SQLite via `bun:sqlite` + Drizzle ORM                               |
+| Java     | Eclipse Temurin JDK 8 / 17 / 21, downloaded on demand               |
+| Tooling  | oxfmt (format), oxlint + eslint (svelte only), lefthook hooks       |
 
 ## Architecture
 
 ```
-Browser ──HTTP/WS──> Panel (SvelteKit on Bun)
+Browser ──HTTP (remote functions, live queries)──> Panel (SvelteKit on Bun)
                         │  SQLite (users, instances, schedules, backups)
                         │
                         └─local socket─> Runner (one per instance, detached)
@@ -64,12 +65,34 @@ Servers must keep running when the panel restarts or updates.
 ### Instances
 
 - Create from: Vanilla, Paper, Purpur, Fabric, Quilt, Forge, NeoForge, or modpack import.
-- Version picker fed by each loader's official API/metadata.
-- Settings: name, RAM min/max, JVM args, Java version (auto-picked from MC version, overridable), port, auto-start on boot.
+- Version picker fed by each loader's official API/metadata. The loader build is not chosen: the newest build (stable channel for Paper) is used and recorded.
+- Server jar is downloaded and checksum-verified when the instance is created.
+- Settings: name, RAM min/max, JVM args, Java version (auto-picked from MC version, overridable), port, auto-start on boot. Ports are auto-assigned from 25565 upward and editable.
 - Actions: start, stop, restart, kill, delete.
-- Live console over WebSocket with command input and history.
+- Live console via `query.live` (streamed over HTTP, no WebSocket) with command input and history. Each frame repeats the most recent lines and clients merge by sequence number, because live queries only keep the latest pending value.
 - `server.properties` editor with form fields for common keys.
-- EULA prompt before first start.
+- EULA must be accepted when the instance is created.
+
+### Instance page
+
+Each instance has a dedicated page, `/instances/[id]`, with a shared header (name, loader and version, port, status, start/stop/kill) and a tab bar. Every module is its own nested route (`/instances/[id]/console`, `/files`, ...) so it can be linked to and loaded on its own. Modules not yet built show a "planned" placeholder.
+
+| Module         | Purpose                                                                                | Milestone |
+| -------------- | -------------------------------------------------------------------------------------- | --------- |
+| Console        | Live terminal with command input and history                                           | 1         |
+| Settings       | Name, RAM, JVM args, port, auto-start, delete                                          | 1         |
+| Mods           | Search, install, update, remove mods; track installed mods                             | 3         |
+| Resource packs | Browse and install resource packs (Modrinth/CurseForge), server resource-pack settings | 3         |
+| Shader packs   | Browse and install shader packs (Modrinth/CurseForge)                                  | 3         |
+| Files          | File manager and text editor, limited to the instance root                             | 4         |
+| Logs           | Browse `logs/latest.log` and rotated `.gz` files with search and download              | 4         |
+| Properties     | `server.properties` editor with form fields for common keys                            | 4         |
+| Players        | Online players, whitelist, ops, bans, kick (RCON)                                      | 4         |
+| Backups        | Manual and scheduled backups, restore                                                  | 4         |
+| Schedules      | Cron tasks for this instance                                                           | 4         |
+| Loader         | Update the loader build or Minecraft version, with a backup prompt                     | 4         |
+
+Console is the live server output with command input; Logs is the history of log files on disk.
 
 ### Loaders
 
@@ -148,13 +171,12 @@ Servers must keep running when the panel restarts or updates.
 
 Estimates assume one developer working part-time (evenings).
 
-1. **Core** (~2 weeks): Bun adapter, Drizzle schema, auth + first-run setup, runner process, start/stop, live console, Vanilla + Paper/Purpur.
+1. **Core** (~2 weeks): Bun adapter, Drizzle schema, auth + first-run setup, runner process, start/stop, live console, Vanilla + Paper/Purpur, auto-start on boot, instance page shell with Console and Settings.
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
-3. **Mods** (~2 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import.
-4. **Operations** (~2 weeks): file manager, backups, scheduled tasks, live stats, permissions UI.
+3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack and shader pack managers.
+4. **Operations** (~3 weeks): file manager, logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Open questions
 
-- Port allocation: auto-assign from a range, or always ask?
 - Panel self-update from the UI?
