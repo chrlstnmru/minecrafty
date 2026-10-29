@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>
 	integer('created_at', { mode: 'timestamp' })
@@ -44,3 +44,36 @@ export const instances = sqliteTable('instances', {
 	eulaAccepted: integer('eula_accepted', { mode: 'boolean' }).notNull().default(false),
 	createdAt: createdAt()
 });
+
+// mods, plugins, resource packs and shader packs installed from a mod platform
+export const installedMods = sqliteTable(
+	'installed_mods',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		instanceId: integer('instance_id')
+			.notNull()
+			.references(() => instances.id, { onDelete: 'cascade' }),
+		kind: text('kind', { enum: ['mod', 'resourcepack', 'shader'] })
+			.notNull()
+			.default('mod'),
+		source: text('source', { enum: ['modrinth', 'curseforge'] }).notNull(),
+		projectId: text('project_id').notNull(),
+		versionId: text('version_id').notNull(),
+		title: text('title').notNull(),
+		iconUrl: text('icon_url'),
+		versionNumber: text('version_number').notNull(),
+		// path relative to the instance's server folder, e.g. mods/sodium-0.6.jar
+		file: text('file').notNull(),
+		// sha512 of the installed file, to spot manual changes and match updates
+		hash: text('hash'),
+		// project id of the mod that pulled this one in as a required dependency
+		dependencyOf: text('dependency_of'),
+		installedAt: integer('installed_at', { mode: 'timestamp' })
+			.notNull()
+			.default(sql`(unixepoch())`)
+	},
+	(t) => [
+		uniqueIndex('installed_mods_project').on(t.instanceId, t.kind, t.source, t.projectId),
+		index('installed_mods_instance').on(t.instanceId)
+	]
+);

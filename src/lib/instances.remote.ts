@@ -2,20 +2,12 @@ import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import { z } from 'zod';
 import { requireAdmin } from '#lib/server/auth.js';
+import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
 import * as runner from '#lib/server/runner-client.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
 
 const id = z.number().int().positive();
-
-// surface service errors (missing jar, already running, ...) to the UI as 400s
-async function userFacing(fn: () => Promise<void>) {
-	try {
-		await fn();
-	} catch (e) {
-		error(400, e instanceof Error ? e.message : 'Something went wrong');
-	}
-}
 
 // there is no runner event for "instance changed", so the stream samples the panel's view of them
 export const listInstances = query.live(async function* () {

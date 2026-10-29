@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
-import { rename, rm } from 'node:fs/promises';
+import { rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { downloadFile, type Download, type Hash } from './download';
 
 export const LOADERS = [
 	'vanilla',
@@ -173,9 +174,6 @@ export async function isKnownVersion(loader: Loader, mc: string) {
 	return (await getMinecraftVersions(loader)).includes(mc);
 }
 
-type Hash = { algo: 'sha1' | 'sha256' | 'md5'; value: string };
-type Download = { url: string; hash?: Hash };
-
 async function sha1Sidecar(url: string): Promise<Hash> {
 	const res = await fetch(`${url}.sha1`, { signal: AbortSignal.timeout(15_000) });
 	if (!res.ok) throw new Error(`Missing checksum for ${url}`);
@@ -231,27 +229,6 @@ async function resolveDownload(loader: Loader, mc: string, build?: string): Prom
 			const url = `${NEOFORGE_MAVEN}/${build}/neoforge-${build}-installer.jar`;
 			return { url, hash: await sha1Sidecar(url) };
 		}
-	}
-}
-
-/** Downloads a file, verifying the upstream checksum when one is published. */
-async function downloadFile(dest: string, { url, hash }: Download) {
-	const res = await fetch(url, { signal: AbortSignal.timeout(5 * 60_000) });
-	if (!res.ok) throw new Error(`Download failed (${res.status})`);
-
-	const tmp = `${dest}.part`;
-	try {
-		await Bun.write(tmp, res);
-		if (hash) {
-			const actual = new Bun.CryptoHasher(hash.algo)
-				.update(await Bun.file(tmp).arrayBuffer())
-				.digest('hex');
-			if (actual !== hash.value) throw new Error('Downloaded file failed checksum verification');
-		}
-		await rename(tmp, dest);
-	} catch (e) {
-		await rm(tmp, { force: true });
-		throw e;
 	}
 }
 

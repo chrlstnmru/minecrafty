@@ -6,7 +6,6 @@ export const plannedSlugs = [
 	'files',
 	'logs',
 	'players',
-	'mods',
 	'resource-packs',
 	'shader-packs',
 	'backups',

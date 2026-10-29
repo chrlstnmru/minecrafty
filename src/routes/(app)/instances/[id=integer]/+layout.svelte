@@ -78,7 +78,11 @@
 				aria-current={slug === m.slug ? 'page' : undefined}
 				class={m.planned ? 'text-muted-foreground' : ''}
 			>
-				<m.icon />{m.title}
+				<m.icon />{m.slug === 'mods' &&
+				instance.loader &&
+				['paper', 'purpur'].includes(instance.loader)
+					? 'Plugins'
+					: m.title}
 			</Button>
 		{/each}
 	</nav>

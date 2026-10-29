@@ -55,7 +55,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'mods',
 		title: 'Mods',
 		icon: PackageIcon,
-		planned: 3,
 		description: 'Search and install mods from Modrinth and CurseForge, and keep them updated.'
 	},
 	{
