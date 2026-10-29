@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import DotsIcon from '@tabler/icons-svelte/icons/dots';
@@ -13,6 +14,18 @@
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
+	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
+	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
+	import {
+		createSortedRowModel,
+		createTable,
+		createTableState,
+		rowSelectionFeature,
+		rowSortingFeature,
+		sortFn_alphanumeric,
+		tableFeatures,
+		type SortingState
+	} from '@tanstack/svelte-table';
 	import { toast } from 'svelte-sonner';
 	import {
 		listFiles,
@@ -23,10 +36,12 @@
 		renameFile,
 		saveFile
 	} from '#lib/files.remote.js';
+	import type { FileEntry } from '#lib/server/files.js';
 	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
@@ -148,6 +163,84 @@
 		}
 	}
 
+	// --- the list: TanStack Table owns sorting and selection, the markup below is ours ---
+	const features = tableFeatures({
+		rowSortingFeature,
+		rowSelectionFeature,
+		sortedRowModel: createSortedRowModel(),
+		sortFns: { alphanumeric: sortFn_alphanumeric }
+	});
+	const [sorting, setSorting] = createTableState<SortingState>([{ id: 'name', desc: false }]);
+	type Row = { original: FileEntry };
+
+	// folders stay on top in either direction: the table flips the result of a descending sort,
+	// so the folder rule is flipped first to cancel that out
+	const foldersFirst = (compare: (a: FileEntry, b: FileEntry) => number) => (a: Row, b: Row) => {
+		const folders = Number(b.original.kind === 'dir') - Number(a.original.kind === 'dir');
+		if (folders) return sorting()[0]?.desc ? -folders : folders;
+		return compare(a.original, b.original);
+	};
+	const columns = [
+		{
+			accessorKey: 'name',
+			sortFn: foldersFirst((a, b) =>
+				a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' })
+			)
+		},
+		{ accessorKey: 'size', sortFn: foldersFirst((a, b) => a.size - b.size) },
+		{
+			accessorKey: 'modified',
+			sortFn: foldersFirst((a, b) => a.modified - b.modified)
+		}
+	];
+	const table = createTable({
+		features,
+		columns,
+		get data() {
+			return listing.current?.entries ?? [];
+		},
+		getRowId: (entry: FileEntry) => entry.name,
+		enableMultiSort: false,
+		enableSortingRemoval: false,
+		state: {
+			get sorting() {
+				return sorting();
+			}
+		},
+		onSortingChange: setSorting
+	});
+	const rows = $derived(table.getRowModel().rows);
+	const selectedCount = $derived(Object.keys(table.atoms.rowSelection.get()).length);
+
+	// a selection belongs to the folder it was made in
+	$effect(() => {
+		void path;
+		untrack(() => table.resetRowSelection(true));
+	});
+
+	const sortOf = (column: string) => {
+		const active = sorting()[0];
+		return active?.id === column ? (active.desc ? 'descending' : 'ascending') : 'none';
+	};
+	const sortBy = (column: string) => {
+		const active = sorting()[0];
+		setSorting([{ id: column, desc: active?.id === column && !active.desc }]);
+	};
+
+	// --- delete the selection ---
+	let bulkOpen = $state(false);
+	async function removeSelected() {
+		bulkOpen = false;
+		const names = table.getSelectedRowModel().rows.map((row) => row.original.name);
+		const results = await Promise.allSettled(
+			names.map((name) => removeFile({ id, path: join(name) }))
+		);
+		const failed = results.filter((r) => r.status === 'rejected');
+		table.resetRowSelection(true);
+		if (failed.length) toast.error(`${failed.length} of ${names.length} could not be deleted`);
+		else toast.success(`Deleted ${names.length} ${names.length === 1 ? 'item' : 'items'}`);
+	}
+
 	// --- upload (a dialog: pick or drop files, or a whole folder) ---
 	let uploadOpen = $state(false);
 
@@ -156,6 +249,21 @@
 		else if (entry.kind === 'file' && EDITABLE.test(entry.name)) openEditor(join(entry.name));
 	}
 </script>
+
+{#snippet sortable(column: string, label: string)}
+	<button
+		type="button"
+		class="inline-flex items-center gap-1 hover:text-foreground"
+		onclick={() => sortBy(column)}
+	>
+		{label}
+		{#if sortOf(column) === 'ascending'}
+			<ArrowUpIcon class="size-3.5" />
+		{:else if sortOf(column) === 'descending'}
+			<ArrowDownIcon class="size-3.5" />
+		{/if}
+	</button>
+{/snippet}
 
 <!-- fills the tab: header and toolbar stay put, only the list scrolls -->
 <Card.Root class="min-h-0 flex-1 gap-0 overflow-hidden py-0">
@@ -206,6 +314,15 @@
 			</Breadcrumb.Root>
 		</div>
 		<Card.Action class="flex flex-wrap gap-2">
+			{#if selectedCount}
+				<span class="self-center text-sm text-muted-foreground">{selectedCount} selected</span>
+				<Button variant="outline" size="sm" onclick={() => table.resetRowSelection(true)}>
+					Clear
+				</Button>
+				<Button variant="destructive" size="sm" onclick={() => (bulkOpen = true)}>
+					<TrashIcon />Delete
+				</Button>
+			{/if}
 			<Button variant="outline" size="sm" onclick={() => (uploadOpen = true)}>
 				<UploadIcon />Upload
 			</Button>
@@ -220,22 +337,43 @@
 			</Button>
 		</Card.Action>
 	</Card.Header>
-	<Card.Content class="min-h-0 flex-1 overflow-y-auto px-0">
-		<Table.Root>
-			<Table.Header>
+	<Card.Content class="flex min-h-0 flex-1 flex-col px-0">
+		<!-- the table scrolls inside its own container so the header can stick to it -->
+		<Table.Root containerClass="min-h-0 flex-1 overflow-y-auto">
+			<Table.Header class="sticky top-0 z-10 bg-card">
 				<Table.Row>
-					<Table.Head class="ps-6">Name</Table.Head>
-					<Table.Head class="w-28 text-end">Size</Table.Head>
-					<Table.Head class="hidden w-48 sm:table-cell">Modified</Table.Head>
+					<Table.Head class="w-10 ps-6">
+						<Checkbox
+							aria-label="Select all"
+							checked={table.getIsAllRowsSelected()}
+							indeterminate={table.getIsSomeRowsSelected()}
+							onCheckedChange={(value) => table.toggleAllRowsSelected(!!value)}
+						/>
+					</Table.Head>
+					<Table.Head aria-sort={sortOf('name')}>{@render sortable('name', 'Name')}</Table.Head>
+					<Table.Head class="w-28 text-end" aria-sort={sortOf('size')}>
+						{@render sortable('size', 'Size')}
+					</Table.Head>
+					<Table.Head class="hidden w-48 sm:table-cell" aria-sort={sortOf('modified')}>
+						{@render sortable('modified', 'Modified')}
+					</Table.Head>
 					<Table.Head class="w-12 pe-6"></Table.Head>
 				</Table.Row>
 			</Table.Header>
 			<Table.Body>
-				{#each listing.current?.entries ?? [] as entry (entry.name)}
+				{#each rows as row (row.id)}
+					{@const entry = row.original}
 					{@const to = join(entry.name)}
 					{@const editable = entry.kind === 'file' && EDITABLE.test(entry.name)}
-					<Table.Row>
+					<Table.Row data-state={row.getIsSelected() ? 'selected' : undefined}>
 						<Table.Cell class="ps-6">
+							<Checkbox
+								aria-label="Select {entry.name}"
+								checked={row.getIsSelected()}
+								onCheckedChange={(value) => row.toggleSelected(!!value)}
+							/>
+						</Table.Cell>
+						<Table.Cell>
 							<button
 								type="button"
 								class="flex max-w-full items-center gap-2 text-start hover:underline disabled:no-underline"
@@ -312,7 +450,7 @@
 				{:else}
 					{#if listing.current}
 						<Table.Row>
-							<Table.Cell colspan={4} class="ps-6 text-muted-foreground">
+							<Table.Cell colspan={5} class="ps-6 text-muted-foreground">
 								This folder is empty.
 							</Table.Cell>
 						</Table.Row>
@@ -368,6 +506,21 @@
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action onclick={remove}>Delete</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<AlertDialog.Root bind:open={bulkOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Delete {selectedCount} selected?</AlertDialog.Title>
+			<AlertDialog.Description>
+				Folders are deleted with everything in them. This cannot be undone.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action onclick={removeSelected}>Delete</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
