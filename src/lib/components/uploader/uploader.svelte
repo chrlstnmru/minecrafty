@@ -175,65 +175,15 @@
 </script>
 
 <div class="grid gap-3">
+	<!-- The root only supplies the hidden file input (opened by the buttons below). The zone itself is
+	     a plain drop target: clicking it does nothing. -->
 	<FileDropZone.Root
 		id={fileInputId}
 		disabled={busy}
 		maxFileSize={maxFileBytes}
 		onUpload={async (files) => add(fromFileList(files))}
 		onFileRejected={({ file }) => toast.error(`${file.name} is too large`)}
-	>
-		<FileDropZone.Trigger
-			ondragenter={() => (dragging = true)}
-			ondragover={(e: DragEvent) => {
-				e.preventDefault();
-				dragging = true;
-			}}
-			ondragleave={() => (dragging = false)}
-			ondrop={onDrop}
-		>
-			<div
-				class="flex h-40 flex-col items-center justify-center gap-3 rounded-lg border border-dashed p-6 text-center transition-colors hover:cursor-pointer hover:bg-accent/25 {dragging
-					? 'border-primary bg-accent/40'
-					: ''}"
-			>
-				<UploadIcon class="size-7 text-muted-foreground" />
-				<span class="font-medium">
-					{folders ? `Drop ${noun} or a folder here` : `Drop ${noun} here`}
-				</span>
-				<!-- buttons inside the label do their own thing, so each opens its own picker -->
-				<span class="flex items-center gap-2 text-sm text-muted-foreground">
-					or
-					<Button
-						type="button"
-						variant="outline"
-						size="sm"
-						disabled={busy}
-						onclick={(e: MouseEvent) => {
-							e.preventDefault();
-							document.getElementById(fileInputId)?.click();
-						}}
-					>
-						<FileIcon />Choose {noun}
-					</Button>
-					{#if folders}
-						<Button
-							type="button"
-							variant="outline"
-							size="sm"
-							disabled={busy}
-							onclick={(e: MouseEvent) => {
-								e.preventDefault();
-								folderInput?.click();
-							}}
-						>
-							<FolderIcon />Choose a folder
-						</Button>
-					{/if}
-				</span>
-			</div>
-		</FileDropZone.Trigger>
-	</FileDropZone.Root>
-
+	/>
 	{#if folders}
 		<input
 			bind:this={folderInput}
@@ -248,13 +198,65 @@
 		/>
 	{/if}
 
-	{#if queue.length}
-		<div class="grid gap-2">
-			<div class="flex items-center justify-between text-sm">
-				<span class="font-medium">{waiting.length} to upload</span>
-				<span class="text-muted-foreground">{size(totalBytes)}</span>
+	{#snippet pickers(compact: boolean)}
+		<Button
+			type="button"
+			variant="outline"
+			size="sm"
+			disabled={busy}
+			onclick={() => document.getElementById(fileInputId)?.click()}
+		>
+			<FileIcon />{compact ? 'Add' : 'Choose'}
+			{noun}
+		</Button>
+		{#if folders}
+			<Button
+				type="button"
+				variant="outline"
+				size="sm"
+				disabled={busy}
+				onclick={() => folderInput?.click()}
+			>
+				<FolderIcon />{compact ? 'Add' : 'Choose'} a folder
+			</Button>
+		{/if}
+	{/snippet}
+
+	<div
+		role="presentation"
+		class="flex min-h-44 flex-col rounded-lg border border-dashed transition-colors {dragging
+			? 'border-primary bg-accent/40'
+			: ''}"
+		ondragenter={() => (dragging = true)}
+		ondragover={(e: DragEvent) => {
+			e.preventDefault();
+			dragging = true;
+		}}
+		ondragleave={() => (dragging = false)}
+		ondrop={onDrop}
+	>
+		{#if !queue.length}
+			<div class="flex flex-1 flex-col items-center justify-center gap-3 p-6 text-center">
+				<UploadIcon class="size-7 text-muted-foreground" />
+				<span class="font-medium">
+					{folders ? `Drop ${noun} or a folder here` : `Drop ${noun} here`}
+				</span>
+				<span
+					class="flex flex-wrap items-center justify-center gap-2 text-sm text-muted-foreground"
+				>
+					or
+					{@render pickers(false)}
+				</span>
 			</div>
-			<div class="grid max-h-56 gap-1.5 overflow-y-auto pe-1">
+		{:else}
+			<div class="flex flex-wrap items-center justify-between gap-2 border-b p-2 ps-3">
+				<span class="text-sm">
+					<span class="font-medium">{waiting.length} to upload</span>
+					<span class="text-muted-foreground"> · {size(totalBytes)}</span>
+				</span>
+				<span class="flex flex-wrap gap-2">{@render pickers(true)}</span>
+			</div>
+			<div class="grid max-h-56 gap-1.5 overflow-y-auto p-2">
 				{#each queue.slice(0, SHOWN) as item (item.path)}
 					{@const current = status[item.path] ?? { state: 'idle' }}
 					{@const Icon = iconFor(item.path)}
@@ -295,8 +297,8 @@
 					<p class="px-1 text-xs text-muted-foreground">and {queue.length - SHOWN} more {noun}</p>
 				{/if}
 			</div>
-		</div>
-	{/if}
+		{/if}
+	</div>
 
 	{#if busy}
 		<div class="grid gap-1">
