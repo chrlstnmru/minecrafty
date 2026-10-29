@@ -18,7 +18,7 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
-	const instance = $derived(getInstance(id));
+	const instance = $derived(await getInstance(id));
 	const all = listInstances();
 	const status = $derived(all.current?.find((i) => i.id === id)?.state ?? 'stopped');
 	const active = $derived(status === 'running' || status === 'stopping');
@@ -33,7 +33,7 @@
 	}
 </script>
 
-<svelte:head><title>{instance.current?.name ?? 'Instance'} · Minecrafty</title></svelte:head>
+<svelte:head><title>{instance?.name ?? 'Instance'} · Minecrafty</title></svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
 	<div class="flex flex-wrap items-center gap-3">
@@ -41,11 +41,11 @@
 			<ArrowLeftIcon />
 		</Button>
 		<div class="min-w-0 flex-1">
-			<h2 class="truncate text-lg font-medium">{instance.current?.name ?? ''}</h2>
-			{#if instance.current}
+			<h2 class="truncate text-lg font-medium">{instance?.name ?? ''}</h2>
+			{#if instance}
 				<p class="text-sm text-muted-foreground">
-					{instance.current.loader}
-					{instance.current.mcVersion} · port {instance.current.port}
+					{instance.loader}
+					{instance.mcVersion} · port {instance.port}
 				</p>
 			{/if}
 		</div>

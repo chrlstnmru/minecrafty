@@ -2,11 +2,11 @@
 	import { tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import SendIcon from '@tabler/icons-svelte/icons/send';
-	import LoaderIcon from '@tabler/icons-svelte/icons/loader';
 	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import * as InputGroup from './ui/input-group';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import MathGreaterIcon from '@tabler/icons-svelte/icons/math-greater';
 
 	let { id, status = $bindable('stopped') }: { id: number; status?: string } = $props();
 
@@ -74,6 +74,7 @@
 	let input = $state('');
 	let history: string[] = [];
 	let cursor = -1;
+	const disableConsoleInput = $derived(!stream.connected || status !== 'running');
 
 	async function submit(e: SubmitEvent) {
 		e.preventDefault();
@@ -123,21 +124,25 @@
 	</div>
 	<form onsubmit={submit} class="flex gap-2">
 		<InputGroup.Root>
-			<InputGroup.Addon align="inline-start" hidden={stream.connected}>
-				<LoaderIcon />
+			<InputGroup.Addon align="inline-start">
+				{#if !stream.connected}
+					<Spinner />
+				{:else}
+					<MathGreaterIcon />
+				{/if}
 			</InputGroup.Addon>
 			<InputGroup.Input
 				bind:value={input}
 				onkeydown={onKeydown}
 				placeholder={status === 'running' ? 'Type a command…' : 'Start the server to send commands'}
-				disabled={status !== 'running'}
+				disabled={disableConsoleInput}
 				autocomplete="off"
 				spellcheck="false"
 				class="font-mono"
 			/>
 		</InputGroup.Root>
 
-		<Button type="submit" disabled={status !== 'running' || !input.trim()}>
+		<Button type="submit" disabled={disableConsoleInput || !input.trim()}>
 			<SendIcon />Send
 		</Button>
 	</form>
