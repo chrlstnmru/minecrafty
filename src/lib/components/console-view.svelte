@@ -48,6 +48,8 @@
 		rows = [];
 		lastRun = null;
 		lastSeq = 0;
+		pinned = true;
+		lastTop = 0;
 	});
 
 	$effect(() => {
@@ -58,17 +60,39 @@
 	});
 
 	let scroller = $state<HTMLElement>();
+
+	// Follow the output while the view sits at the bottom; stop once the user scrolls up.
 	let pinned = true;
+	let lastTop = 0;
+	const BOTTOM_SLACK = 8;
+
+	function toBottom() {
+		if (scroller) scroller.scrollTop = scroller.scrollHeight;
+	}
 
 	function onScroll() {
 		if (!scroller) return;
-		pinned = scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight < 40;
+		const top = scroller.scrollTop;
+		if (scroller.scrollHeight - top - scroller.clientHeight <= BOTTOM_SLACK) pinned = true;
+		// only moving up counts as leaving the bottom: new lines and layout changes never lower scrollTop
+		else if (top < lastTop) pinned = false;
+		lastTop = top;
 	}
 
 	$effect(() => {
-		void rows.length;
-		if (!pinned) return;
-		tick().then(() => scroller?.scrollTo({ top: scroller.scrollHeight }));
+		// the last key changes with every new line, unlike the length once the buffer is capped
+		void rows.at(-1)?.key;
+		if (pinned) tick().then(toBottom);
+	});
+
+	// keep following when the box itself changes size (first layout, window resize)
+	$effect(() => {
+		if (!scroller) return;
+		const observer = new ResizeObserver(() => {
+			if (pinned) toBottom();
+		});
+		observer.observe(scroller);
+		return () => observer.disconnect();
 	});
 
 	let input = $state('');
