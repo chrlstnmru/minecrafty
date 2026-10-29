@@ -1,0 +1,130 @@
+import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
+import { describe, expect, it } from 'vitest';
+import { makeInstance } from '../../test/instance';
+import { setProgress, clearProgress } from './install-progress';
+import * as I from './instances';
+
+describe('ports', () => {
+	it('suggests the first free port from 25565 upward', () => {
+		const taken = makeInstance({ port: I.PORT_START });
+		const next = I.nextFreePort();
+		expect(next).toBeGreaterThan(I.PORT_START);
+		expect(I.getInstance(taken.id)?.port).toBe(I.PORT_START);
+		// the suggestion is really free
+		expect(() => makeInstance({ port: next })).not.toThrow();
+	});
+
+	it('refuses two instances on one port', () => {
+		makeInstance({ port: 27001 });
+		expect(() => makeInstance({ port: 27001 })).toThrow(/UNIQUE/);
+	});
+});
+
+describe('creating an instance row', () => {
+	it('creates its server folder and starts out ready', () => {
+		const row = makeInstance();
+		expect(existsSync(I.serverDir(row.id))).toBe(true);
+		expect(row.installState).toBe('ready');
+		expect(row.installMessage).toBeNull();
+	});
+
+	it('discarding removes the row and the folder', () => {
+		const row = makeInstance();
+		I.discardInstance(row.id);
+		expect(I.getInstance(row.id)).toBeUndefined();
+		expect(existsSync(I.instanceDir(row.id))).toBe(false);
+	});
+});
+
+describe('settings', () => {
+	it('saves what the settings page edits and leaves the rest', () => {
+		const row = makeInstance({ name: 'old' });
+		I.updateSettings(row.id, {
+			name: 'new',
+			port: 27050,
+			ramMinMb: 256,
+			ramMaxMb: 2048,
+			javaMajor: 21,
+			jvmArgs: '-XX:+UseG1GC',
+			autoStart: true
+		});
+		expect(I.getInstance(row.id)).toMatchObject({
+			name: 'new',
+			port: 27050,
+			ramMaxMb: 2048,
+			javaMajor: 21,
+			autoStart: true,
+			loader: 'vanilla'
+		});
+	});
+});
+
+describe('unfinished installs', () => {
+	it('cannot start while installing, or after a failed install', async () => {
+		const installing = makeInstance({ installState: 'installing' });
+		await expect(I.startInstance(installing.id)).rejects.toThrow(/Still installing/);
+		const failed = makeInstance({
+			installState: 'failed',
+			installMessage: 'a mod could not be downloaded'
+		});
+		await expect(I.startInstance(failed.id)).rejects.toThrow(
+			/install failed: a mod could not be downloaded/
+		);
+	});
+
+	it('cannot be deleted while installing', async () => {
+		const row = makeInstance({ installState: 'installing' });
+		await expect(I.deleteInstance(row.id)).rejects.toThrow(/Wait for the install/);
+		expect(I.getInstance(row.id)).toBeDefined();
+	});
+
+	it('a failed install can be deleted', async () => {
+		const row = makeInstance({ installState: 'failed' });
+		await I.deleteInstance(row.id);
+		expect(I.getInstance(row.id)).toBeUndefined();
+	});
+
+	it('marks an install interrupted by a restart as failed', () => {
+		const stuck = makeInstance({ installState: 'installing' });
+		const fine = makeInstance();
+		I.failInterruptedInstalls();
+		expect(I.getInstance(stuck.id)).toMatchObject({
+			installState: 'failed',
+			installMessage: 'Interrupted by a panel restart'
+		});
+		expect(I.getInstance(fine.id)?.installState).toBe('ready');
+	});
+});
+
+describe('start refusals', () => {
+	it('needs the server files and the EULA', async () => {
+		const noEula = makeInstance({ eulaAccepted: false });
+		mkdirSync(I.serverDir(noEula.id), { recursive: true });
+		writeFileSync(`${I.serverDir(noEula.id)}/server.jar`, '');
+		await expect(I.startInstance(noEula.id)).rejects.toThrow(/EULA/);
+
+		const noJar = makeInstance();
+		await expect(I.startInstance(noJar.id)).rejects.toThrow(/server\.jar is missing/);
+	});
+
+	it('says an instance is not found', async () => {
+		await expect(I.startInstance(999_999)).rejects.toThrow(/not found/i);
+	});
+});
+
+describe('the instance list', () => {
+	it('reports state, and install progress while one is running', async () => {
+		const row = makeInstance({ installState: 'installing' });
+		setProgress(row.id, { label: 'Downloading mods', done: 3, total: 10 });
+		let listed = (await I.listInstances()).find((i) => i.id === row.id);
+		expect(listed).toMatchObject({
+			state: 'stopped',
+			installState: 'installing',
+			progress: { label: 'Downloading mods', done: 3, total: 10 }
+		});
+
+		clearProgress(row.id);
+		listed = (await I.listInstances()).find((i) => i.id === row.id);
+		expect(listed?.progress).toBeNull();
+	});
+});

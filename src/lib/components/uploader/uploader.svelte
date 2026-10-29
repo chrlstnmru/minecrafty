@@ -12,6 +12,7 @@
 	import * as FileDropZone from '#lib/components/ui/file-drop-zone/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { SMALL_FILE_BYTES } from '#lib/upload-limits.js';
 	import {
 		batches,
 		collectEntries,
@@ -28,14 +29,31 @@
 	 */
 	let {
 		upload,
+		uploadLarge,
+		discard,
 		maxFileBytes,
+		smallFileBytes = SMALL_FILE_BYTES,
 		busy = $bindable(false),
 		onDone,
 		folders = true,
 		noun = 'files'
 	}: {
+		/** sends a batch of small files */
 		upload: (batch: UploadItem[]) => Promise<void>;
+		/**
+		 * Sends one file bigger than `smallFileBytes`, reporting bytes as they are acknowledged. It
+		 * should be resumable: calling it again for a file that failed picks up where it stopped.
+		 * Without it, every file goes through `upload`.
+		 */
+		uploadLarge?: (
+			item: UploadItem,
+			onBytes: (sent: number, total: number) => void,
+			signal: AbortSignal
+		) => Promise<void>;
+		/** a file left the queue (removed, or the uploader closed): drop whatever was sent of it */
+		discard?: (item: UploadItem) => void;
 		maxFileBytes: number;
+		smallFileBytes?: number;
 		/** true while sending; lets a parent keep a dialog open */
 		busy?: boolean;
 		/** called once everything has been sent */
@@ -45,12 +63,13 @@
 		noun?: string;
 	} = $props();
 
-	type Status = { state: Attachment.AttachmentState; message?: string };
+	type Status = { state: Attachment.AttachmentState; message?: string; sent?: number };
 
 	let queue = $state<UploadItem[]>([]);
 	let status = $state<Record<string, Status>>({});
 	let dragging = $state(false);
-	let progress = $state({ done: 0, total: 0 });
+	let progress = $state({ bytes: 0, totalBytes: 0, files: 0, totalFiles: 0 });
+	let controller: AbortController | undefined;
 	// the drop zone's own (hidden) file input, found by id so a button can open it
 	const fileInputId = $props.id();
 	let folderInput = $state<HTMLInputElement>();
@@ -82,7 +101,13 @@
 		queue = [];
 		status = {};
 	}
-	onDestroy(clear);
+	onDestroy(() => {
+		controller?.abort();
+		for (const item of queue) if (isLarge(item)) discard?.(item);
+		clear();
+	});
+
+	const isLarge = (item: UploadItem) => !!uploadLarge && item.file.size > smallFileBytes;
 
 	/** Adds to the queue; a path already queued is replaced, matching what the server does. */
 	function add(items: UploadItem[]) {
@@ -113,6 +138,8 @@
 	}
 
 	function remove(path: string) {
+		const item = queue.find((i) => i.path === path);
+		if (item && isLarge(item)) discard?.(item);
 		dropPreview(path);
 		delete status[path];
 		queue = queue.filter((item) => item.path !== path);
@@ -142,26 +169,76 @@
 		const todo = waiting;
 		if (!todo.length || busy) return;
 		busy = true;
-		progress = { done: 0, total: todo.length };
+		controller = new AbortController();
+		const { signal } = controller;
+		const small = todo.filter((item) => !isLarge(item));
+		const large = todo.filter(isLarge);
+		progress = {
+			bytes: 0,
+			totalBytes: todo.reduce((sum, item) => sum + item.file.size, 0),
+			files: 0,
+			totalFiles: todo.length
+		};
+		const finish = (item: UploadItem) => {
+			status[item.path] = { state: 'done' };
+			progress.bytes += item.file.size;
+			progress.files++;
+		};
+		const fail = (items: UploadItem[], e: unknown) => {
+			const message =
+				(e as { body?: { message?: string } }).body?.message ??
+				(e as Error).message ??
+				'The upload failed';
+			for (const item of items) status[item.path] = { state: 'error', message };
+			toast.error(message);
+		};
+
 		try {
-			for (const batch of batches(todo)) {
+			for (const batch of batches(small)) {
+				if (signal.aborted) break;
 				for (const item of batch) status[item.path] = { state: 'uploading' };
 				try {
 					await upload(batch);
 				} catch (e) {
-					const message =
-						(e as { body?: { message?: string } }).body?.message ?? 'The upload failed';
-					for (const item of batch) status[item.path] = { state: 'error', message };
-					toast.error(message);
+					fail(batch, e);
 					return;
 				}
-				for (const item of batch) status[item.path] = { state: 'done' };
-				progress.done += batch.length;
+				for (const item of batch) finish(item);
 			}
-			const count = progress.total;
+			for (const item of large) {
+				if (signal.aborted) break;
+				status[item.path] = { state: 'uploading', sent: 0 };
+				const base = progress.bytes;
+				try {
+					await uploadLarge!(
+						item,
+						(sent) => {
+							status[item.path] = { state: 'uploading', sent };
+							progress.bytes = base + sent;
+						},
+						signal
+					);
+				} catch (e) {
+					if (signal.aborted) break;
+					fail([item], e);
+					return;
+				}
+				progress.bytes = base;
+				finish(item);
+			}
+
+			if (signal.aborted) {
+				// what was sent stays sent; the rest goes back to waiting
+				for (const item of todo)
+					if (status[item.path]?.state !== 'done') status[item.path] = { state: 'idle' };
+				toast.info('Upload cancelled');
+				return;
+			}
+			const count = progress.totalFiles;
 			clear();
 			onDone?.(count);
 		} finally {
+			controller = undefined;
 			busy = false;
 		}
 	}
@@ -279,8 +356,17 @@
 									? (current.message ?? 'Failed')
 									: current.state === 'done'
 										? 'Uploaded'
-										: size(item.file.size)}
+										: current.state === 'uploading' && isLarge(item)
+											? `${size(current.sent ?? 0)} of ${size(item.file.size)}`
+											: size(item.file.size)}
 							</Attachment.Description>
+							{#if current.state === 'uploading' && isLarge(item)}
+								<Progress
+									class="mt-1 h-1"
+									value={current.sent ?? 0}
+									max={Math.max(item.file.size, 1)}
+								/>
+							{/if}
 						</Attachment.Content>
 						<Attachment.Actions>
 							<Attachment.Action
@@ -302,14 +388,22 @@
 
 	{#if busy}
 		<div class="grid gap-1">
-			<Progress value={progress.done} max={Math.max(progress.total, 1)} />
+			<Progress value={progress.bytes} max={Math.max(progress.totalBytes, 1)} />
 			<p class="text-xs text-muted-foreground">
-				Uploading {progress.done} of {progress.total}…
+				Uploading {progress.files} of {progress.totalFiles}
+				{progress.totalFiles === 1 ? 'file' : 'files'} · {size(progress.bytes)} of {size(
+					progress.totalBytes
+				)}
 			</p>
 		</div>
 	{/if}
 
-	<Button type="button" disabled={!waiting.length} loading={busy} onclick={send}>
-		Upload {waiting.length || ''}
-	</Button>
+	<div class="flex gap-2">
+		<Button type="button" class="flex-1" disabled={!waiting.length} loading={busy} onclick={send}>
+			Upload {waiting.length || ''}
+		</Button>
+		{#if busy}
+			<Button type="button" variant="outline" onclick={() => controller?.abort()}>Cancel</Button>
+		{/if}
+	</div>
 </div>

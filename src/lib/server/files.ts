@@ -11,6 +11,7 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { SMALL_FILE_BYTES } from '../upload-limits';
 import { getInstance, serverDir } from './instances';
 import type { ZipEntry } from './zip-writer';
 
@@ -25,7 +26,6 @@ export type FileEntry = {
 };
 
 export const MAX_EDIT_BYTES = 2 * 1024 * 1024;
-export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
 
 // the text formats a server's configuration comes in
 const EDITABLE =
@@ -140,17 +140,15 @@ export function deleteEntry(instanceId: number, rel: string) {
 }
 
 /**
- * Saves an uploaded file into a folder, replacing a file of the same name. `relPath` is the file's
- * path inside a dropped folder (`pack/mods/a.jar`); its folders are created below `dirRel`, and
- * every part of it must be a plain name, so it can never climb out.
+ * Where an uploaded file goes: `relPath` is its path inside a dropped folder (`pack/mods/a.jar`),
+ * created below `dirRel`. Every part must be a plain name, so it can never climb out, and the
+ * result is checked through symlinks. Used by both small-file and chunked uploads.
  */
-export async function saveUpload(instanceId: number, dirRel: string, file: File, relPath?: string) {
-	if (file.size > MAX_UPLOAD_BYTES)
-		throw new Error(`${file.name} is too large (${MAX_UPLOAD_BYTES / 1024 / 1024} MB limit)`);
+export function uploadTarget(instanceId: number, dirRel: string, relPath: string) {
 	const { absolute: dir, base } = resolveSafe(instanceId, dirRel);
 	if (!statSync(dir).isDirectory()) throw new Error('Not a folder');
 
-	const raw = (relPath ?? file.name).replaceAll('\\', '/');
+	const raw = relPath.replaceAll('\\', '/');
 	// same rule as every other path here: relative to the folder, never absolute
 	if (raw.startsWith('/') || /^[a-zA-Z]:/.test(raw)) throw new Error('That path is not allowed');
 	const parts = raw.split('/').filter(Boolean);
@@ -158,19 +156,31 @@ export async function saveUpload(instanceId: number, dirRel: string, file: File,
 	for (const part of parts) checkName(part);
 
 	const target = resolveSafe(instanceId, join(relative(base, dir), ...parts));
+	return { ...target, shown: parts.join('/') };
+}
+
+/** Creates the folders a target needs, then checks again: one of them could be a link pointing out. */
+export function prepareTarget(instanceId: number, target: ReturnType<typeof uploadTarget>) {
 	mkdirSync(dirname(target.absolute), { recursive: true });
-	// checked again now that the folders exist: one of them could be a link pointing outside
 	resolveSafe(instanceId, target.rel);
 	if (existsSync(target.absolute) && !statSync(target.absolute).isFile())
-		throw new Error(`${parts.join('/')} is a folder`);
+		throw new Error(`${target.shown} is a folder`);
+}
+
+/** Saves a small uploaded file into a folder, replacing a file of the same name. */
+export async function saveUpload(instanceId: number, dirRel: string, file: File, relPath?: string) {
+	if (file.size > SMALL_FILE_BYTES * 2)
+		throw new Error(`${file.name} is too large for this route, it should be sent in pieces`);
+	const target = uploadTarget(instanceId, dirRel, relPath ?? file.name);
+	prepareTarget(instanceId, target);
 
 	// Kit's lazily read upload must be streamed: handed to Bun.write as is, it is written as text
 	await Bun.write(target.absolute, new Response(file.stream()));
 	if (statSync(target.absolute).size !== file.size) {
 		rmSync(target.absolute, { force: true });
-		throw new Error(`${parts.join('/')} was not received completely, try again`);
+		throw new Error(`${target.shown} was not received completely, try again`);
 	}
-	return parts.join('/');
+	return target.shown;
 }
 
 /** What a download of this path is: a file as it is, or a folder as a zip of its contents. */

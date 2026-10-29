@@ -3,6 +3,7 @@ import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
+import { sweepUploads } from '#lib/server/uploads.js';
 
 const PUBLIC = ['/login', '/setup'];
 
@@ -50,6 +51,7 @@ export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
 	if (building) return;
 	failInterruptedInstalls();
+	sweepUploads();
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
 };

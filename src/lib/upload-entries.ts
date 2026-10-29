@@ -1,6 +1,8 @@
 // Turns what a user drops or picks into a flat list of files with their path inside it. Browser
 // only: plain functions over the File System Entry API, kept apart so they can be tested.
 
+import { BATCH_BYTES, BATCH_FILES } from './upload-limits.js';
+
 export type UploadItem = { file: File; path: string };
 
 type Reader = {
@@ -49,7 +51,7 @@ export const fromFileList = (files: Iterable<File>): UploadItem[] =>
 	Array.from(files, (file) => ({ file, path: file.webkitRelativePath || file.name }));
 
 /** Splits a queue into requests that each stay well under the server's body limit. */
-export function batches(items: UploadItem[], maxBytes = 256 * 1024 * 1024, maxFiles = 200) {
+export function batches(items: UploadItem[], maxBytes = BATCH_BYTES, maxFiles = BATCH_FILES) {
 	const out: UploadItem[][] = [];
 	let current: UploadItem[] = [];
 	let bytes = 0;
