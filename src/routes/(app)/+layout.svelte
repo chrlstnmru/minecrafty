@@ -4,13 +4,13 @@
 	import SiteHeader from '#lib/components/site-header.svelte';
 	import type { LayoutProps } from './$types';
 
-	let { children }: LayoutProps = $props();
+	let { children, data }: LayoutProps = $props();
 </script>
 
 <Sidebar.Provider
 	style="--sidebar-width: calc(var(--spacing) * 72); --header-height: calc(var(--spacing) * 12);"
 >
-	<AppSidebar variant="inset" />
+	<AppSidebar variant="inset" user={{ name: data.user.username, role: data.user.role }} />
 	<Sidebar.Inset>
 		<SiteHeader />
 		<div class="flex flex-1 flex-col">

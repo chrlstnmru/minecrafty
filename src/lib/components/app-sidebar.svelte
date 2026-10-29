@@ -7,10 +7,10 @@
 	import NavUser from './nav-user.svelte';
 	import type { ComponentProps } from 'svelte';
 
-	// Placeholder until auth exists
-	const user = { name: 'admin', email: 'admin@localhost', avatar: '' };
-
-	let { ...restProps }: ComponentProps<typeof Sidebar.Root> = $props();
+	let {
+		user,
+		...restProps
+	}: ComponentProps<typeof Sidebar.Root> & { user: { name: string; role: string } } = $props();
 </script>
 
 <Sidebar.Root collapsible="offcanvas" {...restProps}>
