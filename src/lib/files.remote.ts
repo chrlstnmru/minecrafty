@@ -89,8 +89,6 @@ export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, p
 	await listFiles({ id: instanceId, path }).refresh();
 });
 
-// --- chunked uploads (large files): begin, send pieces, finish. See server/uploads.ts.
-
 const uploadId = v.pipe(v.string(), v.uuid());
 
 export const beginUpload = command(

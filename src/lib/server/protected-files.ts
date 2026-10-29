@@ -36,8 +36,6 @@ export function assertMutable(rel: string, action: string) {
 		);
 }
 
-// --- things that are only dangerous while the server runs ---
-
 // the server keeps these in memory and writes them back, so an edit made while it runs is lost
 const REWRITTEN_ON_STOP = new Set([
 	'server.properties',

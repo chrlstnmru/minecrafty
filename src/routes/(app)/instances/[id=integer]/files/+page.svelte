@@ -81,7 +81,6 @@
 					: `${(bytes / 1024 ** 3).toFixed(2)} GB`;
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
 
-	// --- name prompt: new folder, new file, rename ---
 	type Prompt = { kind: 'folder' | 'file' | 'rename'; target?: string; value: string };
 	let prompt = $state<Prompt>({ kind: 'folder', value: '' });
 	let promptOpen = $state(false);
@@ -108,7 +107,6 @@
 		}
 	}
 
-	// --- delete ---
 	let deleting = $state({ path: '', name: '', kind: '' });
 	let deleteOpen = $state(false);
 
@@ -123,7 +121,6 @@
 		}
 	}
 
-	// --- editor ---
 	let editing = $state<string | null>(null);
 	let editorOpen = $state(false);
 	let draft = $state('');
@@ -165,7 +162,6 @@
 		}
 	}
 
-	// --- the list: TanStack Table owns sorting and selection, the markup below is ours ---
 	const features = tableFeatures({
 		rowSortingFeature,
 		rowSelectionFeature,
@@ -238,7 +234,6 @@
 		setSorting([{ id: column, desc: active?.id === column && !active.desc }]);
 	};
 
-	// --- delete the selection ---
 	let bulkOpen = $state(false);
 	async function removeSelected() {
 		bulkOpen = false;
@@ -252,7 +247,6 @@
 		else toast.success(`Deleted ${names.length} ${names.length === 1 ? 'item' : 'items'}`);
 	}
 
-	// --- upload (a dialog: pick or drop files, or a whole folder) ---
 	let uploadOpen = $state(false);
 
 	function activate(entry: { name: string; kind: string }) {
