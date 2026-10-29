@@ -20,6 +20,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import ExternalLink from '@tabler/icons-svelte/icons/external-link';
 
 	const instances = $derived(await listInstances());
 	const { name, loader, mcVersion, port, ramMaxMb, eulaAccepted } = createInstance.fields;
@@ -172,7 +173,16 @@
 				<Field.Field orientation="horizontal" data-invalid={!!eulaAccepted.issues()?.length}>
 					<FormCheckbox id="eula" field={eulaAccepted} />
 					<Field.Label for="eula" class="font-normal">
-						I accept the Minecraft EULA (aka.ms/MinecraftEULA)
+						I accept the
+						<a
+							href="https://www.minecraft.net/eula"
+							target="_blank"
+							rel="noopener noreferrer"
+							class="inline-flex items-center gap-0.5 underline underline-offset-4 hover:text-foreground"
+						>
+							Minecraft EULA
+							<ExternalLink class="inline size-5" />
+						</a>
 					</Field.Label>
 				</Field.Field>
 				<Field.Error errors={eulaAccepted.issues()} />
