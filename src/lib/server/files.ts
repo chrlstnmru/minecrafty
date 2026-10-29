@@ -1,0 +1,189 @@
+import {
+	existsSync,
+	lstatSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	realpathSync,
+	renameSync,
+	rmSync,
+	statSync,
+	writeFileSync
+} from 'node:fs';
+import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { getInstance, serverDir } from './instances';
+import type { ZipEntry } from './zip-writer';
+
+// Everything the file manager does stays inside an instance's server folder. Every path is
+// resolved through `resolveSafe`, which refuses `..`, absolute paths and symlinks pointing out.
+
+export type FileEntry = {
+	name: string;
+	kind: 'dir' | 'file' | 'link';
+	size: number;
+	modified: number;
+};
+
+export const MAX_EDIT_BYTES = 2 * 1024 * 1024;
+export const MAX_UPLOAD_BYTES = 512 * 1024 * 1024;
+
+// the text formats a server's configuration comes in
+const EDITABLE =
+	/\.(properties|json|json5|jsonc|toml|ya?ml|cfg|conf|ini|txt|mcmeta|xml|md|snbt|log)$/i;
+
+export const isEditable = (name: string) => EDITABLE.test(name);
+
+function root(instanceId: number) {
+	if (!getInstance(instanceId)) throw new Error('Instance not found');
+	const dir = serverDir(instanceId);
+	mkdirSync(dir, { recursive: true });
+	return realpathSync(dir);
+}
+
+const inside = (base: string, path: string) => path === base || path.startsWith(base + sep);
+
+/**
+ * The absolute path for a path relative to the instance's server folder. Throws for anything
+ * that would land outside it, including through a symlink (checked on the deepest part that
+ * already exists, so creating new files works too).
+ */
+export function resolveSafe(instanceId: number, rel: string) {
+	const base = root(instanceId);
+	if (rel.includes('\0')) throw new Error('Invalid path');
+	const clean = rel.replaceAll('\\', '/');
+	if (clean.startsWith('/') || /^[a-zA-Z]:/.test(clean) || clean.split('/').includes('..'))
+		throw new Error('That path is not allowed');
+
+	const absolute = resolve(base, clean);
+	if (!inside(base, absolute)) throw new Error('That path is not allowed');
+
+	let probe = absolute;
+	while (!existsSync(probe)) probe = dirname(probe);
+	if (!inside(base, realpathSync(probe))) throw new Error('That path leaves the instance folder');
+	return { base, absolute, rel: relative(base, absolute).split(sep).join('/') };
+}
+
+export function listDirectory(instanceId: number, rel: string) {
+	const { absolute, rel: normalized } = resolveSafe(instanceId, rel);
+	if (!statSync(absolute).isDirectory()) throw new Error('Not a folder');
+
+	const entries: FileEntry[] = readdirSync(absolute).map((name) => {
+		const stat = lstatSync(join(absolute, name));
+		return {
+			name,
+			kind: stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'dir' : 'file',
+			size: stat.isDirectory() ? 0 : stat.size,
+			modified: stat.mtimeMs
+		};
+	});
+	entries.sort(
+		(a, b) =>
+			Number(b.kind === 'dir') - Number(a.kind === 'dir') ||
+			a.name.localeCompare(b.name, undefined, { sensitivity: 'base', numeric: true })
+	);
+	return { path: normalized, entries };
+}
+
+export function readTextFile(instanceId: number, rel: string) {
+	const { absolute } = resolveSafe(instanceId, rel);
+	const stat = statSync(absolute);
+	if (!stat.isFile()) throw new Error('Not a file');
+	if (stat.size > MAX_EDIT_BYTES)
+		throw new Error('This file is too large to edit here (2 MB limit)');
+	const bytes = readFileSync(absolute);
+	if (bytes.includes(0)) throw new Error('This looks like a binary file');
+	return { content: bytes.toString('utf8'), size: stat.size, modified: stat.mtimeMs };
+}
+
+export function writeTextFile(instanceId: number, rel: string, content: string) {
+	const { absolute } = resolveSafe(instanceId, rel);
+	if (!isEditable(basename(absolute))) throw new Error('This file type cannot be edited here');
+	if (Buffer.byteLength(content) > MAX_EDIT_BYTES)
+		throw new Error('The file is too large (2 MB limit)');
+	if (existsSync(absolute) && !statSync(absolute).isFile()) throw new Error('Not a file');
+	mkdirSync(dirname(absolute), { recursive: true });
+	writeFileSync(absolute, content);
+}
+
+/** A new name may not carry a path: it is one entry in one folder. */
+function checkName(name: string) {
+	if (!name || name === '.' || name === '..' || /[\\/\0]/.test(name) || name.length > 255)
+		throw new Error('Use a plain file name, without slashes');
+	return name;
+}
+
+export function makeDirectory(instanceId: number, parentRel: string, name: string) {
+	const { absolute } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	if (existsSync(absolute)) throw new Error(`${name} already exists`);
+	mkdirSync(absolute, { recursive: true });
+}
+
+export function createTextFile(instanceId: number, parentRel: string, name: string) {
+	const { absolute } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	if (!isEditable(name)) throw new Error('This file type cannot be edited here');
+	if (existsSync(absolute)) throw new Error(`${name} already exists`);
+	writeFileSync(absolute, '');
+}
+
+export function renameEntry(instanceId: number, rel: string, newName: string) {
+	const from = resolveSafe(instanceId, rel);
+	if (from.absolute === from.base) throw new Error('The instance folder itself cannot be renamed');
+	const to = resolveSafe(instanceId, join(dirname(from.rel), checkName(newName)));
+	if (existsSync(to.absolute)) throw new Error(`${newName} already exists`);
+	renameSync(from.absolute, to.absolute);
+}
+
+export function deleteEntry(instanceId: number, rel: string) {
+	const { absolute, base } = resolveSafe(instanceId, rel);
+	if (absolute === base) throw new Error('The instance folder itself cannot be deleted');
+	rmSync(absolute, { recursive: true, force: true });
+}
+
+/** Saves an uploaded file into a folder, replacing a file of the same name. */
+export async function saveUpload(instanceId: number, dirRel: string, file: File) {
+	if (file.size > MAX_UPLOAD_BYTES)
+		throw new Error(`${file.name} is too large (${MAX_UPLOAD_BYTES / 1024 / 1024} MB limit)`);
+	const { absolute: dir } = resolveSafe(instanceId, dirRel);
+	if (!statSync(dir).isDirectory()) throw new Error('Not a folder');
+	const name = checkName(basename(file.name));
+	const { absolute } = resolveSafe(instanceId, join(relative(root(instanceId), dir), name));
+	if (existsSync(absolute) && !statSync(absolute).isFile()) throw new Error(`${name} is a folder`);
+	// Kit's lazily read upload must be streamed: handed to Bun.write as is, it is written as text
+	await Bun.write(absolute, new Response(file.stream()));
+	if (statSync(absolute).size !== file.size) {
+		rmSync(absolute, { force: true });
+		throw new Error(`${name} was not received completely, try again`);
+	}
+	return name;
+}
+
+/** What a download of this path is: a file as it is, or a folder as a zip of its contents. */
+export function describeDownload(instanceId: number, rel: string) {
+	const { absolute, base } = resolveSafe(instanceId, rel);
+	const stat = statSync(absolute);
+	if (stat.isFile()) return { kind: 'file' as const, path: absolute, name: basename(absolute) };
+	if (!stat.isDirectory()) throw new Error('Nothing to download');
+
+	// symlinks are skipped: following one could pull in files from outside the folder
+	const entries: ZipEntry[] = [];
+	const walk = (dir: string) => {
+		for (const name of readdirSync(dir)) {
+			const path = join(dir, name);
+			const entry = lstatSync(path);
+			const zipName = relative(absolute, path).split(sep).join('/');
+			if (entry.isSymbolicLink()) continue;
+			if (entry.isDirectory()) {
+				entries.push({ kind: 'dir', name: zipName, modified: entry.mtime });
+				walk(path);
+			} else if (entry.isFile()) {
+				entries.push({ kind: 'file', name: zipName, path, modified: entry.mtime });
+			}
+		}
+	};
+	walk(absolute);
+	return {
+		kind: 'folder' as const,
+		entries,
+		name: `${absolute === base ? 'server' : basename(absolute)}.zip`
+	};
+}

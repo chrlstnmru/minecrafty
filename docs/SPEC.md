@@ -138,9 +138,11 @@ Build your own modpack on the panel and create instances from it.
 
 ### File manager
 
-- Browse, create, rename, delete, upload, download (zip folders) inside the instance root only.
-- Text editor for configs (`.properties`, `.json`, `.toml`, `.yml`, `.cfg`, `.txt`).
-- Path traversal protection on every file operation.
+- Browse, create, rename, delete, upload, download inside the instance's server folder only. The current folder is in the URL (`?path=`), with breadcrumbs.
+- Download a file as it is, or a folder as a zip streamed from disk (the panel has its own zip writer, since Windows has no `zip` tool and Linux often lacks one). Symlinks are skipped when zipping.
+- Text editor for configs: `.properties`, `.json`, `.json5`, `.toml`, `.yml`/`.yaml`, `.cfg`, `.conf`, `.ini`, `.txt`, `.mcmeta`, `.xml`, `.md`, `.snbt`, `.log`; at most 2 MB, binary files refused, and closing with unsaved edits asks first.
+- Uploads: several files at once, up to 512 MB each, streamed to disk; a file with the same name is replaced. Only signed-in users may send large request bodies (anonymous requests over 64 KB, or of unknown length, get a 413 before anything reads them).
+- Path safety on every operation: `..`, absolute paths, Windows drive paths and NUL bytes are refused, and a path is checked through symlinks, so a link pointing outside the instance cannot be listed, read, written, created in, deleted from or uploaded into. New names are one plain name, never a path; the instance folder itself cannot be renamed or deleted.
 
 ### Backups
 

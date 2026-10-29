@@ -3,7 +3,6 @@
 
 /** Instance modules that appear in the tab bar before they are built (see docs/SPEC.md). */
 export const plannedSlugs = [
-	'files',
 	'logs',
 	'players',
 	'backups',

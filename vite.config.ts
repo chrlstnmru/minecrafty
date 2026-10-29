@@ -14,7 +14,11 @@ export default defineConfig({
 				experimental: { async: true }
 			},
 
-			adapter: adapter(),
+			adapter: adapter({
+				// file uploads; the adapter's default is 512 KB. Only signed-in users can send big
+				// bodies (see hooks.server.ts). BODY_SIZE_LIMIT overrides this.
+				serverOptions: { maxRequestBodySize: 600 * 1024 * 1024 }
+			}),
 			experimental: { remoteFunctions: true }
 		})
 	]

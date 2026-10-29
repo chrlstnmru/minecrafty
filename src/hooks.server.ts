@@ -6,8 +6,23 @@ import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instanc
 
 const PUBLIC = ['/login', '/setup'];
 
+// uploads (the file manager) need a large request limit, so only signed-in users may send a body
+// that is big or of unknown length; everyone else gets a small cap before anything reads it
+const ANONYMOUS_BODY_LIMIT = 64 * 1024;
+
 export const handle: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
+
+	const { method, headers } = event.request;
+	if (method !== 'GET' && method !== 'HEAD' && method !== 'OPTIONS') {
+		const length = headers.get('content-length');
+		if (
+			(length === null || Number(length) > ANONYMOUS_BODY_LIMIT) &&
+			!userFromCookies(event.cookies)
+		)
+			return new Response('Payload too large', { status: 413 });
+	}
+
 	// remote functions (login, setup, ...) enforce their own access rules
 	if (event.isRemoteRequest) {
 		event.locals.user = userFromCookies(event.cookies);

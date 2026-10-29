@@ -22,10 +22,19 @@
 		/** Called once `.submit()` resolves, with whether it succeeded: for toasts, closing a
 		 * sheet, redirects, resetting local state. */
 		onSubmitted?: (succeeded: boolean) => void;
+		/** the rendered `<form>`, for things only the DOM can do (resetting a file input) */
+		element?: HTMLFormElement | null;
 		children: Snippet<[{ attempted: boolean; pending: number }]>;
 	};
 
-	let { schema, remoteFunction, onSubmitted, children, ...rest }: Props = $props();
+	let {
+		schema,
+		remoteFunction,
+		onSubmitted,
+		element = $bindable(null),
+		children,
+		...rest
+	}: Props = $props();
 
 	$effect(() => {
 		remoteFunction.preflight(schema);
@@ -44,6 +53,7 @@
 </script>
 
 <form
+	bind:this={element}
 	{...remoteFunction.enhance(async (form) => {
 		validator.markServerSubmitted();
 		// not `onSubmitted?.(await form.submit())`: that never evaluates the argument when the

@@ -33,7 +33,7 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'files',
 		title: 'Files',
 		icon: FolderIcon,
-		planned: 4,
+
 		description: 'Browse, edit, upload and download files inside the instance folder.'
 	},
 	{
