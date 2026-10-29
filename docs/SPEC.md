@@ -124,12 +124,20 @@ Servers must keep running when the panel restarts or updates.
 - Session auth with hashed passwords (`Bun.password`, argon2).
 - Audit log of actions per instance.
 
+## Release packaging
+
+- Milestones 1–4: run as plain Bun (`bun build/index.js`). No compile step during development.
+- Milestone 5: ship a single binary per platform via `bun build --compile` (`bun-linux-x64`, `bun-linux-arm64`, `bun-windows-x64`), built in one CI job.
+- Client assets are embedded in the binary.
+- The runner is the same binary started as `minecrafty runner <id>`.
+- The build output must stay runnable with plain Bun as a fallback (e.g. if unsigned Windows binaries hit antivirus problems).
+
 ## Install scripts
 
 | Script           | Target                     | Does                                                                          |
 | ---------------- | -------------------------- | ----------------------------------------------------------------------------- |
-| `install.sh`     | Debian/Ubuntu, Proxmox LXC | Install Bun, download panel release, create user + data dir, systemd unit     |
-| `install.ps1`    | Windows 10/11, Server      | Install Bun, download panel release, register Windows service (WinSW)         |
+| `install.sh`     | Debian/Ubuntu, Proxmox LXC | Download panel binary, create user + data dir, systemd unit                   |
+| `install.ps1`    | Windows 10/11, Server      | Download panel binary, register Windows service (WinSW)                       |
 | `proxmox-lxc.sh` | Proxmox VE host            | Create Debian LXC (prompts for CPU/RAM/disk/storage), run `install.sh` inside |
 
 - Java is not installed by the scripts; the panel downloads the Temurin JDK each instance needs.
@@ -144,10 +152,9 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import.
 4. **Operations** (~2 weeks): file manager, backups, scheduled tasks, live stats, permissions UI.
-5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, release packaging.
+5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Open questions
 
-- Release packaging: ship a `bun build --compile` single binary, or the SvelteKit build + Bun?
 - Port allocation: auto-assign from a range, or always ask?
 - Panel self-update from the UI?
