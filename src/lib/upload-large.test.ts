@@ -16,7 +16,8 @@ const net = vi.hoisted(() => ({
 	calls: [] as string[],
 	inFlight: 0,
 	maxInFlight: 0,
-	delayMs: 0
+	delayMs: 0,
+	stallNext: 0
 }));
 
 vi.mock('#lib/files.remote.js', async () => {
@@ -44,6 +45,11 @@ vi.mock('#lib/files.remote.js', async () => {
 			net.inFlight++;
 			net.maxInFlight = Math.max(net.maxInFlight, net.inFlight);
 			try {
+				if (net.stallNext > 0) {
+					net.stallNext--;
+					await new Promise((r) => setTimeout(r, 200));
+					throw new Error('stalled request finally died');
+				}
 				if (net.delayMs) await new Promise((r) => setTimeout(r, net.delayMs));
 				if (net.failIndex === a.index) throw new Error('the connection dropped');
 				if (net.failNext > 0) {
@@ -98,7 +104,8 @@ beforeEach(() => {
 		calls: [],
 		inFlight: 0,
 		maxInFlight: 0,
-		delayMs: 0
+		delayMs: 0,
+		stallNext: 0
 	});
 	const id = makeInstance().id;
 	root = serverDir(id);
@@ -107,6 +114,14 @@ beforeEach(() => {
 });
 
 describe('uploadLarge', () => {
+	it('sends a piece again when the first attempt never comes back in time', async () => {
+		net.stallNext = 1;
+		const data = randomBytes(5 * 1024 * 1024); // 2 pieces
+		await uploadLarge(fileOf(data), target, vi.fn(), new AbortController().signal, 1, 50);
+		expect(readFileSync(join(root, 'big.bin')).equals(data)).toBe(true);
+		expect(pieceCalls().length).toBe(3);
+	});
+
 	it('sends every piece and the file arrives identical', async () => {
 		const data = randomBytes(11 * 1024 * 1024); // 3 pieces
 		await run(fileOf(data));

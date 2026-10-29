@@ -13,6 +13,8 @@ import { CHUNK_BYTES } from './upload-limits.js';
 
 const CONCURRENCY = 3;
 const RETRIES = 3;
+// a piece that has not been acknowledged by now is treated as stalled and sent again
+const PIECE_TIMEOUT_MS = 120_000;
 
 export type LargeTarget = { instanceId: number; path: string };
 
@@ -20,6 +22,17 @@ export type LargeTarget = { instanceId: number; path: string };
 const sessions = new Map<string, string>();
 const keyOf = (item: UploadItem, target: LargeTarget) =>
 	[target.instanceId, target.path, item.path, item.file.size, item.file.lastModified].join('|');
+
+/** Rejects when `promise` takes longer than `ms`; the late request is left to finish on its own. */
+function within<T>(promise: Promise<T>, ms: number) {
+	return new Promise<T>((resolve, reject) => {
+		const timer = setTimeout(() => reject(new Error('Upload stalled')), ms);
+		promise.then(
+			(value) => (clearTimeout(timer), resolve(value)),
+			(error) => (clearTimeout(timer), reject(error))
+		);
+	});
+}
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
@@ -44,7 +57,8 @@ export async function uploadLarge(
 	onBytes: (sent: number, total: number) => void,
 	signal: AbortSignal,
 	/** wait before the first retry; doubles each time (a parameter so tests need not wait) */
-	retryDelayMs = 400
+	retryDelayMs = 400,
+	pieceTimeoutMs = PIECE_TIMEOUT_MS
 ) {
 	const { file } = item;
 	const total = file.size;
@@ -85,14 +99,18 @@ export async function uploadLarge(
 				try {
 					const start = index * CHUNK_BYTES;
 					const blob = file.slice(start, start + lengthOf(index));
-					await uploadPiece({
-						id: target.instanceId,
-						uploadId: id,
-						index,
-						// a File wraps the slice without copying it; commands carry Files, not bare Blobs
-						piece: new File([blob], 'piece'),
-						sha256: await digest(blob)
-					});
+					const sha256 = await digest(blob);
+					await within(
+						uploadPiece({
+							id: target.instanceId,
+							uploadId: id,
+							index,
+							// a File wraps the slice without copying it; commands carry Files, not bare Blobs
+							piece: new File([blob], 'piece'),
+							sha256
+						}),
+						pieceTimeoutMs
+					);
 					sent += blob.size;
 					onBytes(sent, total);
 					break;
