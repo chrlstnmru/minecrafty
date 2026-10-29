@@ -96,13 +96,14 @@ Console is the live server output with command input; Logs is the history of log
 
 ### Loaders
 
-| Loader         | Source                     | Notes                                                                                             |
-| -------------- | -------------------------- | ------------------------------------------------------------------------------------------------- |
-| Vanilla        | Mojang version manifest    |                                                                                                   |
-| Paper / Purpur | PaperMC API / Purpur API   | Plugins, not mods                                                                                 |
-| Fabric / Quilt | Fabric meta / Quilt meta   | Download server launcher jar directly                                                             |
-| Forge          | Forge maven + installer    | Run installer headless (`--installServer`); handle `run.sh` / `@libraries/.../args.txt` for 1.17+ |
-| NeoForge       | NeoForge maven + installer | Same as Forge                                                                                     |
+| Loader         | Source                     | Notes                                                                                                |
+| -------------- | -------------------------- | ---------------------------------------------------------------------------------------------------- |
+| Vanilla        | Mojang version manifest    |                                                                                                      |
+| Paper / Purpur | PaperMC API / Purpur API   | Plugins, not mods                                                                                    |
+| Fabric         | Fabric meta                | Server launcher jar downloaded directly; newest stable loader and installer                          |
+| Quilt          | Quilt meta + Maven         | Run `quilt-installer install server` headless; checksum from Maven (the meta API's hashes are wrong) |
+| Forge          | Forge maven + installer    | Run installer headless (`--installServer`); handle `run.sh` / `@libraries/.../args.txt` for 1.17+    |
+| NeoForge       | NeoForge maven + installer | Same as Forge                                                                                        |
 
 ### Mods and modpacks
 

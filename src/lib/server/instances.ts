@@ -6,7 +6,7 @@ import { instancesDir, javaOverride, runnerEntry } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
-import { downloadServerJar, type Loader } from './loaders';
+import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import * as runner from './runner-client';
 
 export type Instance = typeof instances.$inferSelect;
@@ -36,12 +36,17 @@ export async function createInstance(
 	const row = db.insert(instances).values(input).returning().get();
 	mkdirSync(serverDir(row.id), { recursive: true });
 	try {
-		await downloadServerJar(
-			join(serverDir(row.id), 'server.jar'),
-			row.loader as Loader,
-			row.mcVersion,
-			row.loaderVersion ?? undefined
-		);
+		const mc = row.mcVersion;
+		const java = needsJavaToInstall(row.loader as Loader)
+			? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
+			: undefined;
+		await installServer({
+			serverDir: serverDir(row.id),
+			loader: row.loader as Loader,
+			mc,
+			build: row.loaderVersion ?? undefined,
+			java
+		});
 	} catch (e) {
 		// don't leave a half-created instance behind
 		db.delete(instances).where(eq(instances.id, row.id)).run();
@@ -115,7 +120,7 @@ export async function startInstance(id: number) {
 	}
 
 	const server = serverDir(id);
-	if (!existsSync(join(server, 'server.jar'))) throw new Error('server.jar is missing');
+	const launch = launchArgs(server, inst.loader as Loader);
 	if (!inst.eulaAccepted) throw new Error('The Minecraft EULA has not been accepted');
 
 	writeFileSync(join(server, 'eula.txt'), 'eula=true\n');
@@ -127,9 +132,7 @@ export async function startInstance(id: number) {
 			`-Xms${inst.ramMinMb}M`,
 			`-Xmx${inst.ramMaxMb}M`,
 			...inst.jvmArgs.split(/\s+/).filter(Boolean),
-			'-jar',
-			'server.jar',
-			'nogui'
+			...launch
 		],
 		cwd: server
 	};

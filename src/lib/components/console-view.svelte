@@ -2,9 +2,11 @@
 	import { tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import SendIcon from '@tabler/icons-svelte/icons/send';
+	import LoaderIcon from '@tabler/icons-svelte/icons/loader';
 	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import * as InputGroup from './ui/input-group';
 
 	let { id, status = $bindable('stopped') }: { id: number; status?: string } = $props();
 
@@ -120,20 +122,23 @@
 		{/each}
 	</div>
 	<form onsubmit={submit} class="flex gap-2">
-		<Input
-			bind:value={input}
-			onkeydown={onKeydown}
-			placeholder={status === 'running' ? 'Type a command…' : 'Start the server to send commands'}
-			disabled={status !== 'running'}
-			autocomplete="off"
-			spellcheck="false"
-			class="font-mono"
-		/>
+		<InputGroup.Root>
+			<InputGroup.Addon align="inline-start" hidden={stream.connected}>
+				<LoaderIcon />
+			</InputGroup.Addon>
+			<InputGroup.Input
+				bind:value={input}
+				onkeydown={onKeydown}
+				placeholder={status === 'running' ? 'Type a command…' : 'Start the server to send commands'}
+				disabled={status !== 'running'}
+				autocomplete="off"
+				spellcheck="false"
+				class="font-mono"
+			/>
+		</InputGroup.Root>
+
 		<Button type="submit" disabled={status !== 'running' || !input.trim()}>
 			<SendIcon />Send
 		</Button>
 	</form>
-	{#if !stream.connected}
-		<p class="text-xs text-muted-foreground">Reconnecting…</p>
-	{/if}
 </div>

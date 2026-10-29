@@ -28,7 +28,9 @@ export const sessions = sqliteTable('sessions', {
 export const instances = sqliteTable('instances', {
 	id: integer('id').primaryKey({ autoIncrement: true }),
 	name: text('name').notNull(),
-	loader: text('loader', { enum: ['vanilla', 'paper', 'purpur'] }).notNull(),
+	loader: text('loader', {
+		enum: ['vanilla', 'paper', 'purpur', 'fabric', 'quilt', 'forge', 'neoforge']
+	}).notNull(),
 	mcVersion: text('mc_version').notNull(),
 	// Paper/Purpur build number; null for vanilla
 	loaderVersion: text('loader_version'),

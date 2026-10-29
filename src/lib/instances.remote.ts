@@ -65,10 +65,13 @@ export const createInstance = form(
 		if (!data.eulaAccepted) invalid(issue.eulaAccepted('You must accept the Minecraft EULA'));
 		if (!(await isKnownVersion(data.loader, data.mcVersion)))
 			invalid(issue.mcVersion('Unknown Minecraft version'));
+		const loaderVersion = await latestBuild(data.loader, data.mcVersion);
+		if (data.loader !== 'vanilla' && !loaderVersion)
+			invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
 		try {
 			await instances.createInstance({
 				...data,
-				loaderVersion: await latestBuild(data.loader, data.mcVersion),
+				loaderVersion: loaderVersion ?? null,
 				ramMinMb: Math.min(1024, data.ramMaxMb)
 			});
 		} catch (e) {

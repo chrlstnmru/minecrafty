@@ -23,7 +23,7 @@
 	const instances = listInstances();
 	const { name, loader, mcVersion, port, ramMaxMb, eulaAccepted } = createInstance.fields;
 
-	type LoaderId = 'vanilla' | 'paper' | 'purpur';
+	type LoaderId = 'vanilla' | 'paper' | 'purpur' | 'fabric' | 'quilt' | 'forge' | 'neoforge';
 	const selectedLoader = $derived((loader.value() || 'vanilla') as LoaderId);
 	const versions = $derived(minecraftVersions(selectedLoader));
 	// keep the picker on a valid choice (newest first) when the loader changes
@@ -140,6 +140,10 @@
 						<NativeSelectOption value="vanilla">Vanilla</NativeSelectOption>
 						<NativeSelectOption value="paper">Paper</NativeSelectOption>
 						<NativeSelectOption value="purpur">Purpur</NativeSelectOption>
+						<NativeSelectOption value="fabric">Fabric</NativeSelectOption>
+						<NativeSelectOption value="quilt">Quilt</NativeSelectOption>
+						<NativeSelectOption value="forge">Forge</NativeSelectOption>
+						<NativeSelectOption value="neoforge">NeoForge</NativeSelectOption>
 					</NativeSelect>
 					<Field.Error errors={loader.issues()} />
 				</Field.Field>
