@@ -161,7 +161,7 @@ describe('creating, renaming and deleting', () => {
 	it('creates empty text files only for editable types', () => {
 		F.createTextFile(id, '', 'notes.txt');
 		expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('');
-		expect(() => F.createTextFile(id, '', 'run.sh')).toThrow(/cannot be edited/);
+		expect(() => F.createTextFile(id, '', 'start.sh')).toThrow(/cannot be edited/);
 		expect(() => F.createTextFile(id, '', 'notes.txt')).toThrow(/already exists/);
 	});
 

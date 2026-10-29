@@ -10,6 +10,7 @@
 	import FileZipIcon from '@tabler/icons-svelte/icons/file-zip';
 	import FolderIcon from '@tabler/icons-svelte/icons/folder';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
+	import LockIcon from '@tabler/icons-svelte/icons/lock';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
@@ -201,6 +202,7 @@
 			return listing.current?.entries ?? [];
 		},
 		getRowId: (entry: FileEntry) => entry.name,
+		enableRowSelection: (row: { original: FileEntry }) => !row.original.locked,
 		enableMultiSort: false,
 		enableSortingRemoval: false,
 		state: {
@@ -371,6 +373,7 @@
 							<Checkbox
 								aria-label="Select {entry.name}"
 								checked={row.getIsSelected()}
+								disabled={entry.locked}
 								onCheckedChange={(value) => row.toggleSelected(!!value)}
 							/>
 						</Table.Cell>
@@ -391,6 +394,12 @@
 								<span class="truncate">{entry.name}</span>
 								{#if entry.kind === 'link'}
 									<span class="text-xs text-muted-foreground">(link)</span>
+								{/if}
+								{#if entry.locked}
+									<LockIcon
+										class="size-3.5 shrink-0 text-muted-foreground"
+										aria-label="Part of the server install, it cannot be deleted or renamed"
+									/>
 								{/if}
 							</button>
 						</Table.Cell>
@@ -430,6 +439,7 @@
 										</DropdownMenu.Item>
 									{/if}
 									<DropdownMenu.Item
+										disabled={entry.locked}
 										onSelect={() => ask({ kind: 'rename', target: to, value: entry.name })}
 									>
 										<PencilIcon />Rename
@@ -437,6 +447,7 @@
 									<DropdownMenu.Separator />
 									<DropdownMenu.Item
 										variant="destructive"
+										disabled={entry.locked}
 										onSelect={() => {
 											deleting = { path: to, name: entry.name, kind: entry.kind };
 											deleteOpen = true;

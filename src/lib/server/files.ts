@@ -13,6 +13,7 @@ import {
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { SMALL_FILE_BYTES } from '../upload-limits';
 import { getInstance, serverDir } from './instances';
+import { assertMutable, isProtected } from './protected-files';
 import type { ZipEntry } from './zip-writer';
 
 // Everything the file manager does stays inside an instance's server folder. Every path is
@@ -23,6 +24,8 @@ export type FileEntry = {
 	kind: 'dir' | 'file' | 'link';
 	size: number;
 	modified: number;
+	/** part of the server install: it cannot be deleted, renamed or replaced */
+	locked: boolean;
 };
 
 export const MAX_EDIT_BYTES = 2 * 1024 * 1024;
@@ -73,7 +76,8 @@ export function listDirectory(instanceId: number, rel: string) {
 			name,
 			kind: stat.isSymbolicLink() ? 'link' : stat.isDirectory() ? 'dir' : 'file',
 			size: stat.isDirectory() ? 0 : stat.size,
-			modified: stat.mtimeMs
+			modified: stat.mtimeMs,
+			locked: isProtected(join(normalized, name))
 		};
 	});
 	entries.sort(
@@ -113,13 +117,15 @@ function checkName(name: string) {
 }
 
 export function makeDirectory(instanceId: number, parentRel: string, name: string) {
-	const { absolute } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	const { absolute, rel } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	assertMutable(rel, 'replaced');
 	if (existsSync(absolute)) throw new Error(`${name} already exists`);
 	mkdirSync(absolute, { recursive: true });
 }
 
 export function createTextFile(instanceId: number, parentRel: string, name: string) {
-	const { absolute } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	const { absolute, rel } = resolveSafe(instanceId, join(parentRel, checkName(name)));
+	assertMutable(rel, 'replaced');
 	if (!isEditable(name)) throw new Error('This file type cannot be edited here');
 	if (existsSync(absolute)) throw new Error(`${name} already exists`);
 	writeFileSync(absolute, '');
@@ -129,13 +135,16 @@ export function renameEntry(instanceId: number, rel: string, newName: string) {
 	const from = resolveSafe(instanceId, rel);
 	if (from.absolute === from.base) throw new Error('The instance folder itself cannot be renamed');
 	const to = resolveSafe(instanceId, join(dirname(from.rel), checkName(newName)));
+	assertMutable(from.rel, 'renamed');
+	assertMutable(to.rel, 'replaced');
 	if (existsSync(to.absolute)) throw new Error(`${newName} already exists`);
 	renameSync(from.absolute, to.absolute);
 }
 
 export function deleteEntry(instanceId: number, rel: string) {
-	const { absolute, base } = resolveSafe(instanceId, rel);
+	const { absolute, base, rel: normalized } = resolveSafe(instanceId, rel);
 	if (absolute === base) throw new Error('The instance folder itself cannot be deleted');
+	assertMutable(normalized, 'deleted');
 	rmSync(absolute, { recursive: true, force: true });
 }
 
@@ -156,6 +165,7 @@ export function uploadTarget(instanceId: number, dirRel: string, relPath: string
 	for (const part of parts) checkName(part);
 
 	const target = resolveSafe(instanceId, join(relative(base, dir), ...parts));
+	assertMutable(target.rel, 'replaced');
 	return { ...target, shown: parts.join('/') };
 }
 
