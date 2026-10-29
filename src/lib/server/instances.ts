@@ -174,6 +174,8 @@ export async function killInstance(id: number) {
 }
 
 export async function deleteInstance(id: number) {
+	if (getInstance(id)?.installState === 'installing')
+		throw new Error('Wait for the install to finish before deleting it');
 	const live = await runner.status(instanceDir(id), id);
 	if (live && live.state !== 'exited') throw new Error('Stop the instance before deleting it');
 	db.delete(instances).where(eq(instances.id, id)).run();

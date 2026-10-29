@@ -29,6 +29,8 @@ export type ModrinthVersion = {
 	project_id: string;
 	version_number: string;
 	date_published: string;
+	game_versions: string[];
+	loaders: string[];
 	version_type: 'release' | 'beta' | 'alpha';
 	files: ModrinthFile[];
 	dependencies: {

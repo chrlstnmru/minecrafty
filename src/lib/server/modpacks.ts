@@ -1,4 +1,4 @@
-import { mkdirSync } from 'node:fs';
+import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 import { eq } from 'drizzle-orm';
 import { dataDir } from './config';
@@ -89,6 +89,20 @@ export function safeJoin(base: string, rel: string) {
 
 const cacheDir = join(dataDir, 'tmp', 'modpacks');
 
+const CACHE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
+/** Drops cached packs nobody asked for in a day, so the cache cannot grow without bound. */
+function pruneCache() {
+	try {
+		for (const name of readdirSync(cacheDir)) {
+			const path = join(cacheDir, name);
+			if (Date.now() - statSync(path).mtimeMs > CACHE_MAX_AGE_MS) rmSync(path, { force: true });
+		}
+	} catch {
+		// no cache yet
+	}
+}
+
 /** Downloads the version's .mrpack (kept in a cache so previewing then importing downloads it once). */
 async function fetchPack(versionId: string) {
 	const version = await modrinth.getVersion(versionId);
@@ -97,6 +111,7 @@ async function fetchPack(versionId: string) {
 	if (file.size > MAX_PACK_BYTES)
 		throw new Error(`The modpack is too large (limit ${MAX_PACK_BYTES / 1024 / 1024} MB)`);
 
+	pruneCache();
 	mkdirSync(cacheDir, { recursive: true });
 	const path = join(cacheDir, `${file.hashes.sha512}.mrpack`);
 	if (!(await Bun.file(path).exists()))
@@ -313,4 +328,42 @@ async function trackMods(instanceId: number, files: IndexFile[]) {
 		});
 	}
 	if (rows.length) db.insert(installedMods).values(rows).run();
+}
+
+export async function searchModpacks(query: string, limit: number) {
+	const res = await modrinth.searchProjects({
+		query,
+		loaders: [],
+		type: 'modpack',
+		// Modrinth's server-side flag is not reliable for modpacks; the pack's own file list is
+		serverSide: false,
+		limit
+	});
+	return { hits: res.hits, total: res.total_hits };
+}
+
+export type ModpackVersion = {
+	id: string;
+	versionNumber: string;
+	versionType: 'release' | 'beta' | 'alpha';
+	publishedAt: string;
+	gameVersions: string[];
+	loaders: string[];
+};
+
+/** All versions of a modpack, newest first. */
+export async function listModpackVersions(projectId: string): Promise<ModpackVersion[]> {
+	return (await modrinth.listVersions(projectId, [])).map((v) => ({
+		id: v.id,
+		versionNumber: v.version_number,
+		versionType: v.version_type,
+		publishedAt: v.date_published,
+		gameVersions: v.game_versions,
+		loaders: v.loaders
+	}));
+}
+
+/** What importing this version would do, without creating anything. */
+export async function previewModpack(versionId: string): Promise<ModpackSummary> {
+	return (await loadModpack(versionId)).summary;
 }

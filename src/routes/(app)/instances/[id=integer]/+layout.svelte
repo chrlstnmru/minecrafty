@@ -20,7 +20,9 @@
 	const id = $derived(page.params.id!);
 	const instance = $derived(await getInstance(id));
 	const all = listInstances();
-	const status = $derived(all.current?.find((i) => i.id === id)?.state ?? 'stopped');
+	const row = $derived(all.current?.find((i) => i.id === id));
+	const status = $derived(row?.state ?? 'stopped');
+	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
 	const slug = $derived(page.url.pathname.split('/')[3]);
 
@@ -65,7 +67,17 @@
 			</Button>
 			<Button variant="destructive" size="sm" onClickPromise={() => run(killInstance)}>Kill</Button>
 		{:else}
-			<Button size="sm" onClickPromise={() => run(startInstance)}>Start</Button>
+			<Button
+				size="sm"
+				disabled={installState !== 'ready'}
+				onClickPromise={() => run(startInstance)}
+			>
+				{installState === 'installing'
+					? 'Installing…'
+					: installState === 'failed'
+						? 'Install failed'
+						: 'Start'}
+			</Button>
 		{/if}
 	</div>
 

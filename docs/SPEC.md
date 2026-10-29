@@ -116,7 +116,10 @@ Console is the live server output with command input; Logs is the history of log
 - Search Modrinth and CurseForge from the instance page, filtered by the instance's loader and MC version. Quilt also accepts Fabric mods, and Purpur also accepts Paper/Spigot/Bukkit plugins. Paper-family instances show the tab as Plugins and install into `plugins/`; vanilla has no mods tab content.
 - Install, update, remove; resolve required dependencies. Any compatible version can be chosen when installing, and an installed mod can be moved to a chosen version (including older ones). Update checks use file hashes in one request and only offer stable releases.
 - Track installed mods (source, project ID, file ID, hash) in the DB so updates can be checked.
-- Modpack import: Modrinth `.mrpack` and CurseForge manifest zips; create a new instance from the pack.
+- Modpack import: Modrinth modpacks first, from the "From modpack" tab of the New Instance sheet (a pack decides the loader and Minecraft version, so it is not a separate screen). Search Modrinth, pick a version, see a summary (Minecraft version, loader and build, files to download, client-only files skipped, config files copied), then name, port, RAM and EULA.
+  - The instance is created at once in an "installing" state and finishes in the background with visible progress, since a pack can be hundreds of downloads. It cannot start or be deleted while installing; an interrupted or failed install is marked failed with the reason.
+  - Install: the loader's server, every file the pack lists for the server (checksum-verified, only from the hosts the `.mrpack` format allows), then `overrides/` and `server-overrides/` copied into the server folder. Mods Modrinth knows are recorded, so they appear in the Mods tab and can be updated.
+  - CurseForge manifest zips and uploading an `.mrpack` file are later.
 - CurseForge files with third-party downloads disabled: list them for manual download and accept uploads.
 - CurseForge API key: entered by the admin in Settings. No key ships with the project. Modrinth needs no key.
 - Server-side only: skip client-only mods where metadata says so.
