@@ -101,9 +101,10 @@
 		queue = [];
 		status = {};
 	}
+	let finished = false;
 	onDestroy(() => {
 		controller?.abort();
-		for (const item of queue) if (isLarge(item)) discard?.(item);
+		if (!finished) for (const item of queue) if (isLarge(item)) discard?.(item);
 		clear();
 	});
 
@@ -235,8 +236,11 @@
 				return;
 			}
 			const count = progress.totalFiles;
-			clear();
-			onDone?.(count);
+			// with a parent that closes us, keep the list as is so it does not collapse mid-animation
+			if (onDone) {
+				finished = true;
+				onDone(count);
+			} else clear();
 		} finally {
 			controller = undefined;
 			busy = false;

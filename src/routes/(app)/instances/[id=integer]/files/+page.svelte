@@ -66,19 +66,24 @@
 
 	// --- name prompt: new folder, new file, rename ---
 	type Prompt = { kind: 'folder' | 'file' | 'rename'; target?: string; value: string };
-	let prompt = $state<Prompt | null>(null);
+	let prompt = $state<Prompt>({ kind: 'folder', value: '' });
+	let promptOpen = $state(false);
+	const ask = (next: Prompt) => {
+		prompt = next;
+		promptOpen = true;
+	};
 	let promptBusy = $state(false);
 
 	async function submitPrompt(e: SubmitEvent) {
 		e.preventDefault();
-		if (!prompt || promptBusy) return;
+		if (promptBusy) return;
 		promptBusy = true;
 		try {
 			const name = prompt.value.trim();
 			if (prompt.kind === 'folder') await newFolder({ id, path, name });
 			else if (prompt.kind === 'file') await newFile({ id, path, name });
 			else await renameFile({ id, path: prompt.target!, name });
-			prompt = null;
+			promptOpen = false;
 		} catch (err) {
 			toast.error(message(err, 'That did not work'));
 		} finally {
@@ -87,12 +92,12 @@
 	}
 
 	// --- delete ---
-	let deleting = $state<{ path: string; name: string; kind: string } | null>(null);
+	let deleting = $state({ path: '', name: '', kind: '' });
+	let deleteOpen = $state(false);
 
 	async function remove() {
 		const target = deleting;
-		deleting = null;
-		if (!target) return;
+		deleteOpen = false;
 		try {
 			await removeFile({ id, path: target.path });
 			toast.success(`Deleted ${target.name}`);
@@ -103,11 +108,12 @@
 
 	// --- editor ---
 	let editing = $state<string | null>(null);
+	let editorOpen = $state(false);
 	let draft = $state('');
 	let loaded = $state('');
 	let confirmDiscard = $state(false);
 	const file = $derived(editing ? readFile({ id, path: editing }) : null);
-	const dirty = $derived(editing !== null && draft !== loaded);
+	const dirty = $derived(editorOpen && draft !== loaded);
 
 	// load the file into the editor when it is opened, and again after a save
 	$effect(() => {
@@ -121,6 +127,7 @@
 		draft = '';
 		loaded = '';
 		editing = to;
+		editorOpen = true;
 	}
 
 	function closeEditor(force = false) {
@@ -128,7 +135,7 @@
 			confirmDiscard = true;
 			return;
 		}
-		editing = null;
+		editorOpen = false;
 	}
 
 	async function save() {
@@ -202,10 +209,10 @@
 			<Button variant="outline" size="sm" onclick={() => (uploadOpen = true)}>
 				<UploadIcon />Upload
 			</Button>
-			<Button variant="outline" size="sm" onclick={() => (prompt = { kind: 'folder', value: '' })}>
+			<Button variant="outline" size="sm" onclick={() => ask({ kind: 'folder', value: '' })}>
 				<FolderPlusIcon />New folder
 			</Button>
-			<Button variant="outline" size="sm" onclick={() => (prompt = { kind: 'file', value: '' })}>
+			<Button variant="outline" size="sm" onclick={() => ask({ kind: 'file', value: '' })}>
 				<FilePlusIcon />New file
 			</Button>
 			<Button variant="outline" size="sm" href={downloadUrl(path)} download>
@@ -284,14 +291,17 @@
 										</DropdownMenu.Item>
 									{/if}
 									<DropdownMenu.Item
-										onSelect={() => (prompt = { kind: 'rename', target: to, value: entry.name })}
+										onSelect={() => ask({ kind: 'rename', target: to, value: entry.name })}
 									>
 										<PencilIcon />Rename
 									</DropdownMenu.Item>
 									<DropdownMenu.Separator />
 									<DropdownMenu.Item
 										variant="destructive"
-										onSelect={() => (deleting = { path: to, name: entry.name, kind: entry.kind })}
+										onSelect={() => {
+											deleting = { path: to, name: entry.name, kind: entry.kind };
+											deleteOpen = true;
+										}}
 									>
 										<TrashIcon />Delete
 									</DropdownMenu.Item>
@@ -320,42 +330,36 @@
 
 <UploadDialog bind:open={uploadOpen} instanceId={id} {path} />
 
-<Dialog.Root open={prompt !== null} onOpenChange={(o) => !o && (prompt = null)}>
+<Dialog.Root bind:open={promptOpen}>
 	<Dialog.Content>
 		<form onsubmit={submitPrompt} class="grid gap-4">
 			<Dialog.Header>
 				<Dialog.Title>
-					{prompt?.kind === 'folder'
-						? 'New folder'
-						: prompt?.kind === 'file'
-							? 'New file'
-							: 'Rename'}
+					{prompt.kind === 'folder' ? 'New folder' : prompt.kind === 'file' ? 'New file' : 'Rename'}
 				</Dialog.Title>
-				{#if prompt?.kind === 'file'}
+				{#if prompt.kind === 'file'}
 					<Dialog.Description>
 						Text files only (.properties, .json, .toml, .yml, .cfg, .txt, ...).
 					</Dialog.Description>
 				{/if}
 			</Dialog.Header>
-			{#if prompt}
-				<Input bind:value={prompt.value} placeholder="Name" autocomplete="off" spellcheck="false" />
-			{/if}
+			<Input bind:value={prompt.value} placeholder="Name" autocomplete="off" spellcheck="false" />
 			<Dialog.Footer>
-				<Button type="button" variant="ghost" onclick={() => (prompt = null)}>Cancel</Button>
-				<Button type="submit" loading={promptBusy} disabled={!prompt?.value.trim()}>
-					{prompt?.kind === 'rename' ? 'Rename' : 'Create'}
+				<Button type="button" variant="ghost" onclick={() => (promptOpen = false)}>Cancel</Button>
+				<Button type="submit" loading={promptBusy} disabled={!prompt.value.trim()}>
+					{prompt.kind === 'rename' ? 'Rename' : 'Create'}
 				</Button>
 			</Dialog.Footer>
 		</form>
 	</Dialog.Content>
 </Dialog.Root>
 
-<AlertDialog.Root open={deleting !== null} onOpenChange={(o) => !o && (deleting = null)}>
+<AlertDialog.Root bind:open={deleteOpen}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {deleting?.name}?</AlertDialog.Title>
+			<AlertDialog.Title>Delete {deleting.name}?</AlertDialog.Title>
 			<AlertDialog.Description>
-				{deleting?.kind === 'dir'
+				{deleting.kind === 'dir'
 					? 'The folder and everything in it will be deleted.'
 					: 'The file will be deleted.'}
 				This cannot be undone.
@@ -368,7 +372,7 @@
 	</AlertDialog.Content>
 </AlertDialog.Root>
 
-<Sheet.Root open={editing !== null} onOpenChange={(o) => !o && closeEditor()}>
+<Sheet.Root open={editorOpen} onOpenChange={(o) => !o && closeEditor()}>
 	<Sheet.Content class="flex w-full flex-col overflow-hidden sm:max-w-3xl">
 		<Sheet.Header>
 			<Sheet.Title class="truncate">{editing}</Sheet.Title>

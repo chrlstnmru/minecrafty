@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { uploadFiles } from '#lib/files.remote.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -14,6 +15,12 @@
 
 	// leaving mid-upload would hide the progress
 	let busy = $state(false);
+
+	// a fresh queue per opening, swapped while the dialog is hidden so closing never reflows it
+	let visit = $state(0);
+	$effect(() => {
+		if (open) untrack(() => visit++);
+	});
 </script>
 
 <Dialog.Root bind:open>
@@ -29,8 +36,7 @@
 				Into <code class="font-mono">/{path}</code>. Files with the same name are replaced.
 			</Dialog.Description>
 		</Dialog.Header>
-		<!-- remounted per opening so every visit starts with an empty queue -->
-		{#if open}
+		{#key visit}
 			<Uploader
 				bind:busy
 				maxFileBytes={MAX_FILE_BYTES}
@@ -43,6 +49,6 @@
 					open = false;
 				}}
 			/>
-		{/if}
+		{/key}
 	</Dialog.Content>
 </Dialog.Root>

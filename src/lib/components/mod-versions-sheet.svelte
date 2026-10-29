@@ -27,9 +27,13 @@
 		onSelect: (versionId: string) => Promise<void>;
 	} = $props();
 
-	// only ask Modrinth while the sheet is open
+	// only ask Modrinth once the sheet has been opened, and keep the list through the close animation
+	let asked = $state(false);
+	$effect(() => {
+		if (open) asked = true;
+	});
 	const versions = $derived(
-		!open
+		!asked
 			? null
 			: kind === 'mod'
 				? modVersions({ id: instanceId, projectId })

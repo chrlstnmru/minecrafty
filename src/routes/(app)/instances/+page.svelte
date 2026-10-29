@@ -18,7 +18,12 @@
 	const instances = $derived(await listInstances());
 
 	let createOpen = $state(false);
-	let deleting = $state<{ id: number; name: string } | null>(null);
+	let deleting = $state<{ id: number; name: string }>({ id: 0, name: '' });
+	let deleteOpen = $state(false);
+	const askDelete = (inst: { id: number; name: string }) => {
+		deleting = inst;
+		deleteOpen = true;
+	};
 
 	async function run(action: (id: number) => Promise<void>, id: number) {
 		try {
@@ -97,8 +102,7 @@
 							You can leave this page; the install keeps going.
 						</p>
 					{:else if failed}
-						<Button variant="destructive" size="sm" onclick={() => (deleting = inst)}>Delete</Button
-						>
+						<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
 					{:else}
 						<Button variant="secondary" size="sm" href="/instances/{inst.id}">Console</Button>
 						{#if active}
@@ -119,7 +123,7 @@
 							</Button>
 						{:else}
 							<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>Start</Button>
-							<Button variant="ghost" size="sm" onclick={() => (deleting = inst)}>Delete</Button>
+							<Button variant="ghost" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
 						{/if}
 					{/if}
 				</Card.Footer>
@@ -130,10 +134,10 @@
 
 <NewInstanceSheet bind:open={createOpen} />
 
-<AlertDialog.Root open={!!deleting} onOpenChange={(o) => !o && (deleting = null)}>
+<AlertDialog.Root bind:open={deleteOpen}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {deleting?.name}?</AlertDialog.Title>
+			<AlertDialog.Title>Delete {deleting.name}?</AlertDialog.Title>
 			<AlertDialog.Description>
 				This permanently removes the instance and its world files.
 			</AlertDialog.Description>
@@ -142,8 +146,8 @@
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
 				onclick={() => {
-					const id = deleting!.id;
-					deleting = null;
+					const id = deleting.id;
+					deleteOpen = false;
 					run(deleteInstance, id);
 				}}
 			>
