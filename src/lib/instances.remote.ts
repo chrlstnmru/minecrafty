@@ -79,6 +79,38 @@ export const createInstance = form(
 	}
 );
 
+export const updateInstance = form(
+	z
+		.object({
+			id,
+			name: z.string().trim().min(1, 'Enter a name').max(64),
+			port: z.number().int().min(1024, 'Use a port from 1024').max(65535),
+			ramMinMb: z.number().int().min(256, 'At least 256 MB').max(131072),
+			ramMaxMb: z.number().int().min(512, 'At least 512 MB').max(131072),
+			jvmArgs: z
+				.string()
+				.max(1000)
+				.regex(/^[^\r\n]*$/, 'Use a single line'),
+			autoStart: z.boolean().default(false)
+		})
+		.refine((d) => d.ramMinMb <= d.ramMaxMb, {
+			path: ['ramMinMb'],
+			message: 'Minimum cannot exceed maximum'
+		}),
+	async ({ id: instanceId, ...settings }, issue) => {
+		requireAdmin();
+		if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
+		try {
+			instances.updateSettings(instanceId, { ...settings, jvmArgs: settings.jvmArgs.trim() });
+		} catch (e) {
+			if (String(e).includes('UNIQUE'))
+				invalid(issue.port('Port is already used by another instance'));
+			throw e;
+		}
+		await getInstance(instanceId).refresh();
+	}
+);
+
 export const startInstance = command(id, async (instanceId) => {
 	requireAdmin();
 	await userFacing(() => instances.startInstance(instanceId));

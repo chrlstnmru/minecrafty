@@ -2,17 +2,27 @@
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import { toast } from 'svelte-sonner';
-	import { getInstance, killInstance, startInstance, stopInstance } from '#lib/instances.remote.js';
-	import ConsoleView from '#lib/components/console-view.svelte';
+	import { instanceModules } from '#lib/instance-modules.js';
+	import {
+		getInstance,
+		killInstance,
+		listInstances,
+		startInstance,
+		stopInstance
+	} from '#lib/instances.remote.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import type { LayoutProps } from './$types';
+
+	let { children }: LayoutProps = $props();
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(getInstance(id));
-
-	let status = $state('stopped');
+	const all = listInstances();
+	const status = $derived(all.current?.find((i) => i.id === id)?.state ?? 'stopped');
 	const active = $derived(status === 'running' || status === 'stopping');
+	const slug = $derived(page.url.pathname.split('/')[3]);
 
 	async function run(action: (id: number) => Promise<void>) {
 		try {
@@ -23,7 +33,7 @@
 	}
 </script>
 
-<svelte:head><title>{instance.current?.name ?? 'Console'} · Minecrafty</title></svelte:head>
+<svelte:head><title>{instance.current?.name ?? 'Instance'} · Minecrafty</title></svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
 	<div class="flex flex-wrap items-center gap-3">
@@ -59,5 +69,19 @@
 		{/if}
 	</div>
 
-	<ConsoleView {id} bind:status />
+	<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Instance modules">
+		{#each instanceModules as m (m.slug)}
+			<Button
+				variant={slug === m.slug ? 'secondary' : 'ghost'}
+				size="sm"
+				href="/instances/{id}/{m.slug}"
+				aria-current={slug === m.slug ? 'page' : undefined}
+				class={m.planned ? 'text-muted-foreground' : ''}
+			>
+				<m.icon />{m.title}
+			</Button>
+		{/each}
+	</nav>
+
+	{@render children()}
 </div>

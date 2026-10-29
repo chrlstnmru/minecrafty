@@ -160,3 +160,29 @@ export async function deleteInstance(id: number) {
 	db.delete(instances).where(eq(instances.id, id)).run();
 	rmSync(instanceDir(id), { recursive: true, force: true });
 }
+
+export type InstanceSettings = Pick<
+	Instance,
+	'name' | 'port' | 'ramMinMb' | 'ramMaxMb' | 'jvmArgs' | 'autoStart'
+>;
+
+/** Changes apply on the next start; a running server keeps the values it launched with. */
+export function updateSettings(id: number, settings: InstanceSettings) {
+	return db.update(instances).set(settings).where(eq(instances.id, id)).returning().get();
+}
+
+/** Starts every instance flagged auto-start; failures are logged, never thrown. */
+export async function autoStartInstances() {
+	const rows = db.select().from(instances).where(eq(instances.autoStart, true)).all();
+	for (const row of rows) {
+		try {
+			await startInstance(row.id);
+			console.log(`[autostart] started "${row.name}" (#${row.id})`);
+		} catch (e) {
+			// already running (panel restart) is the normal case, not an error
+			const message = e instanceof Error ? e.message : String(e);
+			if (message !== 'Instance is already running')
+				console.error(`[autostart] "${row.name}" (#${row.id}): ${message}`);
+		}
+	}
+}
