@@ -14,6 +14,7 @@ Self-hosted web panel for running and managing Minecraft servers (vanilla and mo
 - Multi-node / remote agents. The process layer sits behind an interface so this can be added later.
 - Docker-based instances.
 - Built-in TLS. Users put a reverse proxy (Caddy, Nginx, Cloudflare Tunnel) in front.
+- Shader packs. Servers never run shaders, so there is nothing for the panel to manage; players install them from Modrinth. (A copy stored on the host would only help if there were a way to hand it to players, which there is not.)
 
 ## Stack
 
@@ -73,31 +74,29 @@ Servers must keep running when the panel restarts or updates.
 - `server.properties` editor with form fields for common keys.
 - EULA must be accepted when the instance is created.
 
-### Resource and shader packs
+### Resource packs
 
-- Resource packs: a server has one resource pack, delivered to players by URL. Pick a Modrinth pack (URL and sha1 go into `server.properties`, nothing is stored on the host), or upload your own `.zip` (must contain `pack.mcmeta` at its top, up to 250 MB). Uploaded packs are stored in `resourcepacks/` and served by the panel at the public, unauthenticated `/packs/<id>/<sha1>.zip`, which only ever serves the instance's current uploaded pack.
-- Because players download uploaded packs from the panel, the admin can set a public address for it; changing it rewrites the pack URLs. The UI warns when the address is local.
-- Options: require the pack, and a prompt message.
-- Shader packs: servers do not run shaders. Packs from Modrinth or uploaded (must contain `shaders/` at the top of the zip) are saved to `shaderpacks/` so they are included in backups and downloads.
+- A server has one resource pack, delivered to players by URL. Pick a Modrinth pack: its download URL and sha1 go into `server.properties` (`resource-pack`, `resource-pack-sha1`) and nothing is stored on the host. Players download it directly from Modrinth, so it works for any player however they reach the server (including tunnels such as playit.gg).
+- Any compatible version can be chosen. Options: require the pack, and a prompt message. Changes apply the next time the server starts.
+- Uploading your own pack is a future feature (see below).
 
 ### Instance page
 
 Each instance has a dedicated page, `/instances/[id]`, with a shared header (name, loader and version, port, status, start/stop/kill) and a tab bar. Every module is its own nested route (`/instances/[id]/console`, `/files`, ...) so it can be linked to and loaded on its own. Modules not yet built show a "planned" placeholder.
 
-| Module         | Purpose                                                                                | Milestone |
-| -------------- | -------------------------------------------------------------------------------------- | --------- |
-| Console        | Live server output with command input and history                                      | 1         |
-| Settings       | Name, RAM, JVM args, port, auto-start, delete                                          | 1         |
-| Mods           | Search, install, update, remove mods; track installed mods                             | 3         |
-| Resource packs | Browse and install resource packs (Modrinth/CurseForge), server resource-pack settings | 3         |
-| Shader packs   | Browse and install shader packs (Modrinth/CurseForge)                                  | 3         |
-| Files          | File manager and text editor, limited to the instance root                             | 4         |
-| Logs           | Browse `logs/latest.log` and rotated `.gz` files with search and download              | 4         |
-| Properties     | `server.properties` editor with form fields for common keys                            | 4         |
-| Players        | Online players, whitelist, ops, bans, kick (RCON)                                      | 4         |
-| Backups        | Manual and scheduled backups, restore                                                  | 4         |
-| Schedules      | Cron tasks for this instance                                                           | 4         |
-| Loader         | Update the loader build or Minecraft version, with a backup prompt                     | 4         |
+| Module         | Purpose                                                                      | Milestone |
+| -------------- | ---------------------------------------------------------------------------- | --------- |
+| Console        | Live server output with command input and history                            | 1         |
+| Settings       | Name, RAM, JVM args, port, auto-start, delete                                | 1         |
+| Mods           | Search, install, update, remove mods; track installed mods                   | 3         |
+| Resource packs | Pick a Modrinth resource pack as the server pack; require and prompt options | 3         |
+| Files          | File manager and text editor, limited to the instance root                   | 4         |
+| Logs           | Browse `logs/latest.log` and rotated `.gz` files with search and download    | 4         |
+| Properties     | `server.properties` editor with form fields for common keys                  | 4         |
+| Players        | Online players, whitelist, ops, bans, kick (RCON)                            | 4         |
+| Backups        | Manual and scheduled backups, restore                                        | 4         |
+| Schedules      | Cron tasks for this instance                                                 | 4         |
+| Loader         | Update the loader build or Minecraft version, with a backup prompt           | 4         |
 
 Console is the live server output with command input; Logs is the history of log files on disk.
 
@@ -181,9 +180,39 @@ Estimates assume one developer working part-time (evenings).
 
 1. **Core** (~2 weeks): Bun adapter, Drizzle schema, auth + first-run setup, runner process, start/stop, live console, Vanilla + Paper/Purpur, auto-start on boot, instance page shell with Console and Settings.
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
-3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack and shader pack managers.
+3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
 4. **Operations** (~3 weeks): file manager, logs viewer, `server.properties` editor, player management, loader update, backups, scheduled tasks, live stats, permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
+
+## Future features
+
+Not built, deliberately. Custom resource pack upload was implemented once and then removed (commit `4bb5df5` has a working version to start from) because its cost and exposure outweighed the benefit for now. Custom mod upload was never built.
+
+### Custom resource pack upload
+
+Upload a `.zip` and use it as the server pack instead of a Modrinth one.
+
+- Validation: a real zip with `pack.mcmeta` at its top (nested is rejected, Minecraft rejects it too), at most 250 MB (the client's own limit).
+- A server resource pack is fetched by players over HTTP, so the panel has to serve it. That needs a public, unauthenticated route (it was `/packs/<instance>/<sha1>.zip`, serving only the instance's current uploaded pack under its own sha1) and an address players can reach.
+- Needs an admin-set "public address of this panel", with pack URLs rewritten when it changes, and a warning when it is a local address.
+- Prefer serving packs from a separate pack-only listener on its own port, so a tunnel (playit.gg and similar raw TCP tunnels) or reverse proxy can expose just that port and the panel stays private. Exposing the whole panel to serve one file is the main downside of the first version.
+- Costs: players download up to 250 MB each from the host (bandwidth), the adapter's default 512 KB request limit has to be raised for uploads, and free tunnel addresses can change, which makes every player download again.
+- Implementation notes: SvelteKit hands remote-form files over as a lazy `Blob`, not a `File`, so validate with `instanceof Blob`; the shadcn `Input` binds `value` on file inputs and clears the chosen file, so use a plain file input there.
+
+### Custom mod and plugin file upload
+
+Drop in a `.jar` that is not on Modrinth or CurseForge (private mods, forks, plugins from other sites).
+
+- Stored in `mods/` or `plugins/`, tracked as a manually installed entry (no project or version ids, so no update checks, no dependency resolution, no compatibility filter).
+- Validate that it is a jar with the expected metadata (`fabric.mod.json`, `quilt.mod.json`, `META-INF/mods.toml`, `neoforge.mods.toml`, `plugin.yml` or `paper-plugin.yml`) and warn when it does not match the instance's loader.
+- Show a clear note that it is unverified third-party code, since it runs with the server's permissions.
+- Handle name clashes with existing files, and removal.
+- Uploads need the same raised request limit as resource packs.
+
+### Other ideas
+
+- CurseForge integration: API key entered by the admin in Settings (the `settings` table already exists for it), then the same search, install and update flow as Modrinth.
+- Pack-only listener port (see above), which also suits future features that need a public download.
 
 ## Open questions
 

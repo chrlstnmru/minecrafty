@@ -10,7 +10,6 @@
 
 	let {
 		instanceId,
-		kind,
 		noun,
 		description,
 		actionLabel,
@@ -18,7 +17,6 @@
 		onInstall
 	}: {
 		instanceId: number;
-		kind: 'resourcepack' | 'shader';
 		noun: string;
 		description: string;
 		actionLabel: string;
@@ -43,7 +41,7 @@
 		return () => clearTimeout(timer);
 	});
 
-	const results = $derived(searchPacks({ id: instanceId, kind, query: debounced, limit }));
+	const results = $derived(searchPacks({ id: instanceId, query: debounced, limit }));
 
 	let picker = $state<{ projectId: string; title: string } | null>(null);
 	let pickerOpen = $state(false);
@@ -127,7 +125,7 @@
 	<ModVersionsSheet
 		bind:open={pickerOpen}
 		{instanceId}
-		{kind}
+		kind="resourcepack"
 		projectId={picker.projectId}
 		title={picker.title}
 		{noun}

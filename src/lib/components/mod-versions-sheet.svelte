@@ -21,7 +21,7 @@
 		projectId: string;
 		title: string;
 		noun: string;
-		kind?: 'mod' | 'resourcepack' | 'shader';
+		kind?: 'mod' | 'resourcepack';
 		/** set when changing an installed mod; that version is marked and not selectable */
 		currentVersionId?: string;
 		onSelect: (versionId: string) => Promise<void>;
@@ -33,7 +33,7 @@
 			? null
 			: kind === 'mod'
 				? modVersions({ id: instanceId, projectId })
-				: packVersions({ id: instanceId, kind, projectId })
+				: packVersions({ id: instanceId, projectId })
 	);
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });

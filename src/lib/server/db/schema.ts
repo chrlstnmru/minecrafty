@@ -45,7 +45,7 @@ export const instances = sqliteTable('instances', {
 	createdAt: createdAt()
 });
 
-// mods, plugins, resource packs and shader packs installed from a mod platform
+// mods, plugins and the server resource pack installed from a mod platform
 export const installedMods = sqliteTable(
 	'installed_mods',
 	{
@@ -53,10 +53,10 @@ export const installedMods = sqliteTable(
 		instanceId: integer('instance_id')
 			.notNull()
 			.references(() => instances.id, { onDelete: 'cascade' }),
-		kind: text('kind', { enum: ['mod', 'resourcepack', 'shader'] })
+		kind: text('kind', { enum: ['mod', 'resourcepack'] })
 			.notNull()
 			.default('mod'),
-		source: text('source', { enum: ['modrinth', 'curseforge', 'manual'] }).notNull(),
+		source: text('source', { enum: ['modrinth', 'curseforge'] }).notNull(),
 		projectId: text('project_id').notNull(),
 		versionId: text('version_id').notNull(),
 		title: text('title').notNull(),

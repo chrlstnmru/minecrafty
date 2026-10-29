@@ -1,5 +1,4 @@
 import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
-import BrushIcon from '@tabler/icons-svelte/icons/brush';
 import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
 import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
@@ -63,13 +62,6 @@ export const instanceModules: InstanceModule[] = [
 		icon: PaletteIcon,
 
 		description: 'Install resource packs and configure the server resource pack.'
-	},
-	{
-		slug: 'shader-packs',
-		title: 'Shader packs',
-		icon: BrushIcon,
-
-		description: 'Install shader packs from Modrinth and CurseForge.'
 	},
 	{
 		slug: 'backups',
