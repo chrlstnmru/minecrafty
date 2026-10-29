@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { installShader, installedPacks, removePack } from '#lib/packs.remote.js';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
+	import PackUpload from '#lib/components/pack-upload.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 
@@ -53,7 +54,7 @@
 					<div class="min-w-0 flex-1">
 						<span class="truncate text-sm font-medium">{pack.title}</span>
 						<p class="truncate text-xs text-muted-foreground">
-							{pack.versionNumber} · {pack.file}
+							{pack.source === 'manual' ? 'uploaded' : pack.versionNumber} · {pack.file}
 						</p>
 					</div>
 					<Button variant="ghost" size="sm" onClickPromise={() => remove(pack.id, pack.title)}>
@@ -63,6 +64,17 @@
 			{:else}
 				<p class="text-sm text-muted-foreground">No shader packs downloaded yet.</p>
 			{/each}
+		</Card.Content>
+	</Card.Root>
+
+	<Card.Root>
+		<Card.Content>
+			<PackUpload
+				instanceId={id}
+				kind="shader"
+				noun="shader pack"
+				hint="Must be a zip with a shaders/ folder at its top. Maximum 250 MB."
+			/>
 		</Card.Content>
 	</Card.Root>
 

@@ -56,7 +56,7 @@ export const installedMods = sqliteTable(
 		kind: text('kind', { enum: ['mod', 'resourcepack', 'shader'] })
 			.notNull()
 			.default('mod'),
-		source: text('source', { enum: ['modrinth', 'curseforge'] }).notNull(),
+		source: text('source', { enum: ['modrinth', 'curseforge', 'manual'] }).notNull(),
 		projectId: text('project_id').notNull(),
 		versionId: text('version_id').notNull(),
 		title: text('title').notNull(),
@@ -79,3 +79,9 @@ export const installedMods = sqliteTable(
 		index('installed_mods_instance').on(t.instanceId)
 	]
 );
+
+// panel-wide key/value settings (public URL, later the CurseForge API key)
+export const settings = sqliteTable('settings', {
+	key: text('key').primaryKey(),
+	value: text('value').notNull()
+});

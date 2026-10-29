@@ -43,6 +43,13 @@
       "when": 1793299638685,
       "tag": "0005_unique_tusk",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "6",
+      "when": 1793300062040,
+      "tag": "0006_cooing_demogoblin",
+      "breakpoints": true
     }
   ]
 }

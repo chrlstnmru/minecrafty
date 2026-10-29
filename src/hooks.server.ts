@@ -14,6 +14,9 @@ export const handle: Handle = async ({ event, resolve }) => {
 		return resolve(event);
 	}
 
+	// uploaded server resource packs are downloaded by game clients, which have no session
+	if (pathname.startsWith('/packs/')) return resolve(event);
+
 	const isPublic = PUBLIC.includes(pathname);
 
 	// first run: nothing works until the admin account exists

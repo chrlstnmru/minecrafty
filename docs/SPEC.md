@@ -73,6 +73,13 @@ Servers must keep running when the panel restarts or updates.
 - `server.properties` editor with form fields for common keys.
 - EULA must be accepted when the instance is created.
 
+### Resource and shader packs
+
+- Resource packs: a server has one resource pack, delivered to players by URL. Pick a Modrinth pack (URL and sha1 go into `server.properties`, nothing is stored on the host), or upload your own `.zip` (must contain `pack.mcmeta` at its top, up to 250 MB). Uploaded packs are stored in `resourcepacks/` and served by the panel at the public, unauthenticated `/packs/<id>/<sha1>.zip`, which only ever serves the instance's current uploaded pack.
+- Because players download uploaded packs from the panel, the admin can set a public address for it; changing it rewrites the pack URLs. The UI warns when the address is local.
+- Options: require the pack, and a prompt message.
+- Shader packs: servers do not run shaders. Packs from Modrinth or uploaded (must contain `shaders/` at the top of the zip) are saved to `shaderpacks/` so they are included in backups and downloads.
+
 ### Instance page
 
 Each instance has a dedicated page, `/instances/[id]`, with a shared header (name, loader and version, port, status, start/stop/kill) and a tab bar. Every module is its own nested route (`/instances/[id]/console`, `/files`, ...) so it can be linked to and loaded on its own. Modules not yet built show a "planned" placeholder.

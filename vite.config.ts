@@ -14,7 +14,10 @@ export default defineConfig({
 				experimental: { async: true }
 			},
 
-			adapter: adapter(),
+			adapter: adapter({
+				// pack uploads are large; the adapter's default is 512 KB. BODY_SIZE_LIMIT overrides this.
+				serverOptions: { maxRequestBodySize: 300 * 1024 * 1024 }
+			}),
 			experimental: { remoteFunctions: true }
 		})
 	]

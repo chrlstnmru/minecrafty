@@ -30,6 +30,37 @@ export const packVersions = query(
 	}
 );
 
+/** The address players use to reach the panel, if the admin set one. */
+export const publicUrl = query(async () => {
+	requireAdmin();
+	return packs.configuredPublicUrl();
+});
+
+export const setPublicUrl = command(z.string().max(300), async (value) => {
+	requireAdmin();
+	await userFacing(async () => packs.setPublicUrl(value));
+	await publicUrl().refresh();
+});
+
+export const uploadPack = form(
+	z.object({
+		id,
+		kind,
+		// the address the admin is browsing from; players need a reachable one, see packs.setPublicUrl
+		origin: z.url(),
+		// Kit hands over a lazily read Blob that is not `instanceof File` under Bun
+		file: z.custom<File>((v) => v instanceof Blob, 'Choose a .zip file')
+	}),
+	async ({ id: instanceId, kind, origin, file }) => {
+		requireAdmin();
+		await userFacing(() => packs.uploadPack(instanceId, kind, file, new URL(origin).origin));
+		await Promise.all([
+			installedPacks({ id: instanceId, kind }).refresh(),
+			kind === 'resourcepack' ? serverPack(instanceId).refresh() : Promise.resolve()
+		]);
+	}
+);
+
 export const serverPack = query(id, async (instanceId) => {
 	requireAdmin();
 	return packs.serverPack(instanceId);
