@@ -1,7 +1,7 @@
-import { command, form, query } from '$app/server';
+import { command, query } from '$app/server';
 import * as v from 'valibot';
 import { idSchema } from '#lib/schemas/common.js';
-import { fileNameSchema, filePathSchema, uploadFilesSchema } from '#lib/schemas/files.js';
+import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/files.js';
 import { requireAdmin } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
 import { userFacing } from '#lib/server/http.js';
@@ -67,13 +67,11 @@ export const removeFile = command(
 	}
 );
 
-export const uploadFiles = form(
-	uploadFilesSchema,
-	async ({ id: instanceId, path, files: uploads }) => {
-		requireAdmin();
-		await userFacing(async () => {
-			for (const file of uploads) await files.saveUpload(instanceId, path, file);
-		});
-		await listFiles({ id: instanceId, path }).refresh();
-	}
-);
+export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, path, items }) => {
+	requireAdmin();
+	await userFacing(async () => {
+		for (const { file, path: relPath } of items)
+			await files.saveUpload(instanceId, path, file, relPath);
+	});
+	await listFiles({ id: instanceId, path }).refresh();
+});

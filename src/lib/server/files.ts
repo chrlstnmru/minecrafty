@@ -139,22 +139,38 @@ export function deleteEntry(instanceId: number, rel: string) {
 	rmSync(absolute, { recursive: true, force: true });
 }
 
-/** Saves an uploaded file into a folder, replacing a file of the same name. */
-export async function saveUpload(instanceId: number, dirRel: string, file: File) {
+/**
+ * Saves an uploaded file into a folder, replacing a file of the same name. `relPath` is the file's
+ * path inside a dropped folder (`pack/mods/a.jar`); its folders are created below `dirRel`, and
+ * every part of it must be a plain name, so it can never climb out.
+ */
+export async function saveUpload(instanceId: number, dirRel: string, file: File, relPath?: string) {
 	if (file.size > MAX_UPLOAD_BYTES)
 		throw new Error(`${file.name} is too large (${MAX_UPLOAD_BYTES / 1024 / 1024} MB limit)`);
-	const { absolute: dir } = resolveSafe(instanceId, dirRel);
+	const { absolute: dir, base } = resolveSafe(instanceId, dirRel);
 	if (!statSync(dir).isDirectory()) throw new Error('Not a folder');
-	const name = checkName(basename(file.name));
-	const { absolute } = resolveSafe(instanceId, join(relative(root(instanceId), dir), name));
-	if (existsSync(absolute) && !statSync(absolute).isFile()) throw new Error(`${name} is a folder`);
+
+	const raw = (relPath ?? file.name).replaceAll('\\', '/');
+	// same rule as every other path here: relative to the folder, never absolute
+	if (raw.startsWith('/') || /^[a-zA-Z]:/.test(raw)) throw new Error('That path is not allowed');
+	const parts = raw.split('/').filter(Boolean);
+	if (!parts.length) throw new Error('The file has no name');
+	for (const part of parts) checkName(part);
+
+	const target = resolveSafe(instanceId, join(relative(base, dir), ...parts));
+	mkdirSync(dirname(target.absolute), { recursive: true });
+	// checked again now that the folders exist: one of them could be a link pointing outside
+	resolveSafe(instanceId, target.rel);
+	if (existsSync(target.absolute) && !statSync(target.absolute).isFile())
+		throw new Error(`${parts.join('/')} is a folder`);
+
 	// Kit's lazily read upload must be streamed: handed to Bun.write as is, it is written as text
-	await Bun.write(absolute, new Response(file.stream()));
-	if (statSync(absolute).size !== file.size) {
-		rmSync(absolute, { force: true });
-		throw new Error(`${name} was not received completely, try again`);
+	await Bun.write(target.absolute, new Response(file.stream()));
+	if (statSync(target.absolute).size !== file.size) {
+		rmSync(target.absolute, { force: true });
+		throw new Error(`${parts.join('/')} was not received completely, try again`);
 	}
-	return name;
+	return parts.join('/');
 }
 
 /** What a download of this path is: a file as it is, or a folder as a zip of its contents. */

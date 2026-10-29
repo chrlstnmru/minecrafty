@@ -12,6 +12,7 @@
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
+	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import { toast } from 'svelte-sonner';
 	import {
 		listFiles,
@@ -20,10 +21,9 @@
 		readFile,
 		removeFile,
 		renameFile,
-		saveFile,
-		uploadFiles
+		saveFile
 	} from '#lib/files.remote.js';
-	import * as Form from '#lib/components/form/index.js';
+	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -34,7 +34,6 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { Textarea } from '#lib/components/ui/textarea/index.js';
-	import { uploadFilesSchema } from '#lib/schemas/files.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -42,6 +41,7 @@
 	const path = $derived(page.url.searchParams.get('path') ?? '');
 	const listing = $derived(listFiles({ id, path }));
 	const crumbs = $derived(path ? path.split('/') : []);
+	const parent = $derived(crumbs.slice(0, -1).join('/'));
 
 	const join = (name: string) => (path ? `${path}/${name}` : name);
 	const open = (to: string) =>
@@ -141,15 +141,8 @@
 		}
 	}
 
-	// --- upload ---
-	const { path: uploadPath, id: uploadId, files: uploadInput } = uploadFiles.fields;
-	// the input's `files` is read from the DOM at submit, so it is not bound here
-	const fileAttrs = $derived(
-		Object.fromEntries(
-			Object.entries(uploadInput.as('file multiple')).filter(([key]) => key !== 'files')
-		)
-	);
-	let uploadForm = $state<HTMLFormElement | null>(null);
+	// --- upload (a dialog: pick or drop files, or a whole folder) ---
+	let uploadOpen = $state(false);
 
 	function activate(entry: { name: string; kind: string }) {
 		if (entry.kind === 'dir') void open(join(entry.name));
@@ -157,11 +150,22 @@
 	}
 </script>
 
-<div class="grid gap-4">
-	<Card.Root>
-		<Card.Header>
-			<Breadcrumb.Root>
-				<Breadcrumb.List>
+<!-- fills the tab: header and toolbar stay put, only the list scrolls -->
+<Card.Root class="min-h-0 flex-1 gap-0 overflow-hidden py-0">
+	<Card.Header class="shrink-0 border-b py-3">
+		<div class="flex min-w-0 items-center gap-2">
+			<Button
+				variant="outline"
+				size="icon-sm"
+				aria-label="Back to the parent folder"
+				title="Back"
+				disabled={!path}
+				onclick={() => open(parent)}
+			>
+				<ArrowLeftIcon />
+			</Button>
+			<Breadcrumb.Root class="min-w-0">
+				<Breadcrumb.List class="flex-nowrap">
 					<Breadcrumb.Item>
 						{#if path}
 							<Breadcrumb.Link
@@ -177,181 +181,144 @@
 					{#each crumbs as crumb, i (i)}
 						{@const to = crumbs.slice(0, i + 1).join('/')}
 						<Breadcrumb.Separator />
-						<Breadcrumb.Item>
+						<Breadcrumb.Item class="min-w-0">
 							{#if i < crumbs.length - 1}
 								<Breadcrumb.Link
+									class="truncate"
 									href="/instances/{id}/files?path={encodeURIComponent(to)}"
 									onclick={(e) => (e.preventDefault(), open(to))}
 								>
 									{crumb}
 								</Breadcrumb.Link>
 							{:else}
-								<Breadcrumb.Page>{crumb}</Breadcrumb.Page>
+								<Breadcrumb.Page class="truncate">{crumb}</Breadcrumb.Page>
 							{/if}
 						</Breadcrumb.Item>
 					{/each}
 				</Breadcrumb.List>
 			</Breadcrumb.Root>
-			<Card.Action class="flex gap-2">
-				<Button
-					variant="outline"
-					size="sm"
-					onclick={() => (prompt = { kind: 'folder', value: '' })}
-				>
-					<FolderPlusIcon />New folder
-				</Button>
-				<Button variant="outline" size="sm" onclick={() => (prompt = { kind: 'file', value: '' })}>
-					<FilePlusIcon />New file
-				</Button>
-				<Button variant="outline" size="sm" href={downloadUrl(path)} download>
-					<FileZipIcon />Download as zip
-				</Button>
-			</Card.Action>
-		</Card.Header>
-		<Card.Content class="px-0">
-			<Table.Root>
-				<Table.Header>
+		</div>
+		<Card.Action class="flex flex-wrap gap-2">
+			<Button variant="outline" size="sm" onclick={() => (uploadOpen = true)}>
+				<UploadIcon />Upload
+			</Button>
+			<Button variant="outline" size="sm" onclick={() => (prompt = { kind: 'folder', value: '' })}>
+				<FolderPlusIcon />New folder
+			</Button>
+			<Button variant="outline" size="sm" onclick={() => (prompt = { kind: 'file', value: '' })}>
+				<FilePlusIcon />New file
+			</Button>
+			<Button variant="outline" size="sm" href={downloadUrl(path)} download>
+				<FileZipIcon />Download as zip
+			</Button>
+		</Card.Action>
+	</Card.Header>
+	<Card.Content class="min-h-0 flex-1 overflow-y-auto px-0">
+		<Table.Root>
+			<Table.Header>
+				<Table.Row>
+					<Table.Head class="ps-6">Name</Table.Head>
+					<Table.Head class="w-28 text-end">Size</Table.Head>
+					<Table.Head class="hidden w-48 sm:table-cell">Modified</Table.Head>
+					<Table.Head class="w-12 pe-6"></Table.Head>
+				</Table.Row>
+			</Table.Header>
+			<Table.Body>
+				{#each listing.current?.entries ?? [] as entry (entry.name)}
+					{@const to = join(entry.name)}
+					{@const editable = entry.kind === 'file' && EDITABLE.test(entry.name)}
 					<Table.Row>
-						<Table.Head class="ps-6">Name</Table.Head>
-						<Table.Head class="w-28 text-end">Size</Table.Head>
-						<Table.Head class="hidden w-48 sm:table-cell">Modified</Table.Head>
-						<Table.Head class="w-12 pe-6"></Table.Head>
+						<Table.Cell class="ps-6">
+							<button
+								type="button"
+								class="flex max-w-full items-center gap-2 text-start hover:underline disabled:no-underline"
+								disabled={entry.kind === 'link' || (entry.kind === 'file' && !editable)}
+								onclick={() => activate(entry)}
+							>
+								{#if entry.kind === 'dir'}
+									<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
+								{:else if editable}
+									<FileTextIcon class="size-4 shrink-0 text-muted-foreground" />
+								{:else}
+									<FileIcon class="size-4 shrink-0 text-muted-foreground" />
+								{/if}
+								<span class="truncate">{entry.name}</span>
+								{#if entry.kind === 'link'}
+									<span class="text-xs text-muted-foreground">(link)</span>
+								{/if}
+							</button>
+						</Table.Cell>
+						<Table.Cell class="text-end text-muted-foreground">
+							{entry.kind === 'dir' ? '' : size(entry.size)}
+						</Table.Cell>
+						<Table.Cell class="hidden text-muted-foreground sm:table-cell">
+							{date.format(new Date(entry.modified))}
+						</Table.Cell>
+						<Table.Cell class="pe-6">
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger>
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon-sm"
+											aria-label="Actions for {entry.name}"
+										>
+											<DotsIcon />
+										</Button>
+									{/snippet}
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content align="end">
+									{#if editable}
+										<DropdownMenu.Item onSelect={() => openEditor(to)}>
+											<PencilIcon />Edit
+										</DropdownMenu.Item>
+									{/if}
+									{#if entry.kind !== 'link'}
+										<DropdownMenu.Item
+											onSelect={() => {
+												location.href = downloadUrl(to);
+											}}
+										>
+											<DownloadIcon />{entry.kind === 'dir' ? 'Download as zip' : 'Download'}
+										</DropdownMenu.Item>
+									{/if}
+									<DropdownMenu.Item
+										onSelect={() => (prompt = { kind: 'rename', target: to, value: entry.name })}
+									>
+										<PencilIcon />Rename
+									</DropdownMenu.Item>
+									<DropdownMenu.Separator />
+									<DropdownMenu.Item
+										variant="destructive"
+										onSelect={() => (deleting = { path: to, name: entry.name, kind: entry.kind })}
+									>
+										<TrashIcon />Delete
+									</DropdownMenu.Item>
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
+						</Table.Cell>
 					</Table.Row>
-				</Table.Header>
-				<Table.Body>
-					{#each listing.current?.entries ?? [] as entry (entry.name)}
-						{@const to = join(entry.name)}
-						{@const editable = entry.kind === 'file' && EDITABLE.test(entry.name)}
+				{:else}
+					{#if listing.current}
 						<Table.Row>
-							<Table.Cell class="ps-6">
-								<button
-									type="button"
-									class="flex max-w-full items-center gap-2 text-start hover:underline disabled:no-underline"
-									disabled={entry.kind === 'link' || (entry.kind === 'file' && !editable)}
-									onclick={() => activate(entry)}
-								>
-									{#if entry.kind === 'dir'}
-										<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
-									{:else if editable}
-										<FileTextIcon class="size-4 shrink-0 text-muted-foreground" />
-									{:else}
-										<FileIcon class="size-4 shrink-0 text-muted-foreground" />
-									{/if}
-									<span class="truncate">{entry.name}</span>
-									{#if entry.kind === 'link'}
-										<span class="text-xs text-muted-foreground">(link)</span>
-									{/if}
-								</button>
-							</Table.Cell>
-							<Table.Cell class="text-end text-muted-foreground">
-								{entry.kind === 'dir' ? '' : size(entry.size)}
-							</Table.Cell>
-							<Table.Cell class="hidden text-muted-foreground sm:table-cell">
-								{date.format(new Date(entry.modified))}
-							</Table.Cell>
-							<Table.Cell class="pe-6">
-								<DropdownMenu.Root>
-									<DropdownMenu.Trigger>
-										{#snippet child({ props })}
-											<Button
-												{...props}
-												variant="ghost"
-												size="icon-sm"
-												aria-label="Actions for {entry.name}"
-											>
-												<DotsIcon />
-											</Button>
-										{/snippet}
-									</DropdownMenu.Trigger>
-									<DropdownMenu.Content align="end">
-										{#if editable}
-											<DropdownMenu.Item onSelect={() => openEditor(to)}>
-												<PencilIcon />Edit
-											</DropdownMenu.Item>
-										{/if}
-										{#if entry.kind !== 'link'}
-											<DropdownMenu.Item
-												onSelect={() => {
-													location.href = downloadUrl(to);
-												}}
-											>
-												<DownloadIcon />{entry.kind === 'dir' ? 'Download as zip' : 'Download'}
-											</DropdownMenu.Item>
-										{/if}
-										<DropdownMenu.Item
-											onSelect={() => (prompt = { kind: 'rename', target: to, value: entry.name })}
-										>
-											<PencilIcon />Rename
-										</DropdownMenu.Item>
-										<DropdownMenu.Separator />
-										<DropdownMenu.Item
-											variant="destructive"
-											onSelect={() => (deleting = { path: to, name: entry.name, kind: entry.kind })}
-										>
-											<TrashIcon />Delete
-										</DropdownMenu.Item>
-									</DropdownMenu.Content>
-								</DropdownMenu.Root>
+							<Table.Cell colspan={4} class="ps-6 text-muted-foreground">
+								This folder is empty.
 							</Table.Cell>
 						</Table.Row>
-					{:else}
-						{#if listing.current}
-							<Table.Row>
-								<Table.Cell colspan={4} class="ps-6 text-muted-foreground">
-									This folder is empty.
-								</Table.Cell>
-							</Table.Row>
-						{/if}
-					{/each}
-				</Table.Body>
-			</Table.Root>
-			{#if listing.error}
-				<p class="px-6 pt-3 text-sm text-destructive" role="alert">
-					{message(listing.error, 'Could not read this folder.')}
-				</p>
-			{/if}
-		</Card.Content>
-	</Card.Root>
-
-	<Card.Root>
-		<Card.Content>
-			<Form.Root
-				bind:element={uploadForm}
-				schema={uploadFilesSchema}
-				remoteFunction={uploadFiles}
-				enctype="multipart/form-data"
-				class="flex flex-wrap items-end gap-2"
-				onSubmitted={(succeeded) => {
-					if (!succeeded) return;
-					toast.success('Uploaded');
-					uploadForm?.reset();
-				}}
-			>
-				{#snippet children({ pending })}
-					<!-- explicit values so the fields survive the form reset after an upload -->
-					<input {...uploadId.as('number')} type="hidden" value={id} />
-					<input {...uploadPath.as('text')} type="hidden" value={path} />
-					<div class="grid min-w-0 flex-1 gap-1">
-						<label for="upload" class="text-sm font-medium">Upload into this folder</label>
-						<!-- not the shadcn Input: it binds `value` on file inputs, which clears the chosen files -->
-						<input
-							id="upload"
-							class="h-8 w-full min-w-0 rounded-lg border border-input bg-transparent px-2.5 py-1 text-sm transition-colors outline-none file:inline-flex file:h-6 file:border-0 file:bg-transparent file:text-sm file:font-medium file:text-foreground focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50 aria-invalid:border-destructive dark:bg-input/30"
-							{...fileAttrs}
-						/>
-					</div>
-					<Button type="submit" variant="outline" loading={pending > 0}>
-						<UploadIcon />Upload
-					</Button>
-					<Form.Errors form={uploadFiles} />
-				{/snippet}
-			</Form.Root>
-			<p class="mt-2 text-xs text-muted-foreground">
-				Files with the same name are replaced. Up to 512 MB each.
+					{/if}
+				{/each}
+			</Table.Body>
+		</Table.Root>
+		{#if listing.error}
+			<p class="px-6 pt-3 text-sm text-destructive" role="alert">
+				{message(listing.error, 'Could not read this folder.')}
 			</p>
-		</Card.Content>
-	</Card.Root>
-</div>
+		{/if}
+	</Card.Content>
+</Card.Root>
+
+<UploadDialog bind:open={uploadOpen} instanceId={id} {path} />
 
 <Dialog.Root open={prompt !== null} onOpenChange={(o) => !o && (prompt = null)}>
 	<Dialog.Content>

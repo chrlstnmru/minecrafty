@@ -10,11 +10,20 @@ export const fileNameSchema = v.pipe(
 	v.maxLength(255)
 );
 
-export const uploadFilesSchema = v.object({
+// One request carries a batch of files, each with its path inside what was dropped. (A command
+// can carry File objects; a remote form cannot be filled with them from code.)
+export const uploadBatchSchema = v.object({
 	id: idSchema,
 	path: filePathSchema,
-	files: v.pipe(
-		v.array(v.custom<File>((f) => f instanceof Blob, 'Choose at least one file')),
-		v.minLength(1, 'Choose at least one file')
+	items: v.pipe(
+		v.array(
+			v.object({
+				// Kit hands uploads over as lazily read Blobs, which are not `instanceof File` under Bun
+				file: v.custom<File>((f) => f instanceof Blob, 'Not a file'),
+				path: v.pipe(v.string(), v.minLength(1), v.maxLength(1024))
+			})
+		),
+		v.minLength(1),
+		v.maxLength(2000)
 	)
 });
