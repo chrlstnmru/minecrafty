@@ -1,4 +1,4 @@
-import { lstatSync, readdirSync } from 'node:fs';
+import { lstatSync, readdirSync, type Stats } from 'node:fs';
 import { LOG_NAME } from '../log-files';
 import { resolveSafe } from './files';
 
@@ -100,4 +100,86 @@ export async function searchLog(
 		if (lines.length < limit) lines.push(line);
 	}
 	return { lines, matches };
+}
+
+export type LogFrame = {
+	/** changes when `latest.log` is replaced (the server restarted), so a client must reload it */
+	epoch: number;
+	/** how many lines the file has */
+	total: number;
+	/** the most recent lines; a client merges them by line number */
+	lines: LogLine[];
+};
+
+const FOLLOW_OVERLAP = 200;
+const FOLLOW_READ_BYTES = 1024 * 1024;
+
+async function countLines(absolute: string) {
+	let lines = 0;
+	let offset = 0;
+	let position = 0;
+	for await (const chunk of Bun.file(absolute).stream()) {
+		for (let i = 0; i < chunk.length; i++) {
+			if (chunk[i] === 10) {
+				lines++;
+				offset = position + i + 1;
+			}
+		}
+		position += chunk.length;
+	}
+	return { lines, offset };
+}
+
+/**
+ * Follows `latest.log`: a first frame with its current line count, then a frame each time lines
+ * are appended. Only complete lines are sent. A live query keeps just the latest pending frame,
+ * so each frame repeats the last {@link FOLLOW_OVERLAP} lines.
+ */
+export async function* followLog(instanceId: number, pollMs = 500): AsyncGenerator<LogFrame> {
+	const { absolute } = resolveSafe(instanceId, 'logs/latest.log');
+	const stat = (): Stats | null => {
+		try {
+			const s = lstatSync(absolute);
+			return s.isFile() ? s : null;
+		} catch {
+			return null;
+		}
+	};
+
+	let epoch = 0;
+	let identity = stat()?.ino ?? null;
+	let { lines: total, offset } =
+		identity === null ? { lines: 0, offset: 0 } : await countLines(absolute);
+	let carry = '';
+	let recent: LogLine[] = [];
+	yield { epoch, total, lines: recent };
+
+	for (;;) {
+		await Bun.sleep(pollMs);
+		const now = stat();
+		const replaced = now === null ? identity !== null : now.ino !== identity || now.size < offset;
+		if (replaced) {
+			epoch++;
+			total = 0;
+			offset = 0;
+			carry = '';
+			recent = [];
+			identity = now?.ino ?? null;
+			yield { epoch, total, lines: recent };
+		}
+		if (!now) continue;
+
+		while (offset < now.size) {
+			const end = Math.min(now.size, offset + FOLLOW_READ_BYTES);
+			const text = carry + (await Bun.file(absolute).slice(offset, end).text());
+			offset = end;
+			const parts = text.split('\n');
+			carry = parts.pop()!;
+			if (!parts.length) continue;
+			recent = [...recent, ...parts.map((part) => ({ n: ++total, text: clean(part) }))].slice(
+				-FOLLOW_OVERLAP
+			);
+			yield { epoch, total, lines: recent };
+		}
+	}
 }

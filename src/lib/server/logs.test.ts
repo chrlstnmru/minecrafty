@@ -1,10 +1,17 @@
-import { mkdirSync, symlinkSync, utimesSync, writeFileSync } from 'node:fs';
+import {
+	appendFileSync,
+	mkdirSync,
+	renameSync,
+	symlinkSync,
+	utimesSync,
+	writeFileSync
+} from 'node:fs';
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeInstance } from '../../test/instance';
 import { serverDir } from './instances';
-import { listLogs, readLog, searchLog } from './logs';
+import { followLog, listLogs, readLog, searchLog, type LogFrame } from './logs';
 
 let id: number;
 let logs: string;
@@ -136,5 +143,57 @@ describe('names that are refused', () => {
 		symlinkSync(outside, join(logs, 'link.log'));
 		await expect(readLog(id, 'link.log', 5)).rejects.toThrow();
 		expect(listLogs(id).map((f) => f.name)).not.toContain('link.log');
+	});
+});
+
+describe('followLog', () => {
+	const next = async (it: AsyncGenerator<LogFrame>) => (await it.next()).value as LogFrame;
+
+	it('starts from the current end, then reports appended lines with their numbers', async () => {
+		writeFileSync(join(logs, 'latest.log'), 'a\nb\n');
+		const follow = followLog(id, 10);
+		expect(await next(follow)).toEqual({ epoch: 0, total: 2, lines: [] });
+		appendFileSync(join(logs, 'latest.log'), 'c\nd\n');
+		const frame = await next(follow);
+		expect(frame.total).toBe(4);
+		expect(frame.lines.map((l) => [l.n, l.text])).toEqual([
+			[3, 'c'],
+			[4, 'd']
+		]);
+		await follow.return(undefined);
+	});
+
+	it('waits for a line to be finished before sending it', async () => {
+		writeFileSync(join(logs, 'latest.log'), '');
+		const follow = followLog(id, 10);
+		await next(follow);
+		appendFileSync(join(logs, 'latest.log'), 'half a li');
+		const pending = next(follow);
+		await Bun.sleep(60);
+		appendFileSync(join(logs, 'latest.log'), 'ne\n');
+		expect((await pending).lines).toEqual([{ n: 1, text: 'half a line' }]);
+		await follow.return(undefined);
+	});
+
+	it('starts a new epoch when the file is replaced', async () => {
+		writeFileSync(join(logs, 'latest.log'), 'one\ntwo\nthree\n');
+		const follow = followLog(id, 10);
+		await next(follow);
+		renameSync(join(logs, 'latest.log'), join(logs, 'old.log'));
+		writeFileSync(join(logs, 'latest.log'), 'fresh\n');
+		const frames = [await next(follow), await next(follow)];
+		expect(frames[0]).toEqual({ epoch: 1, total: 0, lines: [] });
+		expect(frames[1].epoch).toBe(1);
+		expect(frames[1].lines).toEqual([{ n: 1, text: 'fresh' }]);
+		await follow.return(undefined);
+	});
+
+	it('copes with a log that does not exist yet', async () => {
+		const follow = followLog(id, 10);
+		expect(await next(follow)).toEqual({ epoch: 0, total: 0, lines: [] });
+		writeFileSync(join(logs, 'latest.log'), 'first\n');
+		const frames = [await next(follow), await next(follow)];
+		expect(frames.at(-1)!.lines.at(-1)).toEqual({ n: 1, text: 'first' });
+		await follow.return(undefined);
 	});
 });

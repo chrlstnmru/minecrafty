@@ -1,4 +1,6 @@
+import { error } from '@sveltejs/kit';
 import { query } from '$app/server';
+import { getInstance } from '#lib/server/instances.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { readLogSchema, searchLogSchema } from '#lib/schemas/logs.js';
 import { requireAdmin } from '#lib/server/auth.js';
@@ -18,4 +20,11 @@ export const readLog = query(readLogSchema, async ({ id, name, lines }) => {
 export const searchLog = query(searchLogSchema, async ({ id, name, query: text, matchCase }) => {
 	requireAdmin();
 	return userFacing(() => logs.searchLog(id, name, text, { matchCase }));
+});
+
+/** New lines of `latest.log` as the server writes them. */
+export const followLog = query.live(idSchema, async function* (id) {
+	requireAdmin();
+	if (!getInstance(id)) error(404, 'Instance not found');
+	yield* logs.followLog(id);
 });
