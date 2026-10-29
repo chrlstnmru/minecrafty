@@ -82,19 +82,22 @@ type Planned = { version: modrinth.ModrinthVersion; dependencyOf: string | null 
  * Works out which versions to install: the requested project plus every required
  * dependency that isn't installed yet. Dependencies with no compatible version are skipped.
  */
-async function plan(inst: Instance, projectId: string) {
+async function plan(inst: Instance, projectId: string, rootVersion?: modrinth.ModrinthVersion) {
 	const { loaders } = modSupport(inst.loader);
 	const have = new Set(listInstalled(inst.id).map((m) => m.projectId));
 	const planned = new Map<string, Planned>();
 	const skipped: string[] = [];
+	// the root version may be given up front (a chosen version, or an update of an installed mod)
+	if (rootVersion) have.delete(projectId);
 	const queue: { projectId: string | null; versionId: string | null; parent: string | null }[] = [
-		{ projectId, versionId: null, parent: null }
+		{ projectId, versionId: rootVersion?.id ?? null, parent: null }
 	];
 
 	while (queue.length) {
 		const next = queue.shift()!;
 		let version: modrinth.ModrinthVersion | undefined;
-		if (next.versionId) version = await modrinth.getVersion(next.versionId);
+		if (rootVersion && next.versionId === rootVersion.id) version = rootVersion;
+		else if (next.versionId) version = await modrinth.getVersion(next.versionId);
 		else if (next.projectId)
 			version = pickVersion(await modrinth.listVersions(next.projectId, loaders, inst.mcVersion));
 		const id = next.projectId ?? version?.project_id;
@@ -115,18 +118,21 @@ async function plan(inst: Instance, projectId: string) {
 	return { planned, skipped };
 }
 
-export async function install(instanceId: number, projectId: string) {
-	const inst = requireInstance(instanceId);
-	if (listInstalled(instanceId).some((m) => m.projectId === projectId))
-		throw new Error('Already installed');
-
-	const { planned, skipped } = await plan(inst, projectId);
+/**
+ * Downloads every planned file and records it. A failure removes whatever was already
+ * written. `replacing` is the row an update supersedes: its file is swapped out only once
+ * everything else succeeded.
+ */
+async function apply(
+	inst: Instance,
+	{ planned, skipped }: Awaited<ReturnType<typeof plan>>,
+	replacing?: InstalledMod
+) {
 	const projects = new Map(
 		(await modrinth.getProjects([...planned.keys(), ...skipped])).map((p) => [p.id, p])
 	);
-
 	const folder = modSupport(inst.loader).folder;
-	mkdirSync(join(serverDir(instanceId), folder), { recursive: true });
+	mkdirSync(join(serverDir(inst.id), folder), { recursive: true });
 
 	const written: string[] = [];
 	const rows: (typeof installedMods.$inferInsert)[] = [];
@@ -134,15 +140,16 @@ export async function install(instanceId: number, projectId: string) {
 		for (const [id, { version, dependencyOf }] of planned) {
 			const file = pickFile(version);
 			const rel = `${folder}/${file.filename}`;
-			const dest = join(serverDir(instanceId), rel);
-			if (await Bun.file(dest).exists()) throw new Error(`${rel} already exists`);
+			const dest = join(serverDir(inst.id), rel);
+			if (rel !== replacing?.file && (await Bun.file(dest).exists()))
+				throw new Error(`${rel} already exists`);
 			await downloadFile(dest, {
 				url: file.url,
 				hash: { algo: 'sha512', value: file.hashes.sha512 }
 			});
 			written.push(dest);
 			rows.push({
-				instanceId,
+				instanceId: inst.id,
 				kind: 'mod',
 				source: 'modrinth',
 				projectId: id,
@@ -152,19 +159,116 @@ export async function install(instanceId: number, projectId: string) {
 				versionNumber: version.version_number,
 				file: rel,
 				hash: file.hashes.sha512,
-				dependencyOf
+				dependencyOf: replacing?.projectId === id ? replacing.dependencyOf : dependencyOf
 			});
 		}
 	} catch (e) {
-		for (const f of written) rmSync(f, { force: true });
+		// never delete the file an update is replacing: it is still the installed one
+		const keep = replacing ? join(serverDir(inst.id), replacing.file) : null;
+		for (const f of written) if (f !== keep) rmSync(f, { force: true });
 		throw e;
 	}
-	db.insert(installedMods).values(rows).run();
+
+	db.transaction((tx) => {
+		for (const row of rows) {
+			// an update rewrites the existing row so its id stays stable for the UI
+			if (replacing && row.projectId === replacing.projectId)
+				tx.update(installedMods).set(row).where(eq(installedMods.id, replacing.id)).run();
+			else tx.insert(installedMods).values(row).run();
+		}
+	});
+	// the new file is in place and recorded; drop the old one unless it was overwritten
+	if (replacing && !rows.some((r) => r.file === replacing.file))
+		rmSync(join(serverDir(inst.id), replacing.file), { force: true });
 
 	return {
 		installed: rows.map((r) => ({ title: r.title, version: r.versionNumber })),
 		skipped: skipped.map((id) => projects.get(id)?.title ?? id)
 	};
+}
+
+export type ModVersion = {
+	id: string;
+	versionNumber: string;
+	versionType: 'release' | 'beta' | 'alpha';
+	publishedAt: string;
+};
+
+/** Every version of a project that runs on this instance, newest first. */
+export async function listModVersions(
+	instanceId: number,
+	projectId: string
+): Promise<ModVersion[]> {
+	const inst = requireInstance(instanceId);
+	const versions = await modrinth.listVersions(
+		projectId,
+		modSupport(inst.loader).loaders,
+		inst.mcVersion
+	);
+	return versions.map((v) => ({
+		id: v.id,
+		versionNumber: v.version_number,
+		versionType: v.version_type,
+		publishedAt: v.date_published
+	}));
+}
+
+/** Looks the version up among the compatible ones, so only installable versions can be chosen. */
+async function resolveVersion(inst: Instance, projectId: string, versionId: string) {
+	const versions = await modrinth.listVersions(
+		projectId,
+		modSupport(inst.loader).loaders,
+		inst.mcVersion
+	);
+	const version = versions.find((v) => v.id === versionId);
+	if (!version) throw new Error(`That version does not run on ${inst.loader} ${inst.mcVersion}`);
+	return version;
+}
+
+export async function install(instanceId: number, projectId: string, versionId?: string) {
+	const inst = requireInstance(instanceId);
+	if (listInstalled(instanceId).some((m) => m.projectId === projectId))
+		throw new Error('Already installed');
+	const chosen = versionId ? await resolveVersion(inst, projectId, versionId) : undefined;
+	return apply(inst, await plan(inst, projectId, chosen));
+}
+
+export type ModUpdate = {
+	modId: number;
+	versionId: string;
+	versionNumber: string;
+};
+
+/** Newer releases for the installed Modrinth mods, found by file hash in a single request. */
+export async function checkUpdates(instanceId: number): Promise<ModUpdate[]> {
+	const inst = requireInstance(instanceId);
+	const rows = listInstalled(instanceId).filter((m) => m.source === 'modrinth' && m.hash);
+	const latest = await modrinth.latestVersions(
+		rows.map((r) => r.hash!),
+		modSupport(inst.loader).loaders,
+		inst.mcVersion
+	);
+	return rows.flatMap((row) => {
+		const v = latest[row.hash!];
+		// betas and alphas are never offered as updates
+		if (!v || v.id === row.versionId || v.version_type !== 'release') return [];
+		return [{ modId: row.id, versionId: v.id, versionNumber: v.version_number }];
+	});
+}
+
+/** Moves an installed mod to its newest release, or to a chosen version (including older ones). */
+export async function update(instanceId: number, modId: number, versionId?: string) {
+	const inst = requireInstance(instanceId);
+	const row = listInstalled(instanceId).find((m) => m.id === modId);
+	if (!row?.hash) throw new Error('Not installed');
+	const target = versionId
+		? await resolveVersion(inst, row.projectId, versionId)
+		: (await modrinth.latestVersions([row.hash], modSupport(inst.loader).loaders, inst.mcVersion))[
+				row.hash
+			];
+	if (!target || target.id === row.versionId)
+		throw new Error(versionId ? 'Already on that version' : 'Already up to date');
+	return apply(inst, await plan(inst, row.projectId, target), row);
 }
 
 export function remove(instanceId: number, modId: number) {

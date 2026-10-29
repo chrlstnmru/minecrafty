@@ -2,7 +2,16 @@
 	import { page } from '$app/state';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import { toast } from 'svelte-sonner';
-	import { installMod, installedMods, modsInfo, removeMod, searchMods } from '#lib/mods.remote.js';
+	import {
+		installMod,
+		installedMods,
+		modUpdates,
+		modsInfo,
+		removeMod,
+		searchMods,
+		updateMod
+	} from '#lib/mods.remote.js';
+	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -16,6 +25,30 @@
 	const info = $derived(await modsInfo(id));
 	const installed = $derived(installedMods(id));
 	const installedIds = $derived(new Set(installed.current?.map((m) => m.projectId)));
+
+	const updates = $derived(modUpdates(id));
+	const updateByMod = $derived(new Map(updates.current?.map((u) => [u.modId, u])));
+
+	// the version picker serves both installing a chosen version and changing an installed one
+	let picker = $state<{
+		projectId: string;
+		title: string;
+		modId?: number;
+		currentVersionId?: string;
+	} | null>(null);
+	let pickerOpen = $state(false);
+
+	function pickVersion(target: NonNullable<typeof picker>) {
+		picker = target;
+		pickerOpen = true;
+	}
+
+	async function onPick(versionId: string) {
+		if (!picker) return;
+		const { projectId, title, modId } = picker;
+		if (modId) await change(modId, title, versionId);
+		else await install(projectId, title, versionId);
+	}
 
 	let query = $state('');
 	let debounced = $state('');
@@ -37,9 +70,9 @@
 		return (e as { body?: { message?: string } }).body?.message ?? fallback;
 	}
 
-	async function install(projectId: string, title: string) {
+	async function install(projectId: string, title: string, versionId?: string) {
 		try {
-			const res = await installMod({ id, projectId });
+			const res = await installMod({ id, projectId, versionId });
 			const deps = res.installed.length - 1;
 			toast.success(`Installed ${title}`, {
 				description:
@@ -53,6 +86,22 @@
 				});
 		} catch (e) {
 			toast.error(message(e, 'Install failed'));
+		}
+	}
+
+	async function change(modId: number, title: string, versionId?: string) {
+		try {
+			const res = await updateMod({ id, modId, versionId });
+			toast.success(`${title} is now ${res.installed[0]?.version ?? 'updated'}`);
+		} catch (e) {
+			toast.error(message(e, 'Update failed'));
+		}
+	}
+
+	async function updateAll() {
+		for (const u of updates.current ?? []) {
+			const title = installed.current?.find((m) => m.id === u.modId)?.title ?? 'mod';
+			await change(u.modId, title);
 		}
 	}
 
@@ -83,6 +132,13 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Installed {info.noun}s</Card.Title>
+				{#if updates.current?.length}
+					<Card.Action>
+						<Button size="sm" onClickPromise={updateAll}>
+							Update all ({updates.current.length})
+						</Button>
+					</Card.Action>
+				{/if}
 				<Card.Description>
 					Files in <code class="font-mono">{info.folder}/</code>. Changes apply the next time the
 					server starts.
@@ -90,6 +146,7 @@
 			</Card.Header>
 			<Card.Content>
 				{#each installed.current ?? [] as mod (mod.id)}
+					{@const update = updateByMod.get(mod.id)}
 					<div class="flex items-center gap-3 border-b py-2 first:pt-0 last:border-b-0 last:pb-0">
 						{#if mod.iconUrl}
 							<img src={mod.iconUrl} alt="" class="size-9 shrink-0 rounded-md bg-muted" />
@@ -105,6 +162,24 @@
 								{mod.versionNumber} · {mod.file}
 							</p>
 						</div>
+						{#if update}
+							<Button size="sm" onClickPromise={() => change(mod.id, mod.title)}>
+								Update to {update.versionNumber}
+							</Button>
+						{/if}
+						<Button
+							variant="ghost"
+							size="sm"
+							onclick={() =>
+								pickVersion({
+									projectId: mod.projectId,
+									title: mod.title,
+									modId: mod.id,
+									currentVersionId: mod.versionId
+								})}
+						>
+							Versions
+						</Button>
 						<Button variant="ghost" size="sm" onClickPromise={() => remove(mod.id, mod.title)}>
 							Remove
 						</Button>
@@ -162,6 +237,13 @@
 							{#if installedIds.has(hit.project_id)}
 								<Badge variant="secondary">Installed</Badge>
 							{:else}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => pickVersion({ projectId: hit.project_id, title: hit.title })}
+								>
+									Versions
+								</Button>
 								<Button size="sm" onClickPromise={() => install(hit.project_id, hit.title)}>
 									Install
 								</Button>
@@ -184,4 +266,16 @@
 			</Card.Content>
 		</Card.Root>
 	</div>
+{/if}
+
+{#if info?.supported && picker}
+	<ModVersionsSheet
+		bind:open={pickerOpen}
+		instanceId={id}
+		projectId={picker.projectId}
+		title={picker.title}
+		noun={info.noun}
+		currentVersionId={picker.currentVersionId}
+		onSelect={onPick}
+	/>
 {/if}

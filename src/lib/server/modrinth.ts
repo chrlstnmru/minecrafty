@@ -27,6 +27,7 @@ export type ModrinthVersion = {
 	id: string;
 	project_id: string;
 	version_number: string;
+	date_published: string;
 	version_type: 'release' | 'beta' | 'alpha';
 	files: ModrinthFile[];
 	dependencies: {
@@ -82,6 +83,20 @@ export function listVersions(projectId: string, loaders: string[], mc: string) {
 		loaders: JSON.stringify(loaders),
 		game_versions: JSON.stringify([mc])
 	});
+}
+
+/** Newest version for each installed file (keyed by sha512), for these loaders and Minecraft version. */
+export async function latestVersions(hashes: string[], loaders: string[], mc: string) {
+	if (!hashes.length) return {};
+	const res = await fetch(`${API}/version_files/update`, {
+		method: 'POST',
+		headers: { ...headers, 'Content-Type': 'application/json' },
+		body: JSON.stringify({ hashes, algorithm: 'sha512', loaders, game_versions: [mc] }),
+		signal: AbortSignal.timeout(15_000)
+	});
+	if (res.status === 429) throw new Error('Modrinth is rate limiting requests, try again shortly');
+	if (!res.ok) throw new Error(`Modrinth responded ${res.status}`);
+	return (await res.json()) as Record<string, ModrinthVersion>;
 }
 
 export function getVersion(versionId: string) {

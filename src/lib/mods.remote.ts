@@ -21,6 +21,12 @@ export const installedMods = query(id, async (instanceId) => {
 	return mods.listInstalled(instanceId);
 });
 
+/** Newer releases of the installed mods; one Modrinth request regardless of how many are installed. */
+export const modUpdates = query(id, async (instanceId) => {
+	requireAdmin();
+	return userFacing(() => mods.checkUpdates(instanceId));
+});
+
 export const searchMods = query(
 	z.object({ id, query: z.string().max(100), limit: z.number().int().min(1).max(100) }),
 	async ({ id: instanceId, query, limit }) => {
@@ -29,12 +35,23 @@ export const searchMods = query(
 	}
 );
 
-export const installMod = command(
+const versionId = z.string().min(1).max(64);
+
+/** Versions of a project that run on this instance, for the version picker. */
+export const modVersions = query(
 	z.object({ id, projectId: z.string().min(1).max(64) }),
 	async ({ id: instanceId, projectId }) => {
 		requireAdmin();
-		const result = await userFacing(() => mods.install(instanceId, projectId));
-		await installedMods(instanceId).refresh();
+		return userFacing(() => mods.listModVersions(instanceId, projectId));
+	}
+);
+
+export const installMod = command(
+	z.object({ id, projectId: z.string().min(1).max(64), versionId: versionId.optional() }),
+	async ({ id: instanceId, projectId, versionId }) => {
+		requireAdmin();
+		const result = await userFacing(() => mods.install(instanceId, projectId, versionId));
+		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
 		return result;
 	}
 );
@@ -44,6 +61,16 @@ export const removeMod = command(
 	async ({ id: instanceId, modId }) => {
 		requireAdmin();
 		await userFacing(async () => mods.remove(instanceId, modId));
-		await installedMods(instanceId).refresh();
+		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
+	}
+);
+
+export const updateMod = command(
+	z.object({ id, modId: z.number().int().positive(), versionId: versionId.optional() }),
+	async ({ id: instanceId, modId, versionId }) => {
+		requireAdmin();
+		const result = await userFacing(() => mods.update(instanceId, modId, versionId));
+		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
+		return result;
 	}
 );

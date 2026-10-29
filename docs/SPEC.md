@@ -108,7 +108,7 @@ Console is the live server output with command input; Logs is the history of log
 ### Mods and modpacks
 
 - Search Modrinth and CurseForge from the instance page, filtered by the instance's loader and MC version. Quilt also accepts Fabric mods, and Purpur also accepts Paper/Spigot/Bukkit plugins. Paper-family instances show the tab as Plugins and install into `plugins/`; vanilla has no mods tab content.
-- Install, update, remove; resolve required dependencies.
+- Install, update, remove; resolve required dependencies. Any compatible version can be chosen when installing, and an installed mod can be moved to a chosen version (including older ones). Update checks use file hashes in one request and only offer stable releases.
 - Track installed mods (source, project ID, file ID, hash) in the DB so updates can be checked.
 - Modpack import: Modrinth `.mrpack` and CurseForge manifest zips; create a new instance from the pack.
 - CurseForge files with third-party downloads disabled: list them for manual download and accept uploads.
