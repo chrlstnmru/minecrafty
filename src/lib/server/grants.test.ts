@@ -174,6 +174,24 @@ describe('canAssignRole', () => {
 	it('lets an owner assign any role', () => {
 		expect(G.canAssignRole(owner, target(role('Top', 99, ['logs']))).ok).toBe(true);
 	});
+
+	it('keeps a role with an owner-only permission for the owner to assign, even ranked low', () => {
+		const admins = role('Admins', 10, ['users.write']);
+		const result = G.canAssignRole(boss, target(admins));
+		expect(result).toMatchObject({ ok: false });
+		expect(result.reason).toMatch(/Only the owner may assign/);
+		expect(G.canAssignRole(boss, target(role('Roles', 10, ['roles.write']))).ok).toBe(false);
+		expect(G.canAssignRole(owner, target(admins)).ok).toBe(true);
+	});
+});
+
+describe('roleAssignable', () => {
+	it('marks a role the actor may hand out, and one they may not', () => {
+		expect(G.roleAssignable(boss, { rank: 50, permissions: ['logs'] }).ok).toBe(true);
+		expect(G.roleAssignable(boss, { rank: 70, permissions: ['logs'] }).ok).toBe(false);
+		expect(G.roleAssignable(boss, { rank: 10, permissions: ['users.write'] }).ok).toBe(false);
+		expect(G.roleAssignable(owner, { rank: 99, permissions: ['roles.write'] }).ok).toBe(true);
+	});
 });
 
 describe('canAddUser', () => {
