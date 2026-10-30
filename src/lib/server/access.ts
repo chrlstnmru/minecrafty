@@ -22,7 +22,6 @@ export type Entry = {
 	/** null: assigned on the whole panel */
 	instanceId: number | null;
 	granted: Set<Permission>;
-	denied: Set<Permission>;
 };
 
 /** A user's role assignments, read fresh each time so a change applies on the very next request. */
@@ -44,35 +43,24 @@ export function entriesFor(userId: number): Entry[] {
 				roleId: row.roleId,
 				rank: row.rank,
 				instanceId: row.instanceId,
-				granted: new Set(grantedBy(rules)),
-				denied: new Set(rules.deny)
+				granted: new Set(grantedBy(rules))
 			};
 		});
 }
 
 /**
  * What the entries amount to on an instance (or on the panel itself, with null). A permission is
- * granted by any applicable role and removed by a deny in any applicable role. Panel permissions
- * only come from roles assigned panel-wide; instance permissions come from those and from roles
- * assigned to this instance.
+ * granted by any applicable role. Panel permissions only come from roles assigned panel-wide;
+ * instance permissions come from those and from roles assigned to this instance.
  */
 export function resolve(entries: readonly Entry[], instanceId: number | null): Set<Permission> {
 	const granted = new Set<Permission>();
-	const denied = new Set<Permission>();
 	for (const entry of entries) {
 		const panelWide = entry.instanceId === null;
 		const here = panelWide || (instanceId !== null && entry.instanceId === instanceId);
 		for (const key of entry.granted) {
 			if (isInstancePermission(key) ? here : panelWide) granted.add(key);
 		}
-		for (const key of entry.denied) {
-			if (isInstancePermission(key) ? here : panelWide) denied.add(key);
-		}
-	}
-	for (const key of denied) granted.delete(key);
-	// without View there is no server to act on, whatever else was granted
-	if (instanceId !== null && !granted.has('view')) {
-		for (const key of [...granted]) if (isInstancePermission(key)) granted.delete(key);
 	}
 	return granted;
 }
@@ -141,7 +129,6 @@ export function grantingRank(user: Actor, key: Permission, instanceId: number | 
 		.filter(
 			(e) =>
 				e.granted.has(key) &&
-				!e.denied.has(key) &&
 				(e.instanceId === null || (instanceId !== null && e.instanceId === instanceId))
 		)
 		.reduce((max, e) => Math.max(max, e.rank), -Infinity);

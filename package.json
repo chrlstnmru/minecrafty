@@ -67,5 +67,8 @@
 		"test": "bun run --bun vitest run",
 		"test:watch": "bun run --bun vitest"
 	},
-	"type": "module"
+	"type": "module",
+	"dependencies": {
+		"@flexiboards/svelte": "^1.0.0"
+	}
 }

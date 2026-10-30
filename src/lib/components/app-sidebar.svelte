@@ -42,9 +42,7 @@
 	<Sidebar.Content>
 		<NavMain items={navMain} />
 		<NavSecondary
-			items={panel.includes('users.read')
-				? navSecondary
-				: navSecondary.filter((i) => i.url !== '/users')}
+			items={navSecondary.filter((i) => !i.permission || panel.includes(i.permission))}
 			class="mt-auto"
 		/>
 	</Sidebar.Content>

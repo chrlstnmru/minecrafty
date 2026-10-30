@@ -8,6 +8,8 @@ import {
 	type Permission as PermissionDef
 } from './permission-define.js';
 
+export { MAX_RANK } from './rank-plan.js';
+
 /** Per server: one for each instance tab, plus view (the server itself) and control. */
 const instance = definePermissions({
 	view: { label: 'View', description: 'See the server and its status', scope: 'instance' },
@@ -108,6 +110,11 @@ const panel = definePermissions({
 		description: 'Delete a server and its files',
 		scope: 'panel'
 	},
+	'roles.read': {
+		label: 'See roles',
+		description: 'Open the Roles page and see what each role grants',
+		scope: 'panel'
+	},
 	'users.read': {
 		label: 'See users',
 		description: 'Open the Users page and see accounts and roles',
@@ -123,16 +130,16 @@ const panel = definePermissions({
 	},
 	'roles.write': {
 		label: 'Manage roles',
-		description: 'Create, edit and delete roles ranked below you',
+		description: 'Create, edit, reorder and delete roles ranked below you',
 		scope: 'panel',
-		implies: ['users.read'],
+		implies: ['roles.read'],
 		ownerOnlyGrant: true
 	},
 	'roles.assign': {
 		label: 'Assign roles',
 		description: 'Give people roles, panel-wide or on a server, ranked below you',
 		scope: 'panel',
-		implies: ['users.read'],
+		implies: ['users.read', 'roles.read'],
 		hierarchical: true
 	}
 });
@@ -173,12 +180,10 @@ export const MODULE_PERMISSION: Record<string, InstancePermission> = {
 	settings: 'settings'
 };
 
-export const MAX_RANK = 99;
+/** What a role grants: the permissions picked for it. What they imply comes with them. */
+export type RoleRules = { allow: Permission[] };
 
-/** What a role says. A permission is allowed, denied (which wins) or left out, which is not granted. */
-export type RoleRules = { allow: Permission[]; deny: Permission[] };
-
-export const emptyRules = (): RoleRules => ({ allow: [], deny: [] });
+export const emptyRules = (): RoleRules => ({ allow: [] });
 
 /** Reads stored rules, dropping what it does not know; damaged rules grant nothing. */
 export function parseRules(text: string): RoleRules {
@@ -189,16 +194,21 @@ export function parseRules(text: string): RoleRules {
 		return emptyRules();
 	}
 	if (!raw || typeof raw !== 'object') return emptyRules();
-	const r = raw as Record<string, unknown>;
-	const known = (value: unknown) =>
-		PERMISSIONS.filter((p) => Array.isArray(value) && value.includes(p));
-	return { allow: known(r.allow), deny: known(r.deny) };
+	const { allow } = raw as Record<string, unknown>;
+	return { allow: PERMISSIONS.filter((p) => Array.isArray(allow) && allow.includes(p)) };
 }
 
-/** What a role grants: the allowed permissions and what they imply, minus the denied ones. */
+/** What a role grants: the permissions picked and what they imply, in catalogue order. */
 export function grantedBy(rules: RoleRules): Permission[] {
-	const denied = new Set(rules.deny);
-	return PERMISSIONS.filter((p) => closure(rules.allow).has(p) && !denied.has(p));
+	const all = closure(rules.allow);
+	return PERMISSIONS.filter((p) => all.has(p));
+}
+
+/** The section a permission sits under on the roles page: the resource it controls. */
+export function permissionGroup(key: Permission): string {
+	if (isInstancePermission(key)) return 'Server';
+	const resource = key.split('.')[0];
+	return resource.charAt(0).toUpperCase() + resource.slice(1);
 }
 
 /** Starting points for a new role; the built-in roles are made from these. */

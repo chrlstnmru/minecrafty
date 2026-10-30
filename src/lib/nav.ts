@@ -4,10 +4,12 @@ import DashboardIcon from '@tabler/icons-svelte/icons/dashboard';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
 import ServerIcon from '@tabler/icons-svelte/icons/server';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
+import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
 import UsersIcon from '@tabler/icons-svelte/icons/users';
 import type { Icon } from '@tabler/icons-svelte';
 
-export type NavItem = { title: string; url: string; icon: Icon };
+/** `permission` is a panel permission needed to see the item. */
+export type NavItem = { title: string; url: string; icon: Icon; permission?: string };
 
 export const navMain: NavItem[] = [
 	{ title: 'Dashboard', url: '/', icon: DashboardIcon },
@@ -18,7 +20,8 @@ export const navMain: NavItem[] = [
 ];
 
 export const navSecondary: NavItem[] = [
-	{ title: 'Users', url: '/users', icon: UsersIcon },
+	{ title: 'Users', url: '/users', icon: UsersIcon, permission: 'users.read' },
+	{ title: 'Roles', url: '/roles', icon: ShieldLockIcon, permission: 'roles.read' },
 	{ title: 'Settings', url: '/settings', icon: SettingsIcon }
 ];
 

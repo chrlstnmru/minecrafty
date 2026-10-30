@@ -13,7 +13,6 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { addUserSchema } from '#lib/schemas/users.js';
 	import {
@@ -25,7 +24,6 @@
 	} from '#lib/users.remote.js';
 	import type { PageProps } from './$types';
 	import AccessSheet from './access-sheet.svelte';
-	import RolesPanel from './roles-panel.svelte';
 
 	type Row = {
 		id: number;
@@ -42,7 +40,6 @@
 	const canAddUsers = $derived(data.panel.includes('users.write'));
 	const { username, role } = addAccount.fields;
 
-	let tab = $state('users');
 	let adding = $state(false);
 	// new accounts are plain users unless the admin picks otherwise
 	$effect(() => {
@@ -93,85 +90,74 @@
 	<PageHeader
 		title="Users"
 		description="Admins manage everything. Other users get roles, panel-wide or on a server."
-	></PageHeader>
-
-	<Tabs.Root bind:value={tab}>
-		<Tabs.List>
-			<Tabs.Trigger value="users">Users</Tabs.Trigger>
-			<Tabs.Trigger value="roles">Roles</Tabs.Trigger>
-		</Tabs.List>
-	</Tabs.Root>
-
-	{#if tab === 'roles'}
-		<RolesPanel {isAdmin} canWrite={data.panel.includes('roles.write')} />
-	{:else}
-		{#if canAddUsers}
-			<div class="flex justify-end">
+	>
+		{#snippet actions()}
+			{#if canAddUsers}
 				<Button onclick={() => (adding = true)}><PlusIcon />Add user</Button>
-			</div>
-		{/if}
+			{/if}
+		{/snippet}
+	</PageHeader>
 
-		<Table.Root>
-			<Table.Header>
+	<Table.Root>
+		<Table.Header>
+			<Table.Row>
+				<Table.Head>Username</Table.Head>
+				<Table.Head>Role</Table.Head>
+				<Table.Head>Roles</Table.Head>
+				<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
+			</Table.Row>
+		</Table.Header>
+		<Table.Body>
+			{#each users.current ?? [] as row (row.id)}
+				{@const self = row.id === data.user.id}
 				<Table.Row>
-					<Table.Head>Username</Table.Head>
-					<Table.Head>Role</Table.Head>
-					<Table.Head>Roles</Table.Head>
-					<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
-				</Table.Row>
-			</Table.Header>
-			<Table.Body>
-				{#each users.current ?? [] as row (row.id)}
-					{@const self = row.id === data.user.id}
-					<Table.Row>
-						<Table.Cell class="font-medium">
-							{row.username}
-							{#if self}<span class="text-xs text-muted-foreground">(you)</span>{/if}
-						</Table.Cell>
-						<Table.Cell>
-							<Badge variant={row.role === 'admin' ? 'default' : 'secondary'}>{row.role}</Badge>
-						</Table.Cell>
-						<Table.Cell class="text-muted-foreground">
-							{row.role === 'admin' ? 'Everything' : row.assignments}
-						</Table.Cell>
-						<Table.Cell>
-							<div class="flex justify-end gap-1">
-								{#if row.role !== 'admin' && row.canAssign}
-									{@render tip(
-										'Give roles, panel-wide or per server',
-										ShieldIcon,
-										'Edit access',
-										() => {
-											accessFor = row;
-											accessOpen = true;
-										}
-									)}
+					<Table.Cell class="font-medium">
+						{row.username}
+						{#if self}<span class="text-xs text-muted-foreground">(you)</span>{/if}
+					</Table.Cell>
+					<Table.Cell>
+						<Badge variant={row.role === 'admin' ? 'default' : 'secondary'}>{row.role}</Badge>
+					</Table.Cell>
+					<Table.Cell class="text-muted-foreground">
+						{row.role === 'admin' ? 'Everything' : row.assignments}
+					</Table.Cell>
+					<Table.Cell>
+						<div class="flex justify-end gap-1">
+							{#if row.role !== 'admin' && row.canAssign}
+								{@render tip(
+									'Give roles, panel-wide or per server',
+									ShieldIcon,
+									'Edit access',
+									() => {
+										accessFor = row;
+										accessOpen = true;
+									}
+								)}
+							{/if}
+							{#if row.canManage || self}
+								{@render tip('Set a new password', KeyIcon, 'Set password', () => {
+									password = '';
+									passwordFor = row;
+								})}
+							{/if}
+							{#if !self}
+								{#if isAdmin}
+									<Button variant="ghost" size="sm" onclick={() => changeRole(row)}>
+										{row.role === 'admin' ? 'Make user' : 'Make admin'}
+									</Button>
 								{/if}
-								{#if row.canManage || self}
-									{@render tip('Set a new password', KeyIcon, 'Set password', () => {
-										password = '';
-										passwordFor = row;
+								{#if row.canManage}
+									{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
+										removing = row;
 									})}
 								{/if}
-								{#if !self}
-									{#if isAdmin}
-										<Button variant="ghost" size="sm" onclick={() => changeRole(row)}>
-											{row.role === 'admin' ? 'Make user' : 'Make admin'}
-										</Button>
-									{/if}
-									{#if row.canManage}
-										{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
-											removing = row;
-										})}
-									{/if}
-								{/if}
-							</div>
-						</Table.Cell>
-					</Table.Row>
-				{/each}
-			</Table.Body>
-		</Table.Root>
-	{/if}
+							{/if}
+						</div>
+					</Table.Cell>
+				</Table.Row>
+			{/each}
+		</Table.Body>
+	</Table.Root>
 </div>
 
 {#snippet tip(text: string, Icon: typeof KeyIcon, label: string, run: () => void)}

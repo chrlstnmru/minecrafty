@@ -7,7 +7,10 @@ declare global {
 			user: import('#lib/server/auth.js').SessionUser | null;
 		}
 		// interface PageData {}
-		// interface PageState {}
+		interface PageState {
+			/** the roles page, on a narrow screen: the details of one role are open */
+			roleDetail?: boolean;
+		}
 		// interface Platform {}
 	}
 }

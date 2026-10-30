@@ -1,15 +1,21 @@
 import * as v from 'valibot';
-import { MAX_RANK, PERMISSIONS } from '#lib/permissions.js';
+import { PERMISSIONS } from '#lib/permissions.js';
 import { idSchema } from './common.js';
 
-export const roleInputSchema = v.object({
-	name: v.pipe(v.string(), v.trim(), v.minLength(1, 'Give the role a name'), v.maxLength(40)),
-	description: v.pipe(v.string(), v.maxLength(200)),
-	rank: v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(MAX_RANK)),
-	rules: v.object({
-		allow: v.array(v.picklist(PERMISSIONS)),
-		deny: v.array(v.picklist(PERMISSIONS))
-	})
+export const newRoleSchema = v.object({
+	name: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter a name for the role.'), v.maxLength(40))
 });
 
-export const roleUpdateSchema = v.object({ id: idSchema, ...roleInputSchema.entries });
+const roleEdit = v.object({
+	roleId: idSchema,
+	name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(40)),
+	description: v.pipe(v.string(), v.maxLength(200)),
+	permissions: v.array(v.picklist(PERMISSIONS))
+});
+
+export const saveRolesSchema = v.object({
+	/** Every live role id, highest first. Omit to leave ranks as they are. */
+	order: v.optional(v.array(idSchema)),
+	/** Roles whose name, description or permissions changed, with their new values. */
+	roles: v.array(roleEdit)
+});

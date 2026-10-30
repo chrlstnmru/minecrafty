@@ -5,8 +5,8 @@ import {
 	PERMISSIONS,
 	emptyRules,
 	grantedBy,
+	permissionGroup,
 	parseRules,
-	type Permission,
 	firstAllowedModule,
 	hasPermission,
 	INSTANCE_PERMISSIONS,
@@ -52,7 +52,11 @@ describe('the catalogue', () => {
 
 	it('follows implications all the way down', () => {
 		expect([...closure(['files'])].sort()).toEqual(['files', 'view']);
-		expect([...closure(['roles.assign'])].sort()).toEqual(['roles.assign', 'users.read']);
+		expect([...closure(['roles.assign'])].sort()).toEqual([
+			'roles.assign',
+			'roles.read',
+			'users.read'
+		]);
 		expect(closure([]).size).toBe(0);
 		expect(closure(['view']).size).toBe(1);
 	});
@@ -104,21 +108,24 @@ describe('hasPermission and firstAllowedModule', () => {
 });
 
 describe('role rules', () => {
-	it('reads stored rules, dropping what it does not know', () => {
+	it('reads stored rules, dropping what it does not know and ignoring an old deny list', () => {
 		expect(parseRules('{oops')).toEqual(emptyRules());
 		expect(parseRules('"files"')).toEqual(emptyRules());
 		expect(
-			parseRules(JSON.stringify({ allow: ['files', 'root', 'logs'], deny: ['mods', 7], extra: 1 }))
-		).toEqual({ allow: ['logs', 'files'], deny: ['mods'] });
+			parseRules(JSON.stringify({ allow: ['files', 'root', 'logs'], deny: ['mods'], extra: 1 }))
+		).toEqual({ allow: ['logs', 'files'] });
 	});
 
-	it('grants the allowed permissions and what they imply, minus the denied ones', () => {
-		const rules = {
-			allow: ['files', 'backups'] as Permission[],
-			deny: ['backups'] as Permission[]
-		};
-		expect(grantedBy(rules)).toEqual(['view', 'files']);
-		expect(grantedBy({ ...rules, deny: ['view'] })).toEqual(['files', 'backups']);
+	it('grants the picked permissions and what they imply, in catalogue order', () => {
+		expect(grantedBy({ allow: ['files', 'backups'] })).toEqual(['view', 'files', 'backups']);
+		expect(grantedBy({ allow: ['roles.write'] })).toEqual(['roles.read', 'roles.write']);
 		expect(grantedBy(emptyRules())).toEqual([]);
+	});
+
+	it('groups permissions by the resource they control', () => {
+		expect(permissionGroup('files')).toBe('Server');
+		expect(permissionGroup('users.write')).toBe('Users');
+		expect(permissionGroup('host.view')).toBe('Host');
+		expect(permissionGroup('roles.assign')).toBe('Roles');
 	});
 });

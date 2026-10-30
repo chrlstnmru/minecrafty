@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { emptyRules, type Permission } from '#lib/permissions.js';
+import { type Permission } from '#lib/permissions.js';
+import { makeRole } from '#test/roles.js';
 import * as A from './access';
 import { db } from './db';
 import { instances, roles, users } from './db/schema';
@@ -15,9 +16,8 @@ let junior: A.Actor; // rank 20
 let peer: A.Actor; // rank 70
 let one: number;
 
-const rules = (allow: Permission[], deny: Permission[] = []) => ({ ...emptyRules(), allow, deny });
-const role = (name: string, rank: number, allow: Permission[]) =>
-	R.createRole({ name, description: '', rank, rules: rules(allow) }).id;
+const rules = (allow: Permission[]) => allow;
+const role = makeRole;
 const give = (user: A.Actor, roleId: number, instanceId: number | null = null) => {
 	const now = A.listAssignments(user.id).filter((a) => a.instanceId === instanceId);
 	A.setAssignments(user.id, instanceId, [...now.map((a) => a.roleId), roleId]);
@@ -81,9 +81,9 @@ describe('canEditRole and canDeleteRole', () => {
 		const lower = role('Lower', 40, ['logs']);
 		expect(G.canEditRole(boss, lower, rules(['logs']), 40).ok).toBe(true);
 		const held = A.listAssignments(boss.id)[0].roleId;
-		expect(G.canEditRole(boss, held, rules(['logs']), 10).reason).toMatch(/you hold/);
+		expect(G.canEditRole(boss, held, rules(['logs']), 10).ok).toBe(false);
 		const same = role('Same', 70, ['logs']);
-		expect(G.canEditRole(boss, same, rules(['logs']), 10).reason).toMatch(/as high/);
+		expect(G.canEditRole(boss, same, rules(['logs']), 10).reason).toMatch(/at or above/);
 		expect(G.canEditRole(boss, lower, rules(['logs']), 80).ok).toBe(false);
 	});
 
@@ -99,6 +99,36 @@ describe('canEditRole and canDeleteRole', () => {
 		expect(G.canDeleteRole(junior, lower).ok).toBe(false);
 		expect(G.canDeleteRole(boss, A.listAssignments(boss.id)[0].roleId).ok).toBe(false);
 		expect(G.canDeleteRole(admin, lower).ok).toBe(true);
+	});
+});
+
+describe('roleLock', () => {
+	const row = (id: number) => R.listRoles().find((r) => r.id === id)!;
+
+	it('is read-only without roles.write, and open to an admin for a custom role', () => {
+		const lower = role('Lower', 40, ['logs']);
+		expect(G.roleLock(junior, row(lower))).toBe('read-only');
+		expect(G.roleLock(admin, row(lower))).toBeNull();
+	});
+
+	it('locks built-in roles for everyone, even an admin', () => {
+		const viewer = R.listRoles().find((r) => r.name === 'Viewer')!;
+		expect(G.roleLock(admin, viewer)).toBe('built-in');
+		expect(G.roleLock(boss, viewer)).toBe('built-in');
+	});
+
+	it('locks a role ranked at or above the actor, one they hold, and one with admin-only permissions', () => {
+		expect(G.roleLock(boss, row(role('Same', 70, ['logs'])))).toBe('rank');
+		expect(G.roleLock(boss, row(role('Above', 80, ['logs'])))).toBe('rank');
+		expect(G.roleLock(boss, row(A.listAssignments(boss.id)[0].roleId))).toBe('rank');
+		expect(G.roleLock(boss, row(role('Power', 40, ['users.write'])))).toBe('owner-only');
+		expect(G.roleLock(boss, row(role('Plain', 40, ['logs'])))).toBeNull();
+	});
+
+	it('locks a lower role the actor holds', () => {
+		const lower = role('Lower', 40, ['logs']);
+		give(boss, lower);
+		expect(G.roleLock(boss, row(lower))).toBe('held');
 	});
 });
 

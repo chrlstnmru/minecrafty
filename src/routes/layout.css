@@ -177,6 +177,12 @@
 }
 
 /* generated components flip their direction arrows with this class in right-to-left layouts */
+/* marks a drag handle for the sortable list, which pins a dragged row to its axis */
+@utility flexi-grabber {
+	cursor: grab;
+	touch-action: none;
+}
+
 @utility cn-rtl-flip {
 	&:where([dir='rtl'], [dir='rtl'] *) {
 		scale: -1 1;

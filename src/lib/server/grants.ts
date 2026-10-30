@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { MAX_RANK, closure, registry, type Permission, type RoleRules } from '#lib/permissions.js';
+import { MAX_RANK, closure, registry, type Permission } from '#lib/permissions.js';
+import { LOCK_MESSAGES, type RoleLock } from '#lib/role-lock.js';
 import { can, entriesFor, grantingRank, holdsRole, rankOf, resolve, type Actor } from './access';
 import { db } from './db';
 import { roles, users } from './db/schema';
@@ -19,18 +20,36 @@ function activeRole(roleId: number) {
 	return row && !row.deletedAt ? row : undefined;
 }
 
+export function roleLock(
+	actor: Actor,
+	role: { id: number; rank: number; builtIn: boolean; permissions: readonly Permission[] }
+): RoleLock | null {
+	if (!can(actor, 'roles.write')) return 'read-only';
+	if (role.builtIn) return 'built-in';
+	if (isAdmin(actor)) return null;
+	if (!(role.rank < rankOf(actor))) return 'rank';
+	if (holdsRole(actor.id, role.id)) return 'held';
+	if (role.permissions.some((key) => registry[key].ownerOnlyGrant)) return 'owner-only';
+	return null;
+}
+
 /**
- * Whether the actor may create or edit a role holding these rules at `rank`: they must hold
- * `roles.write`, only an admin may add an owner-only permission, a non-admin may only hand out
- * what they hold panel-wide themselves, and the rank must be below their own.
+ * Whether the actor may create or edit a role holding these permissions at `rank`: they must hold
+ * `roles.write`, only an admin may add an admin-only permission, a non-admin may only hand out
+ * what they hold panel-wide themselves (an addition to sv-erp's rules), and the rank must be below
+ * their own.
  */
-export function canGrantRolePermissions(actor: Actor, rules: RoleRules, rank: number): GrantCheck {
+export function canGrantRolePermissions(
+	actor: Actor,
+	permissions: readonly Permission[],
+	rank: number
+): GrantCheck {
 	if (!Number.isInteger(rank) || rank < 0 || rank > MAX_RANK)
 		return deny(`Rank is a whole number from 0 to ${MAX_RANK}`);
 	if (!can(actor, 'roles.write')) return deny('You cannot manage roles');
 	if (isAdmin(actor)) return allow;
 
-	const wanted = closure(rules.allow);
+	const wanted = closure(permissions);
 	const ownerOnly = [...wanted].find((key) => registry[key].ownerOnlyGrant);
 	if (ownerOnly) return deny(`Only an admin may grant "${registry[ownerOnly].label}"`);
 
@@ -42,33 +61,40 @@ export function canGrantRolePermissions(actor: Actor, rules: RoleRules, rank: nu
 	return allow;
 }
 
-/** The same, for a role that exists: you may not edit one you hold, nor one that ranks as high as you. */
+/** The same, for a role that exists: it must not be locked for the actor. */
 export function canEditRole(
 	actor: Actor,
 	roleId: number,
-	rules: RoleRules,
+	permissions: readonly Permission[],
 	rank: number
 ): GrantCheck {
 	const role = activeRole(roleId);
 	if (!role) return deny('Role not found');
-	if (role.builtIn) return deny('Built-in roles cannot be edited; duplicate it instead');
-	if (!isAdmin(actor)) {
-		if (holdsRole(actor.id, roleId)) return deny('You cannot edit a role you hold');
-		if (!(role.rank < rankOf(actor))) return deny('That role ranks as high as you or higher');
-	}
-	return canGrantRolePermissions(actor, rules, rank);
+	const current = {
+		id: role.id,
+		rank: role.rank,
+		builtIn: role.builtIn,
+		permissions: [] as Permission[]
+	};
+	// the stored permissions matter for the admin-only check, so read them back
+	const stored = JSON.parse(role.rules) as { allow?: Permission[] };
+	current.permissions = stored.allow ?? [];
+	const lock = roleLock(actor, current);
+	if (lock) return deny(LOCK_MESSAGES[lock]);
+	return canGrantRolePermissions(actor, permissions, rank);
 }
 
 export function canDeleteRole(actor: Actor, roleId: number): GrantCheck {
 	const role = activeRole(roleId);
 	if (!role) return deny('Role not found');
-	if (role.builtIn) return deny('Built-in roles cannot be deleted');
-	if (!can(actor, 'roles.write')) return deny('You cannot manage roles');
-	if (!isAdmin(actor)) {
-		if (holdsRole(actor.id, roleId)) return deny('You cannot delete a role you hold');
-		if (!(role.rank < rankOf(actor))) return deny('That role ranks as high as you or higher');
-	}
-	return allow;
+	const stored = JSON.parse(role.rules) as { allow?: Permission[] };
+	const lock = roleLock(actor, {
+		id: role.id,
+		rank: role.rank,
+		builtIn: role.builtIn,
+		permissions: stored.allow ?? []
+	});
+	return lock ? deny(LOCK_MESSAGES[lock]) : allow;
 }
 
 /**

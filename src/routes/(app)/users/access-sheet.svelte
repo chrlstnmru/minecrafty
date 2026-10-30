@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { listInstances } from '#lib/instances.remote.js';
-	import { allRoles } from '#lib/roles.remote.js';
+	import { listRoles } from '#lib/roles.remote.js';
 	import { setUserAccess, userAccess } from '#lib/users.remote.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
@@ -12,7 +12,7 @@
 	}: { user: { id: number; username: string } | null; open: boolean } = $props();
 
 	const servers = listInstances();
-	const roles = allRoles();
+	const roles = listRoles();
 	const access = $derived(user ? userAccess(user.id) : null);
 	const rolesOn = (instanceId: number | null) =>
 		(access?.current ?? []).filter((a) => a.instanceId === instanceId).map((a) => a.roleId);
