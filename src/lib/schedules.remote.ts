@@ -1,22 +1,44 @@
+import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
-import { scheduleRefSchema, scheduleSchema, scheduleToggleSchema } from '#lib/schemas/schedules.js';
+import {
+	scheduleRefSchema,
+	scheduleSchema,
+	scheduleToggleSchema,
+	type ScheduleAction
+} from '#lib/schemas/schedules.js';
+import type { Actor } from '#lib/server/access.js';
 import { requirePermission, requireUser } from '#lib/server/auth.js';
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as schedules from '#lib/server/schedules.js';
 
-const taskName = (instanceId: number, scheduleId: number) =>
-	schedules.listSchedules(instanceId).find((t) => t.id === scheduleId)?.name ?? 'a task';
+/** Besides `schedules`, a task needs the permission its action uses; refuses with 403 otherwise. */
+async function allowTask(
+	user: Actor,
+	instanceId: number,
+	change: { scheduleId?: number; action?: ScheduleAction }
+) {
+	const reason = await userFacing(async () => schedules.taskRefusal(user, instanceId, change));
+	if (reason) error(403, reason);
+}
 
-/** The instance's tasks, each with the next time it fires (null when switched off or never). */
+/**
+ * The instance's tasks, each with the next time it fires (null when switched off or never) and
+ * whether the caller may change it, plus the actions the caller may give a task.
+ */
 export const instanceSchedules = query(idSchema, async (instanceId) => {
-	requirePermission(instanceId, 'schedules');
-	return schedules.listSchedules(instanceId).map((task) => ({
-		...task,
-		next: task.enabled ? (schedules.previewCron(task.cron, 1).next[0] ?? null) : null
-	}));
+	const user = requirePermission(instanceId, 'schedules');
+	const actions = schedules.allowedActions(user, instanceId);
+	return {
+		actions,
+		tasks: schedules.listSchedules(instanceId).map((task) => ({
+			...task,
+			next: task.enabled ? (schedules.previewCron(task.cron, 1).next[0] ?? null) : null,
+			canChange: actions.includes(task.action)
+		}))
+	};
 });
 
 /** The next few times an expression fires, in the host's time zone, for the field's preview. */
@@ -29,7 +51,9 @@ export const cronPreview = query(v.pipe(v.string(), v.maxLength(100)), async (ex
 });
 
 export const saveSchedule = command(scheduleSchema, async ({ id, scheduleId, ...input }) => {
-	requirePermission(id, 'schedules');
+	const user = requirePermission(id, 'schedules');
+	// a change needs the permission for what the task did and for what it will do
+	await allowTask(user, id, { scheduleId, action: input.action });
 	const row = await userFacing(async () => schedules.saveSchedule(id, input, scheduleId));
 	record({
 		action: scheduleId ? 'schedule.change' : 'schedule.add',
@@ -41,19 +65,22 @@ export const saveSchedule = command(scheduleSchema, async ({ id, scheduleId, ...
 });
 
 export const deleteSchedule = command(scheduleRefSchema, async ({ id, scheduleId }) => {
-	requirePermission(id, 'schedules');
-	const name = taskName(id, scheduleId);
+	const user = requirePermission(id, 'schedules');
+	await allowTask(user, id, { scheduleId });
+	const name = schedules.getSchedule(id, scheduleId).name;
 	await userFacing(async () => schedules.deleteSchedule(id, scheduleId));
 	record({ action: 'schedule.delete', summary: `Deleted the task "${name}"`, instanceId: id });
 	await instanceSchedules(id).refresh();
 });
 
 export const toggleSchedule = command(scheduleToggleSchema, async ({ id, scheduleId, enabled }) => {
-	requirePermission(id, 'schedules');
+	const user = requirePermission(id, 'schedules');
+	await allowTask(user, id, { scheduleId });
+	const name = schedules.getSchedule(id, scheduleId).name;
 	await userFacing(async () => schedules.setScheduleEnabled(id, scheduleId, enabled));
 	record({
 		action: 'schedule.toggle',
-		summary: `${enabled ? 'Turned on' : 'Turned off'} the task "${taskName(id, scheduleId)}"`,
+		summary: `${enabled ? 'Turned on' : 'Turned off'} the task "${name}"`,
 		instanceId: id
 	});
 	await instanceSchedules(id).refresh();
@@ -61,7 +88,8 @@ export const toggleSchedule = command(scheduleToggleSchema, async ({ id, schedul
 
 /** Runs a task now, outside its schedule; returns how it went. */
 export const runScheduleNow = command(scheduleRefSchema, async ({ id, scheduleId }) => {
-	requirePermission(id, 'schedules');
+	const user = requirePermission(id, 'schedules');
+	await allowTask(user, id, { scheduleId });
 	const outcome = await userFacing(() => schedules.runSchedule(id, scheduleId));
 	await instanceSchedules(id).refresh();
 	return outcome ?? { status: 'skipped' as const, message: 'It is already running' };
