@@ -363,16 +363,39 @@ export async function trackMods(instanceId: number, files: IndexFile[]) {
 	if (rows.length) db.insert(installedMods).values(rows).onConflictDoNothing().run();
 }
 
-export async function searchModpacks(query: string, limit: number) {
-	const res = await modrinth.searchProjects({
-		query,
-		loaders: [],
-		type: 'modpack',
-		// Modrinth's server-side flag is not reliable for modpacks; the pack's own file list is
-		serverSide: false,
-		limit
-	});
-	return { hits: res.hits, total: res.total_hits };
+const SEARCH_PAGE = 100;
+const MAX_SEARCH_PAGES = 5;
+
+/**
+ * Modrinth modpacks. Packs a result marks as unsupported on the server (optimisation packs and
+ * launcher bundles that only make sense on a player's machine) are left out unless asked for.
+ * The search's own `server_side` facet is not used: it lets some of those through, so each
+ * result's flag is checked instead, reading further pages until `limit` packs are found.
+ */
+export async function searchModpacks(query: string, limit: number, includeClientOnly = false) {
+	const hits: modrinth.ModrinthHit[] = [];
+	let offset = 0;
+	let more = false;
+	for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
+		const res = await modrinth.searchProjects({
+			query,
+			loaders: [],
+			type: 'modpack',
+			serverSide: false,
+			offset,
+			limit: includeClientOnly ? limit : SEARCH_PAGE
+		});
+		offset += res.hits.length;
+		hits.push(
+			...(includeClientOnly
+				? res.hits
+				: res.hits.filter((hit) => hit.server_side !== 'unsupported'))
+		);
+		more = offset < res.total_hits;
+		if (hits.length >= limit || !res.hits.length || !more) break;
+	}
+	// a full list means there may be more; a short one only if the search stopped early
+	return { hits: hits.slice(0, limit), more: hits.length > limit || more };
 }
 
 export type ModpackVersion = {

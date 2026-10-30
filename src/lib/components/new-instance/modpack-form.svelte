@@ -12,6 +12,8 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import { Label } from '#lib/components/ui/label/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import SelectMenu from '#lib/components/select-menu.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
@@ -32,6 +34,8 @@
 	let query = $state('');
 	let debounced = $state('');
 	let limit = $state(PAGE_SIZE);
+	// packs Modrinth marks as client-only cannot run a server, so they are hidden unless asked for
+	let includeClientOnly = $state(false);
 
 	// wait for a pause in typing before asking Modrinth
 	$effect(() => {
@@ -47,7 +51,9 @@
 	let picked = $state<Picked | null>(null);
 	let versionId = $state('');
 
-	const results = $derived(picked ? null : searchModpacks({ query: debounced, limit }));
+	const results = $derived(
+		picked ? null : searchModpacks({ query: debounced, limit, includeClientOnly })
+	);
 	const versions = $derived(picked ? modpackVersions(picked.projectId) : null);
 	const preview = $derived(versionId ? modpackPreview(versionId) : null);
 
@@ -94,6 +100,16 @@
 				spellcheck="false"
 			/>
 		</InputGroup.Root>
+		<div class="flex items-center gap-2">
+			<Checkbox
+				id="show-client-only"
+				bind:checked={includeClientOnly}
+				onCheckedChange={() => (limit = PAGE_SIZE)}
+			/>
+			<Label for="show-client-only" class="text-xs text-muted-foreground">
+				Show client-only modpacks
+			</Label>
+		</div>
 		{#if results?.error}
 			<p class="text-sm text-destructive" role="alert">Search failed. Try again shortly.</p>
 		{/if}
@@ -119,6 +135,8 @@
 					<span class="min-w-0 flex-1">
 						<span class="flex min-w-0 items-baseline gap-2">
 							<span class="truncate text-sm font-medium">{hit.title}</span>
+							{#if hit.server_side === 'unsupported'}<Badge variant="warning">Client only</Badge
+								>{/if}
 							<span class="shrink-0 text-xs text-muted-foreground">
 								{number.format(hit.downloads)} downloads
 							</span>
@@ -137,7 +155,7 @@
 					</Empty.Root>
 				{/if}
 			{/each}
-			{#if results?.current && results.current.hits.length < results.current.total}
+			{#if results?.current && results.current.more}
 				<div class="py-2">
 					<Button variant="outline" size="sm" onclick={() => (limit += PAGE_SIZE)}>Show more</Button
 					>

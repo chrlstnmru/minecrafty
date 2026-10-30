@@ -10,11 +10,12 @@ import * as modpacks from '#lib/server/modpacks.js';
 export const searchModpacks = query(
 	v.object({
 		query: v.pipe(v.string(), v.maxLength(100)),
-		limit: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100))
+		limit: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100)),
+		includeClientOnly: v.optional(v.boolean(), false)
 	}),
-	async ({ query, limit }) => {
+	async ({ query, limit, includeClientOnly }) => {
 		requireAdmin();
-		return userFacing(() => modpacks.searchModpacks(query.trim(), limit));
+		return userFacing(() => modpacks.searchModpacks(query.trim(), limit, includeClientOnly));
 	}
 );
 
