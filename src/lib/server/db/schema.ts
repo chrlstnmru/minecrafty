@@ -53,6 +53,9 @@ export const instances = sqliteTable('instances', {
 	packVersionNumber: text('pack_version_number'),
 	packName: text('pack_name'),
 	packIconUrl: text('pack_icon_url'),
+	// set for an instance made from a pack of the modpack builder, and the revision it was made from
+	fromPackId: integer('from_pack_id'),
+	fromPackRevision: integer('from_pack_revision'),
 	// RCON, which the panel enables on every start to run commands and read the player list; the
 	// password is generated once and never leaves the server side
 	rconPort: integer('rcon_port'),
@@ -190,3 +193,49 @@ export const settings = sqliteTable('settings', {
 	key: text('key').primaryKey(),
 	value: text('value').notNull()
 });
+
+// a modpack made in the builder; its config files live on disk under data/packs/<id>/overrides
+export const localPacks = sqliteTable('local_packs', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull(),
+	description: text('description').notNull().default(''),
+	loader: text('loader', { enum: ['fabric', 'quilt', 'forge', 'neoforge'] }).notNull(),
+	loaderVersion: text('loader_version'),
+	mcVersion: text('mc_version').notNull(),
+	// goes up with every saved change
+	revision: integer('revision').notNull().default(1),
+	createdAt: integer('created_at', { mode: 'timestamp' })
+		.notNull()
+		.$defaultFn(() => new Date()),
+	updatedAt: integer('updated_at', { mode: 'timestamp' })
+		.notNull()
+		.$defaultFn(() => new Date())
+});
+
+// a file the pack downloads (a mod, usually), pinned to one version and its hashes
+export const localPackFiles = sqliteTable(
+	'local_pack_files',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		packId: integer('pack_id')
+			.notNull()
+			.references(() => localPacks.id, { onDelete: 'cascade' }),
+		// null for a file that is not from Modrinth (kept when a pack is imported)
+		projectId: text('project_id'),
+		versionId: text('version_id'),
+		versionNumber: text('version_number'),
+		title: text('title').notNull(),
+		iconUrl: text('icon_url'),
+		path: text('path').notNull(),
+		// JSON list of download URLs
+		downloads: text('downloads').notNull(),
+		sha1: text('sha1'),
+		sha512: text('sha512'),
+		size: integer('size'),
+		clientSide: text('client_side'),
+		serverSide: text('server_side'),
+		// the project that needed this one, when it came in as a dependency
+		dependencyOf: text('dependency_of')
+	},
+	(t) => [uniqueIndex('local_pack_files_path').on(t.packId, t.path)]
+);

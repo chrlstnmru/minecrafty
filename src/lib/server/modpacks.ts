@@ -6,7 +6,7 @@ import { db } from './db';
 import { installedMods, instances } from './db/schema';
 import { downloadFile } from './download';
 import { clearProgress, setProgress } from './install-progress';
-import { installBase, insertInstance, serverDir } from './instances';
+import { installBase, insertInstance, serverDir, type NewInstance } from './instances';
 import type { Loader } from './loaders';
 import * as modrinth from './modrinth';
 import { safeEntryName } from '#lib/safe-entry-name.js';
@@ -38,7 +38,7 @@ export type IndexFile = {
 	fileSize?: number;
 };
 
-type PackIndex = {
+export type PackIndex = {
 	formatVersion: number;
 	game: string;
 	name: string;
@@ -69,7 +69,7 @@ export type ModpackSummary = {
 
 export type LoadedPack = { summary: ModpackSummary; index: PackIndex; zip: Zip };
 
-const LOADER_KEYS: [string, Loader][] = [
+export const LOADER_KEYS: [string, Loader][] = [
 	['fabric-loader', 'fabric'],
 	['quilt-loader', 'quilt'],
 	['neoforge', 'neoforge'],
@@ -126,7 +126,7 @@ async function fetchPack(versionId: string) {
 	return { version, path };
 }
 
-function parseIndex(zip: Zip): PackIndex {
+export function parseIndex(zip: Zip): PackIndex {
 	const entry = zip.find('modrinth.index.json');
 	if (!entry) throw new Error('This is not a Modrinth modpack (modrinth.index.json is missing)');
 	if (entry.size > MAX_INDEX_BYTES) throw new Error('The modpack index is too large');
@@ -198,8 +198,24 @@ export type ImportOptions = {
  * background (a pack can mean hundreds of downloads). Progress shows in the instance list.
  */
 export async function startImport(opts: ImportOptions) {
-	if (!opts.eulaAccepted) throw new Error('You must accept the Minecraft EULA');
 	const pack = await loadModpack(opts.versionId);
+	const { summary } = pack;
+	return startImportLoaded(pack, opts, {
+		packProjectId: summary.projectId,
+		packVersionId: summary.versionId,
+		packVersionNumber: summary.versionNumber,
+		packName: summary.name,
+		packIconUrl: summary.iconUrl
+	});
+}
+
+/** The same, for a pack already in memory; `origin` is what the instance records about where it came from. */
+export async function startImportLoaded(
+	pack: LoadedPack,
+	opts: Omit<ImportOptions, 'versionId'>,
+	origin: Partial<NewInstance>
+) {
+	if (!opts.eulaAccepted) throw new Error('You must accept the Minecraft EULA');
 	const { summary } = pack;
 
 	const row = insertInstance({
@@ -214,11 +230,7 @@ export async function startImport(opts: ImportOptions) {
 		autoStart: false,
 		eulaAccepted: true,
 		installState: 'installing',
-		packProjectId: summary.projectId,
-		packVersionId: summary.versionId,
-		packVersionNumber: summary.versionNumber,
-		packName: summary.name,
-		packIconUrl: summary.iconUrl
+		...origin
 	});
 	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
 	void finishImport(row, pack);
