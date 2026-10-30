@@ -1,7 +1,7 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
-import { visibleInstanceIds } from '#lib/server/access.js';
+import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
 import { requireAdmin, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
@@ -19,9 +19,9 @@ export const listInstances = query.live(async function* () {
 	let last = '';
 	while (true) {
 		const visible = visibleInstanceIds(user);
-		const rows = (await instances.listInstances()).filter(
-			(r) => !visible || visible.includes(r.id)
-		);
+		const rows = (await instances.listInstances())
+			.filter((r) => !visible || visible.includes(r.id))
+			.map((r) => ({ ...r, permissions: permissionsFor(user, r.id) }));
 		const json = JSON.stringify(rows);
 		if (json !== last) {
 			last = json;
@@ -32,12 +32,12 @@ export const listInstances = query.live(async function* () {
 });
 
 export const getInstance = query(id, async (instanceId) => {
-	requirePermission(instanceId, 'view');
+	const user = requirePermission(instanceId, 'view');
 	const row = instances.getInstance(instanceId);
 	if (!row) error(404, 'Instance not found');
 	// the RCON password is for the panel's own use
 	const { rconPassword: _secret, ...visible } = row;
-	return visible;
+	return { ...visible, permissions: permissionsFor(user, instanceId) };
 });
 
 const loader = v.picklist(LOADERS);

@@ -223,15 +223,20 @@ The home page (`/`) shows how the host and the servers are doing and lets you ac
 
 - Cards: CPU with a trend, memory (used of total, with a bar and a trend, and how much the servers account for), storage (used, free, servers and backups), servers (running of total, and how many are installing or failed), players online across running servers, and maintenance (the next scheduled task across every server, the last backup, and how many servers have never been backed up).
 - Servers table: every instance with its loader and Minecraft version, uptime, status (installing and failed included), CPU, memory, folder size and players. Sortable by server, status, CPU, memory, disk and players (a row with no figure always sorts last), and filterable by All, Running, Stopped and, when there are any, Problems. Per row: start for a stopped server, restart and stop for a running one (kill stays on the instance page). The numbers update live.
-- Planned with the permissions UI: only servers the signed-in user may view appear.
+- Only servers the signed-in user may view appear. The CPU, memory and storage cards are for admins; the server returns zeros for anyone else, and the maintenance card covers only their servers.
 
 ### Users and permissions
 
 - First-run setup creates the admin account.
-- Roles: admin (everything), user (only assigned instances).
-- Per-instance permissions: view, console, start/stop, files, mods, backups, schedules, settings.
+- Roles: admin (everything everywhere), user (only what was granted per instance).
+- Per-instance permissions: view, console, start/stop, files, mods, backups, schedules, settings. Anything granted includes view. Presets (Viewer, Operator, Manager, Full) are starting points; any mix can be ticked.
+- What each permission opens: console (Console, Players, sending commands), start/stop (start, stop, restart, kill), files (Files, Properties, file downloads), mods (Mods or Plugins, Modpack, Resource packs), backups (Backups and their downloads), schedules (Schedules), settings (Settings and Loader), view (the instance, Logs, the dashboard row).
+- Admin only: creating and deleting instances, importing a modpack, the Users page, host CPU, memory and storage.
+- A server a user has no access to answers 404, as if it did not exist; a server they can see but a feature they lack answers 403. Every remote function and download route checks this on the server (`requireUser`, `requirePermission`, `requireAdmin`), and a test fails if an export has none. The page also hides what a user cannot use and sends a link to a forbidden tab to the first tab they may open.
+- Users page (`/users`, admin only): add a user, make an account admin or user, set a password, delete, and an access sheet with the presets and one checkbox per permission for each server, saved as ticked.
+- Safeguards: the last admin cannot be demoted or deleted, nobody can demote or delete themselves, and changing someone else's role or password signs them out everywhere.
 - Session auth with hashed passwords (`Bun.password`, argon2).
-- Audit log of actions per instance.
+- Audit log of actions per instance (not built yet).
 
 ## Release packaging
 
@@ -261,7 +266,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI (done; audit log still open).
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features

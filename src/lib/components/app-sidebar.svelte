@@ -37,7 +37,10 @@
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<NavMain items={navMain} />
-		<NavSecondary items={navSecondary} class="mt-auto" />
+		<NavSecondary
+			items={user.role === 'admin' ? navSecondary : navSecondary.filter((i) => i.url !== '/users')}
+			class="mt-auto"
+		/>
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<NavUser {user} />

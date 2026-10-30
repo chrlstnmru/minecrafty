@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
@@ -36,6 +37,7 @@
 		...[8, 17, 21, 25].map((v) => ({ value: String(v), label: `Java ${v}` }))
 	];
 
+	let { data }: PageProps = $props();
 	let confirmDelete = $state(false);
 
 	async function remove() {
@@ -95,17 +97,20 @@
 		</Card.Content>
 	</Card.Root>
 
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Delete instance</Card.Title>
-			<Card.Description>
-				Permanently removes the instance and its world files. The server must be stopped.
-			</Card.Description>
-		</Card.Header>
-		<Card.Footer>
-			<Button variant="destructive" onclick={() => (confirmDelete = true)}>Delete instance</Button>
-		</Card.Footer>
-	</Card.Root>
+	{#if data.user.role === 'admin'}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>Delete instance</Card.Title>
+				<Card.Description>
+					Permanently removes the instance and its world files. The server must be stopped.
+				</Card.Description>
+			</Card.Header>
+			<Card.Footer>
+				<Button variant="destructive" onclick={() => (confirmDelete = true)}>Delete instance</Button
+				>
+			</Card.Footer>
+		</Card.Root>
+	{/if}
 </div>
 
 <AlertDialog.Root bind:open={confirmDelete}>

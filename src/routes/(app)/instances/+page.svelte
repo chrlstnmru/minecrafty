@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { SvelteSet } from 'svelte/reactivity';
 	import PageHeader from '#lib/components/page-header.svelte';
@@ -24,6 +25,8 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 
+	let { data }: PageProps = $props();
+	const isAdmin = $derived(data.user.role === 'admin');
 	const instances = $derived(await listInstances());
 
 	// modpack servers made before their icon was kept get it from Modrinth, once
@@ -85,7 +88,9 @@
 <div class="flex flex-col gap-4 p-4 lg:p-6">
 	<PageHeader title="Instances" description="Create and manage your Minecraft servers.">
 		{#snippet actions()}
-			<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
+			{#if isAdmin}
+				<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
+			{/if}
 		{/snippet}
 	</PageHeader>
 
@@ -94,11 +99,17 @@
 			<Empty.Header>
 				<Empty.Media variant="icon"><ServerIcon /></Empty.Media>
 				<Empty.Title>No instances yet</Empty.Title>
-				<Empty.Description>Create your first server to get started.</Empty.Description>
+				<Empty.Description>
+					{isAdmin
+						? 'Create your first server to get started.'
+						: 'An admin can give you access to one.'}
+				</Empty.Description>
 			</Empty.Header>
-			<Empty.Content>
-				<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
-			</Empty.Content>
+			{#if isAdmin}
+				<Empty.Content>
+					<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
+				</Empty.Content>
+			{/if}
 		</Empty.Root>
 	{/if}
 
@@ -150,15 +161,20 @@
 							{settled ? 'Ready to start.' : 'You can leave this page; the install keeps going.'}
 						</p>
 					{:else if failed}
-						{#if !inst.packProjectId}
+						{#if !inst.packProjectId && inst.permissions.includes('settings')}
 							<Button variant="outline" size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
 								Retry
 							</Button>
 						{/if}
-						<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
+						{#if isAdmin}
+							<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button
+							>
+						{/if}
 					{:else}
 						<Button variant="secondary" size="sm" href="/instances/{inst.id}">Console</Button>
-						{#if active}
+						{#if !inst.permissions.includes('control')}
+							<!-- viewing only -->
+						{:else if active}
 							<Button
 								variant="outline"
 								size="sm"
@@ -176,7 +192,9 @@
 							</Button>
 						{:else}
 							<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>Start</Button>
-							<Button variant="ghost" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
+							{#if isAdmin}
+								<Button variant="ghost" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
+							{/if}
 						{/if}
 					{/if}
 				</Card.Footer>

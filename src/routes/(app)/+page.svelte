@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { PageProps } from './$types';
 	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
 	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
 	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
@@ -28,6 +29,8 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
 
+	let { data }: PageProps = $props();
+	const isAdmin = $derived(data.user.role === 'admin');
 	const instances = $derived(await listInstances());
 	const live = liveStats();
 	const stats = $derived(live.current);
@@ -196,39 +199,41 @@
 	<PageHeader title="Dashboard" description="How the host and your servers are doing right now." />
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-		<StatCard
-			title="CPU"
-			value={stats?.host.cpu != null ? formatPercent(stats.host.cpu) : '–'}
-			hint={stats
-				? `${stats.host.cores} cores · host up ${formatDuration(stats.host.uptime * 1000)}`
-				: undefined}
-		>
-			<Sparkline values={stats?.history.cpu ?? []} class="text-info" />
-		</StatCard>
+		{#if isAdmin}
+			<StatCard
+				title="CPU"
+				value={stats?.host.cpu != null ? formatPercent(stats.host.cpu) : '–'}
+				hint={stats
+					? `${stats.host.cores} cores · host up ${formatDuration(stats.host.uptime * 1000)}`
+					: undefined}
+			>
+				<Sparkline values={stats?.history.cpu ?? []} class="text-info" />
+			</StatCard>
 
-		<StatCard
-			title="Memory"
-			value={stats ? `${gb(stats.host.memUsed)} of ${gb(stats.host.memTotal)}` : '–'}
-			hint={stats ? `Servers use ${gb(serversMemory)}` : undefined}
-		>
-			<div class="grid gap-2">
-				<Progress value={memShare} max={100} />
-				<Sparkline
-					values={stats?.history.mem.map((m) => (m / stats.host.memTotal) * 100) ?? []}
-					class="text-success"
-				/>
-			</div>
-		</StatCard>
+			<StatCard
+				title="Memory"
+				value={stats ? `${gb(stats.host.memUsed)} of ${gb(stats.host.memTotal)}` : '–'}
+				hint={stats ? `Servers use ${gb(serversMemory)}` : undefined}
+			>
+				<div class="grid gap-2">
+					<Progress value={memShare} max={100} />
+					<Sparkline
+						values={stats?.history.mem.map((m) => (m / stats.host.memTotal) * 100) ?? []}
+						class="text-success"
+					/>
+				</div>
+			</StatCard>
 
-		<StatCard
-			title="Storage"
-			value={stats ? `${formatBytes(diskUsed)} used` : '–'}
-			hint={stats
-				? `${formatBytes(stats.storage.free)} free · servers ${formatBytes(stats.storage.instances)} · backups ${formatBytes(stats.storage.backups)}`
-				: undefined}
-		>
-			<Progress value={diskShare} max={100} />
-		</StatCard>
+			<StatCard
+				title="Storage"
+				value={stats ? `${formatBytes(diskUsed)} used` : '–'}
+				hint={stats
+					? `${formatBytes(stats.storage.free)} free · servers ${formatBytes(stats.storage.instances)} · backups ${formatBytes(stats.storage.backups)}`
+					: undefined}
+			>
+				<Progress value={diskShare} max={100} />
+			</StatCard>
+		{/if}
 
 		<StatCard
 			title="Servers"
@@ -292,7 +297,11 @@
 						<Empty.Header>
 							<Empty.Media variant="icon"><ServerIcon /></Empty.Media>
 							<Empty.Title>No servers yet</Empty.Title>
-							<Empty.Description>Create your first one to see it here.</Empty.Description>
+							<Empty.Description>
+								{isAdmin
+									? 'Create your first one to see it here.'
+									: 'An admin can give you access to one.'}
+							</Empty.Description>
 						</Empty.Header>
 						<Empty.Content>
 							<Button size="sm" href="/instances">Go to Instances</Button>
@@ -361,7 +370,9 @@
 								</Table.Cell>
 								<Table.Cell class="pe-6">
 									<div class="flex justify-end">
-										{#if row.state === 'running'}
+										{#if !row.permissions.includes('control')}
+											<!-- viewing only -->
+										{:else if row.state === 'running'}
 											{@render action(
 												`Restart ${row.name}`,
 												'Stop, then start again',

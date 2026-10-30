@@ -3,7 +3,9 @@
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
+	import { goto } from '$app/navigation';
 	import { instanceModules, type InstanceModule } from '#lib/instance-modules.js';
+	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
 	import {
 		getInstance,
 		killInstance,
@@ -54,9 +56,25 @@
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
 	// the Modpack tab only makes sense for a server created from a modpack
+	const granted = $derived(instance?.permissions ?? []);
+	const canControl = $derived(granted.includes('control'));
 	const modules = $derived(
-		instanceModules.filter((m) => m.slug !== 'modpack' || !!instance?.packProjectId)
+		instanceModules.filter(
+			(m) =>
+				(m.slug !== 'modpack' || !!instance?.packProjectId) &&
+				granted.includes(MODULE_PERMISSION[m.slug])
+		)
 	);
+	const slug = $derived(page.url.pathname.split('/')[3]);
+	// a link to a tab the user may not open goes to the first one they may
+	$effect(() => {
+		if (!instance || !slug || modules.some((m) => m.slug === slug)) return;
+		const first = firstAllowedModule(
+			granted,
+			modules.map((m) => m.slug)
+		);
+		if (first && first !== slug) void goto(`/instances/${id}/${first}`, { replaceState: true });
+	});
 	const labelOf = (m: InstanceModule) =>
 		m.slug === 'mods' && instance?.loader && ['paper', 'purpur'].includes(instance.loader)
 			? 'Plugins'
@@ -68,7 +86,6 @@
 				? 'Install failed'
 				: 'Start the server'
 	);
-	const slug = $derived(page.url.pathname.split('/')[3]);
 
 	async function run(action: (id: number) => Promise<void>) {
 		try {
@@ -101,42 +118,44 @@
 			>
 				{#snippet badge()}<StatusPill state={status} />{/snippet}
 				{#snippet actions()}
-					<ButtonGroup.Root>
-						{#if !active}
+					{#if canControl}
+						<ButtonGroup.Root>
+							{#if !active}
+								{@render action({
+									label: 'Start',
+									tip: startHint,
+									icon: PlayerPlayFilledIcon,
+									tone: 'success',
+									disabled: installState !== 'ready',
+									run: () => run(startInstance)
+								})}
+							{:else}
+								{@render action({
+									label: 'Restart',
+									tip: 'Stop the server, then start it again',
+									icon: RefreshIcon,
+									disabled: status === 'stopping',
+									run: () => run(restartInstance)
+								})}
+							{/if}
 							{@render action({
-								label: 'Start',
-								tip: startHint,
-								icon: PlayerPlayFilledIcon,
-								tone: 'success',
-								disabled: installState !== 'ready',
-								run: () => run(startInstance)
+								label: 'Stop',
+								tip: 'Stop the server and save the world',
+								icon: PlayerStopFilledIcon,
+								tone: 'warning',
+								disabled: !active || status === 'stopping',
+								run: () => run(stopInstance)
 							})}
-						{:else}
 							{@render action({
-								label: 'Restart',
-								tip: 'Stop the server, then start it again',
-								icon: RefreshIcon,
-								disabled: status === 'stopping',
-								run: () => run(restartInstance)
+								label: 'Kill',
+								tip: 'Kill the process now. Unsaved progress is lost',
+								icon: SkullIcon,
+								tone: 'danger',
+								disabled: !active,
+								run: async () => void (confirmKill = true)
 							})}
-						{/if}
-						{@render action({
-							label: 'Stop',
-							tip: 'Stop the server and save the world',
-							icon: PlayerStopFilledIcon,
-							tone: 'warning',
-							disabled: !active || status === 'stopping',
-							run: () => run(stopInstance)
-						})}
-						{@render action({
-							label: 'Kill',
-							tip: 'Kill the process now. Unsaved progress is lost',
-							icon: SkullIcon,
-							tone: 'danger',
-							disabled: !active,
-							run: async () => void (confirmKill = true)
-						})}
-					</ButtonGroup.Root>
+						</ButtonGroup.Root>
+					{/if}
 				{/snippet}
 			</PageHeader>
 		</div>
@@ -159,7 +178,9 @@
 	     padding and matching negative margin leave room for a card's 1px ring, which a scroll
 	     container would otherwise clip along its edges. -->
 	<div class="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1">
-		{@render children()}
+		{#if modules.some((m) => m.slug === slug)}
+			{@render children()}
+		{/if}
 	</div>
 </div>
 
