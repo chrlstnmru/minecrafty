@@ -579,7 +579,7 @@
 		<div class="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
 			{#if running && editingEntry?.rewritten}
 				<p
-					class="rounded-md border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm"
+					class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
 					role="status"
 				>
 					The server is running and writes this file back when it stops, so changes made now can be

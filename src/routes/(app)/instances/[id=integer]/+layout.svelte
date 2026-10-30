@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
-	import PlayerStopIcon from '@tabler/icons-svelte/icons/player-stop';
 	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
 	import { instanceModules } from '#lib/instance-modules.js';
@@ -15,17 +14,17 @@
 	} from '#lib/instances.remote.js';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import type { LayoutProps } from './$types';
 	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import PlayerStopFilledIcon from '@tabler/icons-svelte/icons/player-stop-filled';
 	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
-	import XIcon from '@tabler/icons-svelte/icons/x';
 	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 
 	let { children }: LayoutProps = $props();
 
-	let isRestarting = $state(false);
+	let confirmKill = $state(false);
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -35,6 +34,13 @@
 	const status = $derived(row?.state ?? 'stopped');
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
+	const startHint = $derived(
+		installState === 'installing'
+			? 'Installing…'
+			: installState === 'failed'
+				? 'Install failed'
+				: 'Start the server'
+	);
 	const slug = $derived(page.url.pathname.split('/')[3]);
 
 	async function run(action: (id: number) => Promise<void>) {
@@ -67,96 +73,39 @@
 		</div>
 		<ButtonGroup.Root>
 			{#if !active}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								class="text-emerald-500"
-								variant="outline"
-								size="icon"
-								aria-label="Restart"
-								disabled={status === 'stopping'}
-								onClickPromise={async () => {
-									isRestarting = true;
-									return run(restartInstance);
-								}}
-							>
-								<PlayerPlayFilledIcon />
-							</Button>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content></Tooltip.Content>
-				</Tooltip.Root>
+				{@render action({
+					label: 'Start',
+					tip: startHint,
+					icon: PlayerPlayFilledIcon,
+					tone: 'text-success',
+					disabled: installState !== 'ready',
+					run: () => run(startInstance)
+				})}
 			{:else}
-				<Tooltip.Root>
-					<Tooltip.Trigger>
-						{#snippet child({ props })}
-							<Button
-								{...props}
-								class="text-blue-500"
-								variant="outline"
-								size="icon"
-								aria-label="Restart"
-								disabled={status === 'stopping'}
-								onClickPromise={async () => {
-									isRestarting = true;
-									return run(restartInstance);
-								}}
-							>
-								<RefreshIcon />
-							</Button>
-						{/snippet}
-					</Tooltip.Trigger>
-					<Tooltip.Content></Tooltip.Content>
-				</Tooltip.Root>
+				{@render action({
+					label: 'Restart',
+					tip: 'Stop the server, then start it again',
+					icon: RefreshIcon,
+					disabled: status === 'stopping',
+					run: () => run(restartInstance)
+				})}
+				{@render action({
+					label: 'Stop',
+					tip: 'Stop the server and save the world',
+					icon: PlayerStopFilledIcon,
+					tone: 'text-warning',
+					disabled: status === 'stopping',
+					run: () => run(stopInstance)
+				})}
+				{@render action({
+					label: 'Kill',
+					tip: 'Kill the process now. Unsaved progress is lost',
+					icon: SkullIcon,
+					tone: 'text-danger',
+					run: async () => void (confirmKill = true)
+				})}
 			{/if}
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					{#snippet child({ props })}
-						<Button
-							{...props}
-							class="text-amber-500"
-							variant="outline"
-							size="icon"
-							aria-label="Stop"
-							disabled={status === 'stopping'}
-							onClickPromise={() => run(stopInstance)}
-						>
-							<PlayerStopFilledIcon />
-						</Button>
-					{/snippet}
-				</Tooltip.Trigger>
-				<Tooltip.Content>Stop the server and save the world</Tooltip.Content>
-			</Tooltip.Root>
-			<Tooltip.Root>
-				<Tooltip.Trigger>
-					{#snippet child({ props })}
-						<Button
-							{...props}
-							variant="destructive"
-							size="icon"
-							aria-label="Kill"
-							onClickPromise={() => run(killInstance)}
-						>
-							<XIcon />
-						</Button>
-					{/snippet}
-				</Tooltip.Trigger>
-				<Tooltip.Content>Kill the process now. Unsaved progress is lost</Tooltip.Content>
-			</Tooltip.Root>
 		</ButtonGroup.Root>
-		<!-- <Button
-				size="sm"
-				disabled={installState !== 'ready'}
-				onClickPromise={() => run(startInstance)}
-			>
-				{installState === 'installing'
-					? 'Installing…'
-					: installState === 'failed'
-						? 'Install failed'
-						: 'Start'}
-			</Button> -->
 	</div>
 
 	<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Instance modules">
@@ -184,3 +133,49 @@
 		{@render children()}
 	</div>
 </div>
+
+{#snippet action(a: {
+	label: string;
+	tip: string;
+	icon: typeof SkullIcon;
+	tone?: string;
+	disabled?: boolean;
+	run: () => Promise<void>;
+})}
+	<Tooltip.Root>
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					class={a.tone}
+					variant="outline"
+					size="icon"
+					aria-label={a.label}
+					disabled={a.disabled}
+					onClickPromise={a.run}
+				>
+					<a.icon />
+				</Button>
+			{/snippet}
+		</Tooltip.Trigger>
+		<Tooltip.Content>{a.tip}</Tooltip.Content>
+	</Tooltip.Root>
+{/snippet}
+
+<AlertDialog.Root bind:open={confirmKill}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Kill {instance?.name}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				The process ends immediately and progress since the last save is lost. Use Stop to shut down
+				safely.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={() => run(killInstance)}>
+				Kill
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>

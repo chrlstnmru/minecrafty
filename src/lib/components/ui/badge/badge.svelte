@@ -20,6 +20,10 @@
 				mint: 'bg-tint-mint/12 text-tint-mint',
 				pink: 'bg-tint-pink/12 text-tint-pink',
 				amber: 'bg-tint-amber/12 text-tint-amber',
+				info: 'bg-info/12 text-info',
+				success: 'bg-success/12 text-success',
+				warning: 'bg-warning/12 text-warning',
+				danger: 'bg-danger/12 text-danger',
 				muted: 'bg-muted text-muted-foreground'
 			}
 		},

@@ -11,6 +11,10 @@
  * meaning everywhere (cyan in progress, violet pending, mint done or active, pink
  * highlight, amber warning). The main action is plain white, so tints never compete
  * with it.
+ *
+ * State tokens (info, success, warning, danger) are what UI states use. Their light values
+ * are darker than the tints so small text keeps 4.5:1 contrast; use them with opacity for
+ * fills and borders (bg-warning/10 border-warning/40).
  */
 :root {
 	color-scheme: light;
@@ -37,11 +41,15 @@
 	--tint-mint: #0f9f6e;
 	--tint-pink: #c2409f;
 	--tint-amber: #b7791f;
-	--chart-1: #0e8fb8;
-	--chart-2: #6d5ce8;
-	--chart-3: #0f9f6e;
-	--chart-4: #c2409f;
-	--chart-5: #b7791f;
+	--info: #0b7a9e;
+	--success: #0b7f58;
+	--warning: #92600f;
+	--danger: var(--destructive);
+	--chart-1: var(--tint-cyan);
+	--chart-2: var(--tint-violet);
+	--chart-3: var(--tint-mint);
+	--chart-4: var(--tint-pink);
+	--chart-5: var(--tint-amber);
 	--radius: 0.75rem;
 	--sidebar: #fbfbfc;
 	--sidebar-foreground: #18181b;
@@ -78,11 +86,10 @@
 	--tint-mint: #6ee7b7;
 	--tint-pink: #f0a8e0;
 	--tint-amber: #fbbf24;
-	--chart-1: #4fc3e8;
-	--chart-2: #8b7cf6;
-	--chart-3: #6ee7b7;
-	--chart-4: #f0a8e0;
-	--chart-5: #fbbf24;
+	--info: #4fc3e8;
+	--success: #6ee7b7;
+	--warning: #fbbf24;
+	--danger: var(--destructive);
 	--sidebar: #151518;
 	--sidebar-foreground: #ededf0;
 	--sidebar-primary: #f4f4f5;
@@ -101,6 +108,10 @@
 	--color-tint-mint: var(--tint-mint);
 	--color-tint-pink: var(--tint-pink);
 	--color-tint-amber: var(--tint-amber);
+	--color-info: var(--info);
+	--color-success: var(--success);
+	--color-warning: var(--warning);
+	--color-danger: var(--danger);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);

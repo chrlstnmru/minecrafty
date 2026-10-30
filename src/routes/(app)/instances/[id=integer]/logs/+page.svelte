@@ -181,7 +181,7 @@
 		/\/(ERROR|FATAL)\]/.test(text)
 			? 'text-destructive'
 			: /\/WARN\]/.test(text)
-				? 'text-amber-600 dark:text-amber-400'
+				? 'text-warning'
 				: '';
 
 	function parts(text: string) {
@@ -246,7 +246,7 @@
 				title="Follow new lines"
 			>
 				<span
-					class="size-2 rounded-full {live?.connected ? 'bg-green-500' : 'bg-muted-foreground/50'}"
+					class="size-2 rounded-full {live?.connected ? 'bg-success' : 'bg-muted-foreground/50'}"
 				></span>
 				Live
 			</Toggle>
@@ -351,8 +351,7 @@
 							>
 							<span class="min-w-0 flex-1 pr-3 pl-3 {wrap ? 'break-words' : ''}"
 								>{#each parts(row.text) as part, i (i)}{#if part.hit}<mark
-											class="rounded-sm bg-yellow-300/60 text-inherit dark:bg-yellow-400/30"
-											>{part.text}</mark
+											class="rounded-sm bg-warning/30 text-inherit">{part.text}</mark
 										>{:else}{part.text}{/if}{/each}</span
 							>
 						</div>

@@ -1,14 +1,14 @@
 <script lang="ts">
 	import { Badge } from '#lib/components/ui/badge/index.js';
 
-	type Tone = 'mint' | 'cyan' | 'muted' | 'destructive';
+	type Tone = 'success' | 'info' | 'muted' | 'danger';
 
 	const states: Record<string, { tone: Tone; label: string }> = {
-		running: { tone: 'mint', label: 'Running' },
-		starting: { tone: 'cyan', label: 'Starting' },
-		stopping: { tone: 'cyan', label: 'Stopping' },
-		installing: { tone: 'cyan', label: 'Installing' },
-		failed: { tone: 'destructive', label: 'Failed' },
+		running: { tone: 'success', label: 'Running' },
+		starting: { tone: 'info', label: 'Starting' },
+		stopping: { tone: 'info', label: 'Stopping' },
+		installing: { tone: 'info', label: 'Installing' },
+		failed: { tone: 'danger', label: 'Failed' },
 		stopped: { tone: 'muted', label: 'Stopped' },
 		exited: { tone: 'muted', label: 'Stopped' }
 	};
