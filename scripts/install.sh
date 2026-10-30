@@ -151,8 +151,9 @@ if [ ! -f "$ENV_FILE" ]; then
 PORT=$PORT
 HOST=0.0.0.0
 MINECRAFTY_DATA=$DATA_DIR
-# Behind a reverse proxy that sets X-Forwarded-Proto, nothing else is needed. To name another
-# header, set PROTOCOL_HEADER (and HOST_HEADER if the proxy rewrites the host).
+# Behind a reverse proxy that sets X-Forwarded-Proto, nothing else is needed for https. To name
+# another header, set PROTOCOL_HEADER (and HOST_HEADER if the proxy rewrites the host). Also set
+# ADDRESS_HEADER=X-Forwarded-For there, so failed sign-ins are counted per visitor, not per proxy.
 EOF
 fi
 PORT="$(grep -E '^PORT=' "$ENV_FILE" | tail -1 | cut -d= -f2)"
