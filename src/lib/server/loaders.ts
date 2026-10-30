@@ -2,7 +2,7 @@ import { existsSync, readdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
 import { compareVersions } from '../versions';
-import { downloadFile, type Download, type Hash } from './download';
+import { downloadFile, type Download, type Hash, type OnProgress } from './download';
 
 export { LOADERS, type Loader } from '../loader-list';
 import type { Loader } from '../loader-list';
@@ -243,18 +243,22 @@ export async function installServer(opts: {
 	mc: string;
 	build?: string;
 	java?: string;
+	/** told what is happening: the download with its byte counts, then the installer's run */
+	report?: (step: 'downloading' | 'installing', done?: number, total?: number) => void;
 }) {
-	const { serverDir, loader, mc, build, java } = opts;
+	const { serverDir, loader, mc, build, java, report } = opts;
+	const onBytes: OnProgress = (done, total) => report?.('downloading', done, total);
 	const download = await resolveDownload(loader, mc, build);
 	if (!needsJavaToInstall(loader)) {
-		await downloadFile(join(serverDir, 'server.jar'), download);
+		await downloadFile(join(serverDir, 'server.jar'), download, onBytes);
 		return;
 	}
 	if (!java) throw new Error(`Installing ${loader} needs Java`);
 
 	const installer = join(serverDir, 'installer.jar');
 	try {
-		await downloadFile(installer, download);
+		await downloadFile(installer, download, onBytes);
+		report?.('installing');
 		const args =
 			loader === 'quilt'
 				? [

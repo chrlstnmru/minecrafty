@@ -56,7 +56,8 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 	if (data.loader !== 'vanilla' && !loaderVersion)
 		invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
 	try {
-		await instances.createInstance({
+		// returns at once; the install carries on in the background and shows in the list
+		instances.createInstance({
 			...data,
 			loaderVersion: loaderVersion ?? null,
 			ramMinMb: Math.min(1024, data.ramMaxMb)
@@ -192,4 +193,10 @@ export const sendCommand = command(
 export const refreshPackIcons = command(async () => {
 	requireAdmin();
 	return userFacing(() => backfillPackIcons());
+});
+
+/** Runs a failed install again; it carries on in the background. */
+export const retryInstall = command(id, async (instanceId) => {
+	requireAdmin();
+	await userFacing(async () => void instances.retryInstall(instanceId));
 });

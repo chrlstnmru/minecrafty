@@ -1,7 +1,8 @@
 // In-memory progress of background installs (modpack imports), keyed by instance id.
 // Lost on restart on purpose: an install interrupted by a restart is marked failed at startup.
 
-export type InstallProgress = { label: string; done: number; total: number };
+/** `bytes` says done and total are byte counts, which the page shows as sizes, not as a count of items. */
+export type InstallProgress = { label: string; done: number; total: number; bytes?: boolean };
 
 const progress = new Map<number, InstallProgress>();
 

@@ -3,13 +3,14 @@
 	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
 	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import { getInstance } from '#lib/instances.remote.js';
+	import { modSupport } from '#lib/mod-support.js';
 	import { toast } from 'svelte-sonner';
 	import {
 		installMod,
 		disableClientOnlyMods,
 		installedMods,
 		modUpdates,
-		modsInfo,
 		refreshModSides,
 		removeMod,
 		setModEnabled,
@@ -30,14 +31,18 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
-	// Awaited deriveds below run one after another, so each request would wait for the previous
-	// one. Reading all three here sends them together; the awaits then join the requests in flight.
+	// Starts the list and the update check together; the await below joins the request in flight.
 	$effect.pre(() => {
-		void modsInfo(id).current;
 		void installedMods(id).current;
 		void modUpdates(id).current;
 	});
-	const info = $derived(await modsInfo(id));
+	// what the loader can install needs no request: the layout has loaded the instance already
+	const instance = $derived(getInstance(id).current);
+	const info = $derived(
+		instance
+			? { ...modSupport(instance.loader), loader: instance.loader, mcVersion: instance.mcVersion }
+			: undefined
+	);
 	// awaited, so the server renders the list and the browser hydrates the same markup
 	const installed = $derived(await installedMods(id));
 	const installedIds = $derived(new Set(installed.map((m) => m.projectId)));

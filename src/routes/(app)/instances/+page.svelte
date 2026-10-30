@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { prefersReducedMotion } from 'svelte/motion';
+	import { SvelteSet } from 'svelte/reactivity';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import { toast } from 'svelte-sonner';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
@@ -8,9 +10,11 @@
 		killInstance,
 		listInstances,
 		refreshPackIcons,
+		retryInstall,
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
+	import { formatBytes } from '#lib/format.js';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import NewInstanceSheet from '#lib/components/new-instance/new-instance-sheet.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
@@ -28,6 +32,35 @@
 		if (askedIcons || !instances.some((i) => i.packProjectId && !i.packIconUrl)) return;
 		askedIcons = true;
 		void refreshPackIcons().catch(() => undefined);
+	});
+
+	// a download shows sizes, anything else a count of steps
+	const progressDetail = (p: { done: number; total: number; bytes?: boolean } | null) =>
+		!p
+			? ''
+			: p.bytes
+				? p.total > 0
+					? ` · ${formatBytes(p.done)} of ${formatBytes(p.total)}`
+					: ` · ${formatBytes(p.done)}`
+				: p.total > 1
+					? ` · ${p.done}/${p.total}`
+					: '';
+
+	// When an install finishes the card would flip to its buttons before the bar reaches the end.
+	// It stays an installing card for a moment, the bar filling up, then hands over.
+	const SETTLE_MS = 1400;
+	const settling = new SvelteSet<number>();
+	let wasInstalling = new Set<number>();
+	$effect(() => {
+		const now = new Set(instances.filter((i) => i.installState === 'installing').map((i) => i.id));
+		for (const id of wasInstalling) {
+			const inst = instances.find((i) => i.id === id);
+			if (now.has(id) || inst?.installState !== 'ready') continue;
+			if (prefersReducedMotion.current) continue;
+			settling.add(id);
+			setTimeout(() => settling.delete(id), SETTLE_MS);
+		}
+		wasInstalling = now;
 	});
 
 	let createOpen = $state(false);
@@ -71,7 +104,8 @@
 
 	<div class="grid gap-4 @3xl/main:grid-cols-2 @5xl/main:grid-cols-3">
 		{#each instances ?? [] as inst (inst.id)}
-			{@const installing = inst.installState === 'installing'}
+			{@const settled = settling.has(inst.id) && inst.installState === 'ready'}
+			{@const installing = inst.installState === 'installing' || settled}
 			{@const failed = inst.installState === 'failed'}
 			{@const active = inst.state === 'running' || inst.state === 'stopping'}
 			{@const progress = inst.progress}
@@ -94,13 +128,13 @@
 				{#if installing}
 					<Card.Content class="grid gap-2">
 						<Progress
-							value={progress ? progress.done : 0}
-							max={Math.max(progress?.total ?? 1, 1)}
+							value={settled ? 1 : progress ? progress.done : 0}
+							max={settled ? 1 : Math.max(progress?.total ?? 1, 1)}
 						/>
 						<p class="text-xs text-muted-foreground">
-							{progress?.label ?? 'Starting'}{progress && progress.total > 1
-								? ` · ${progress.done}/${progress.total}`
-								: ''}
+							{settled ? 'Installed' : (progress?.label ?? 'Starting')}{settled
+								? ''
+								: progressDetail(progress)}
 						</p>
 					</Card.Content>
 				{:else if failed}
@@ -113,9 +147,14 @@
 				<Card.Footer class="flex flex-wrap gap-2">
 					{#if installing}
 						<p class="text-xs text-muted-foreground">
-							You can leave this page; the install keeps going.
+							{settled ? 'Ready to start.' : 'You can leave this page; the install keeps going.'}
 						</p>
 					{:else if failed}
+						{#if !inst.packProjectId}
+							<Button variant="outline" size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
+								Retry
+							</Button>
+						{/if}
 						<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
 					{:else}
 						<Button variant="secondary" size="sm" href="/instances/{inst.id}">Console</Button>

@@ -7,7 +7,7 @@ import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './ja
 import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
-import { getProgress } from './install-progress';
+import { clearProgress, getProgress, setProgress } from './install-progress';
 import * as runner from './runner-client';
 import { setProperties } from './server-properties';
 
@@ -83,18 +83,31 @@ export function writeInstanceMeta(row: Instance) {
 	);
 }
 
-/** Installs the loader's server files and writes instance.json. */
+/**
+ * Installs the loader's server files and writes instance.json, reporting what it is doing through
+ * the install progress, which the caller clears when it is done.
+ */
 export async function installBase(row: Instance) {
 	const mc = row.mcVersion;
-	const java = needsJavaToInstall(row.loader as Loader)
-		? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
-		: undefined;
+	const loader = row.loader as Loader;
+	let java: string | undefined;
+	if (needsJavaToInstall(loader)) {
+		setProgress(row.id, { label: 'Getting Java ready', done: 0, total: 1 });
+		java = javaOverride ?? (await ensureJava(await requiredJavaMajor(mc)));
+	}
 	await installServer({
 		serverDir: serverDir(row.id),
-		loader: row.loader as Loader,
+		loader,
 		mc,
 		build: row.loaderVersion ?? undefined,
-		java
+		java,
+		report: (step, done, total) =>
+			setProgress(
+				row.id,
+				step === 'installing'
+					? { label: `Installing ${loader}`, done: 0, total: 1 }
+					: { label: 'Downloading the server', done: done ?? 0, total: total ?? 0, bytes: true }
+			)
 	});
 	writeInstanceMeta(row);
 }
@@ -110,16 +123,55 @@ export function discardInstance(id: number) {
 	removeInstanceFiles(id);
 }
 
-export async function createInstance(input: NewInstance) {
-	const row = insertInstance(input);
+/** Finishes an install that started in the background: the instance becomes ready, or failed with the reason. */
+async function finishInstall(row: Instance) {
 	try {
 		await installBase(row);
+		db.update(instances)
+			.set({ installState: 'ready', installMessage: null })
+			.where(eq(instances.id, row.id))
+			.run();
 	} catch (e) {
-		// don't leave a half-created instance behind
-		discardInstance(row.id);
-		throw e;
+		const message = e instanceof Error ? e.message : String(e);
+		console.error(`[install] "${row.name}" (#${row.id}) failed: ${message}`);
+		db.update(instances)
+			.set({ installState: 'failed', installMessage: message.slice(0, 500) })
+			.where(eq(instances.id, row.id))
+			.run();
+	} finally {
+		clearProgress(row.id);
 	}
-	return row;
+}
+
+/**
+ * Adds the instance at once, marked as installing, and installs its server in the background
+ * (a download of 50 MB, or Java and an installer, is no reason to keep a form waiting). `finished`
+ * settles when the install is over, whichever way it went.
+ */
+export function createInstance(input: NewInstance) {
+	const row = insertInstance({ ...input, installState: 'installing', installMessage: null });
+	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
+	return { row, finished: finishInstall(row) };
+}
+
+/** Runs a failed install again from scratch. Only for servers made from a loader: a modpack's own files need the pack. */
+export function retryInstall(id: number) {
+	const row = getInstance(id);
+	if (!row) throw new Error('Instance not found');
+	if (row.installState !== 'failed') throw new Error('Nothing failed here');
+	if (row.packProjectId)
+		throw new Error('A modpack server cannot be retried; create it again from the pack');
+	// whatever a half-finished install left would only get in the way
+	rmSync(serverDir(id), { recursive: true, force: true });
+	mkdirSync(serverDir(id), { recursive: true });
+	const installing = db
+		.update(instances)
+		.set({ installState: 'installing', installMessage: null })
+		.where(eq(instances.id, id))
+		.returning()
+		.get();
+	setProgress(id, { label: 'Starting', done: 0, total: 1 });
+	return { row: installing, finished: finishInstall(installing) };
 }
 
 export function getInstance(id: number) {

@@ -6,6 +6,7 @@ import { installedMods } from './db/schema';
 import { downloadFile } from './download';
 import { getInstance, serverDir, type Instance } from './instances';
 import * as modrinth from './modrinth';
+import { modSupport } from '#lib/mod-support.js';
 import { projectSides } from './mod-sides';
 
 export type InstalledMod = typeof installedMods.$inferSelect;
@@ -13,28 +14,7 @@ export type InstalledMod = typeof installedMods.$inferSelect;
 /** A disabled mod keeps its file, renamed so the loader no longer sees a jar. */
 export const DISABLED_SUFFIX = '.disabled';
 
-// Modrinth loader tags an instance's loader can run; Quilt runs Fabric mods, Purpur runs Paper plugins
-const COMPATIBLE_LOADERS: Record<string, string[]> = {
-	fabric: ['fabric'],
-	quilt: ['quilt', 'fabric'],
-	forge: ['forge'],
-	neoforge: ['neoforge'],
-	paper: ['paper', 'spigot', 'bukkit'],
-	purpur: ['purpur', 'paper', 'spigot', 'bukkit']
-};
-
-const PLUGIN_LOADERS = new Set(['paper', 'purpur']);
-
-export function modSupport(loader: string) {
-	const loaders = COMPATIBLE_LOADERS[loader];
-	return {
-		supported: !!loaders,
-		loaders: loaders ?? [],
-		// Paper-family servers load plugins, everything else loads mods
-		noun: PLUGIN_LOADERS.has(loader) ? 'plugin' : 'mod',
-		folder: PLUGIN_LOADERS.has(loader) ? 'plugins' : 'mods'
-	};
-}
+export { modSupport };
 
 function requireInstance(instanceId: number): Instance {
 	const inst = getInstance(instanceId);
@@ -59,7 +39,7 @@ export async function search(instanceId: number, query: string, limit: number) {
 	const res = await modrinth.searchProjects({
 		query,
 		loaders: modSupport(inst.loader).loaders,
-		plugins: PLUGIN_LOADERS.has(inst.loader),
+		plugins: modSupport(inst.loader).noun === 'plugin',
 		mc: inst.mcVersion,
 		limit
 	});

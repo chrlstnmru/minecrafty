@@ -1,4 +1,5 @@
 <script lang="ts">
+	import { toast } from 'svelte-sonner';
 	import { createInstance, minecraftVersions } from '#lib/instances.remote.js';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import * as Form from '#lib/components/form/index.js';
@@ -36,7 +37,12 @@
 	remoteFunction={createInstance}
 	class="flex min-h-0 flex-1 flex-col gap-4"
 	onSubmitted={(succeeded) => {
-		if (succeeded) onDone();
+		if (!succeeded) return;
+		// the instance exists already; its server downloads in the background
+		toast.info(`Creating ${name.value()}`, {
+			description: 'The server installs in the background. Its progress is on the Instances page.'
+		});
+		onDone();
 	}}
 >
 	{#snippet children({ pending })}

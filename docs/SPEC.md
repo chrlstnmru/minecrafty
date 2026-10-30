@@ -66,6 +66,8 @@ Servers must keep running when the panel restarts or updates.
 ### Instances
 
 - Create from: Vanilla, Paper, Purpur, Fabric, Quilt, Forge, NeoForge, or modpack import.
+  - Creating a server from a loader returns at once: the instance appears in the list marked as installing, and the server downloads in the background (a 50 MB jar, or Java and the loader's installer, is too long to keep a form waiting). The card shows what it is doing, with real sizes for a download ("Downloading the server · 22.4 MB of 52.7 MB"), and stays an installing card for a moment after the last step so the bar can reach the end before the Console and Start buttons replace it (not with reduced motion). The server cannot be started while it installs.
+  - A failed install keeps the instance with the reason, and offers Retry (which clears what the failed attempt left and installs again) and Delete. A modpack server cannot be retried, since its files come from the pack, and is deleted and created again.
 - The instance list shows an icon beside each name: the modpack's own icon (from Modrinth, kept at import and filled in for older pack instances) for a modpack instance, else the loader's: a generic Tabler (MIT) symbol tinted per loader, stored in the repo (`src/lib/assets/loaders/`) and served by `@sveltejs/enhanced-img`. They are not the loaders' own logos, whose licenses differ per project. A pack icon that fails to load falls back to the loader's.
 - Version picker fed by each loader's official API/metadata. The loader build is not chosen: the newest build (stable channel for Paper) is used and recorded.
 - Server jar is downloaded and checksum-verified when the instance is created.

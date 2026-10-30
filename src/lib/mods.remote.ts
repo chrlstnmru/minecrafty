@@ -8,19 +8,9 @@ import {
 } from '#lib/schemas/common.js';
 import { requireAdmin } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
-import { getInstance } from '#lib/server/instances.js';
 import * as mods from '#lib/server/mods.js';
 
 const id = idSchema;
-
-/** What the Mods tab should call itself and whether the loader supports it at all. */
-export const modsInfo = query(id, async (instanceId) => {
-	requireAdmin();
-	const inst = getInstance(instanceId);
-	if (!inst) return null;
-	const { supported, noun, folder } = mods.modSupport(inst.loader);
-	return { supported, noun, folder, loader: inst.loader, mcVersion: inst.mcVersion };
-});
 
 export const installedMods = query(id, async (instanceId) => {
 	requireAdmin();
