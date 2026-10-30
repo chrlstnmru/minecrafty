@@ -96,7 +96,8 @@
 		});
 	});
 	$effect(() => {
-		if (open && scroller) reveal(highlighted, 'center');
+		// only on opening: reading `highlighted` here would re-center the list on every hover
+		if (open && scroller) untrack(() => reveal(highlighted, 'center'));
 	});
 
 	function search(next: string) {
