@@ -13,6 +13,8 @@
 		stopInstance
 	} from '#lib/instances.remote.js';
 	import PageHeader from '#lib/components/page-header.svelte';
+	import { liveStats } from '#lib/stats.remote.js';
+	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
@@ -33,6 +35,22 @@
 	const all = listInstances();
 	const row = $derived(all.current?.find((i) => i.id === id));
 	const status = $derived(row?.state ?? 'stopped');
+
+	// what the running server is using, a few seconds old
+	const live = liveStats();
+	const mine = $derived(status === 'running' ? live.current?.instances[id] : undefined);
+	const usage = $derived(
+		[
+			mine?.cpu != null ? `CPU ${formatPercent(mine.cpu)}` : null,
+			mine?.rss != null ? `${formatBytes(mine.rss)} memory` : null,
+			mine?.uptimeMs != null ? `up ${formatDuration(mine.uptimeMs)}` : null,
+			mine?.players
+				? `${mine.players.count}${mine.players.max ? ` of ${mine.players.max}` : ''} players`
+				: null
+		]
+			.filter(Boolean)
+			.join(' · ')
+	);
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
 	// the Modpack tab only makes sense for a server created from a modpack
@@ -78,7 +96,7 @@
 			<PageHeader
 				title={instance?.name ?? ''}
 				description={instance
-					? `${instance.loader} ${instance.mcVersion} · port ${instance.port}`
+					? `${instance.loader} ${instance.mcVersion} · port ${instance.port}${usage ? ` · ${usage}` : ''}`
 					: undefined}
 			>
 				{#snippet badge()}<StatusPill state={status} />{/snippet}

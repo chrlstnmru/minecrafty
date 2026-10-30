@@ -208,27 +208,20 @@ Build your own modpack on the panel and create instances from it.
 
 ### Live stats
 
-- Per instance: CPU and RAM of the Java process, uptime, status.
-- Players online and player list via RCON or server query (panel enables RCON with a random password on creation).
-- Host overview and the per-instance numbers feed the dashboard (see Dashboard).
+- A sampler in the panel reads every three seconds and keeps the newest reading (and the last sixty of the host's CPU and memory, for the trend lines). The dashboard and the instance header subscribe to it as a live query.
+- Host: CPU busy share between two readings, memory in use (what Linux calls available, not merely free) out of the total, uptime and core count.
+- Per running server: its CPU as a share of the whole host's CPU (all cores = 100%, so it adds up with the host figure and a server using one core of four reads 25%), resident memory of the Java process, uptime, and the players online and the maximum. CPU and memory come from `/proc` on Linux and from `ps` on macOS; Windows reports neither (shown as a dash) and still gets uptime and players. A stopping server still counts, since it is still using the machine. A restarted server's CPU reading starts afresh rather than from the previous run.
+- Players come from RCON every ten seconds, not on every reading; a server that cannot say shows a dash.
+- Storage: the volume holding the data folder (used and free), the size of every server folder, and the size of every backup. Walking a world is the slow part, so folder sizes are measured one server after the other every five minutes (first a few seconds after start) and the last figure is shown in between; links are never followed.
+- The instance header shows the running server's CPU, memory, uptime and players next to its version and port.
 
 ### Dashboard
 
-The home page (`/`) replaces the placeholder content that came with the shadcn dashboard block. It shows how the host and the servers are doing, and lets you act on a server without opening it.
+The home page (`/`) shows how the host and the servers are doing and lets you act on a server without opening it. The demo content that came with the shadcn dashboard block, and the chart and drag-and-drop libraries it needed, are gone.
 
-- KPI cards, system metrics first:
-  - CPU: host usage now, with a short trend.
-  - RAM: used and total, and how much of it the running instances account for.
-  - Storage: used and free on the volume holding the data folder, and how much instances and backups take.
-  - Instances: running out of total, and how many are installing or failed.
-  - Players online: the total across running instances.
-  - More cards worth having once the data exists: last backup (and any instance with none), host and panel uptime, scheduled tasks due soon.
-- Instances table: every instance in one list, with quick actions and live statistics.
-  - Quick actions per row: start, restart, stop (kill stays on the instance page). Restart is a graceful stop followed by a start, and is only offered while running.
-  - Columns: name (links to the instance), status (including installing and failed), CPU and RAM of the Java process, storage used by the instance folder, players online out of the maximum, and the loader and Minecraft version.
-  - Sortable and filterable by status; the numbers update live (the same live-query mechanism as the instance list).
-- Sampling: CPU and RAM come from the operating system per process (the runner knows the Java PID), host figures from the OS, players from RCON or a server query. Storage is the slow one (walking a world folder), so folder sizes are computed in the background every few minutes and cached rather than on every refresh.
-- Only instances the signed-in user may view appear, matching the per-instance permissions.
+- Cards: CPU with a trend, memory (used of total, with a bar and a trend, and how much the servers account for), storage (used, free, servers and backups), servers (running of total, and how many are installing or failed), players online across running servers, and maintenance (the next scheduled task across every server, the last backup, and how many servers have never been backed up).
+- Servers table: every instance with its loader and Minecraft version, uptime, status (installing and failed included), CPU, memory, folder size and players. Sortable by server, status, CPU, memory, disk and players (a row with no figure always sorts last), and filterable by All, Running, Stopped and, when there are any, Problems. Per row: start for a stopped server, restart and stop for a running one (kill stays on the instance page). The numbers update live.
+- Planned with the permissions UI: only servers the signed-in user may view appear.
 
 ### Users and permissions
 
@@ -266,7 +259,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
