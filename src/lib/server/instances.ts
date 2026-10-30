@@ -135,6 +135,7 @@ export async function listInstances() {
 				...row,
 				state: (s?.state ?? 'stopped') as InstanceState,
 				pid: s?.pid ?? null,
+				startedAt: s?.startedAt ?? null,
 				progress: getProgress(row.id)
 			};
 		})
