@@ -7,9 +7,11 @@
 		deleteInstance,
 		killInstance,
 		listInstances,
+		refreshPackIcons,
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import NewInstanceSheet from '#lib/components/new-instance/new-instance-sheet.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import StatusPill from '#lib/components/status-pill.svelte';
@@ -19,6 +21,14 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 
 	const instances = $derived(await listInstances());
+
+	// modpack servers made before their icon was kept get it from Modrinth, once
+	let askedIcons = false;
+	$effect(() => {
+		if (askedIcons || !instances.some((i) => i.packProjectId && !i.packIconUrl)) return;
+		askedIcons = true;
+		void refreshPackIcons().catch(() => undefined);
+	});
 
 	let createOpen = $state(false);
 	let deleting = $state<{ id: number; name: string }>({ id: 0, name: '' });
@@ -67,11 +77,16 @@
 			{@const progress = inst.progress}
 			<Card.Root>
 				<Card.Header>
-					<Card.Title>{inst.name}</Card.Title>
-					<Card.Description>
-						{inst.loader}
-						{inst.mcVersion} · port {inst.port} · {inst.ramMaxMb} MB
-					</Card.Description>
+					<div class="flex min-w-0 items-center gap-3">
+						<InstanceIcon loader={inst.loader} packIconUrl={inst.packIconUrl} />
+						<div class="grid min-w-0 gap-1">
+							<Card.Title class="truncate">{inst.name}</Card.Title>
+							<Card.Description>
+								{inst.loader}
+								{inst.mcVersion} · port {inst.port} · {inst.ramMaxMb} MB
+							</Card.Description>
+						</div>
+					</div>
 					<Card.Action>
 						<StatusPill state={installing ? 'installing' : failed ? 'failed' : inst.state} />
 					</Card.Action>

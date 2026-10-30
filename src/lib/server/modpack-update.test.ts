@@ -160,6 +160,7 @@ async function makePack(spec: PackSpec): Promise<LoadedPack> {
 			projectId: spec.projectId ?? 'PACK',
 			versionId: spec.versionId,
 			name: 'Test Pack',
+			iconUrl: null,
 			summary: '',
 			versionNumber: spec.versionNumber,
 			mcVersion: spec.mc ?? '1.21.4',

@@ -327,6 +327,7 @@ export async function startModpackUpdate(
 					packVersionId: plan.versionId,
 					packVersionNumber: plan.versionNumber,
 					packName: plan.name,
+					packIconUrl: pack.summary.iconUrl,
 					installState: 'ready',
 					installMessage: null
 				})

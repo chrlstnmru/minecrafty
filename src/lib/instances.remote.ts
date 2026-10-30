@@ -7,6 +7,7 @@ import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instanc
 import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
 import * as runner from '#lib/server/runner-client.js';
+import { backfillPackIcons } from '#lib/server/modpacks.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
 
 const id = idSchema;
@@ -184,3 +185,9 @@ export const sendCommand = command(
 		if (!sent) error(400, 'Instance is not running');
 	}
 );
+
+/** Fetches the icon of modpack instances made before it was kept; the instance list picks it up. */
+export const refreshPackIcons = command(async () => {
+	requireAdmin();
+	return userFacing(() => backfillPackIcons());
+});

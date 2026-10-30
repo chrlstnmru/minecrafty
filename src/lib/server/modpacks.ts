@@ -1,6 +1,6 @@
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { eq } from 'drizzle-orm';
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { dataDir } from './config';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
@@ -52,6 +52,8 @@ export type ModpackSummary = {
 	projectId: string;
 	versionId: string;
 	name: string;
+	/** the pack's icon on Modrinth */
+	iconUrl: string | null;
 	summary: string;
 	versionNumber: string;
 	mcVersion: string;
@@ -139,14 +141,15 @@ function parseIndex(zip: Zip): PackIndex {
 export const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
 
 /**
- * The pack's name on Modrinth. The index's own `name` is whatever the author typed into their
- * build tool, and for some packs it is just the version number.
+ * The pack's name and icon on Modrinth. The index's own `name` is whatever the author typed into
+ * their build tool, and for some packs it is just the version number.
  */
-export async function projectTitle(projectId: string, fallback: string) {
+export async function projectInfo(projectId: string, fallbackName: string) {
 	try {
-		return (await modrinth.getProjects([projectId]))[0]?.title || fallback;
+		const project = (await modrinth.getProjects([projectId]))[0];
+		return { name: project?.title || fallbackName, iconUrl: project?.icon_url ?? null };
 	} catch {
-		return fallback;
+		return { name: fallbackName, iconUrl: null };
 	}
 }
 
@@ -155,6 +158,7 @@ export async function loadModpack(versionId: string): Promise<LoadedPack> {
 	const zip = new Zip(new Uint8Array(await Bun.file(path).arrayBuffer()));
 	const index = parseIndex(zip);
 
+	const info = await projectInfo(version.project_id, index.name);
 	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
 	const files = index.files.filter(wantsOnServer);
 	return {
@@ -163,7 +167,8 @@ export async function loadModpack(versionId: string): Promise<LoadedPack> {
 		summary: {
 			projectId: version.project_id,
 			versionId: version.id,
-			name: await projectTitle(version.project_id, index.name),
+			name: info.name,
+			iconUrl: info.iconUrl,
 			summary: index.summary ?? '',
 			versionNumber: index.versionId,
 			mcVersion: index.dependencies.minecraft,
@@ -212,7 +217,8 @@ export async function startImport(opts: ImportOptions) {
 		packProjectId: summary.projectId,
 		packVersionId: summary.versionId,
 		packVersionNumber: summary.versionNumber,
-		packName: summary.name
+		packName: summary.name,
+		packIconUrl: summary.iconUrl
 	});
 	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
 	void finishImport(row, pack);
@@ -414,4 +420,23 @@ export async function listModpackVersions(projectId: string): Promise<ModpackVer
 /** What importing this version would do, without creating anything. */
 export async function previewModpack(versionId: string): Promise<ModpackSummary> {
 	return (await loadModpack(versionId)).summary;
+}
+
+/** Fills in the icon of modpack instances created before it was kept; returns how many it filled. */
+export async function backfillPackIcons() {
+	const missing = db
+		.select()
+		.from(instances)
+		.where(and(isNotNull(instances.packProjectId), isNull(instances.packIconUrl)))
+		.all();
+	if (!missing.length) return 0;
+	const projects = await modrinth.getProjects([...new Set(missing.map((i) => i.packProjectId!))]);
+	let filled = 0;
+	for (const row of missing) {
+		const icon = projects.find((p) => p.id === row.packProjectId)?.icon_url;
+		if (!icon) continue;
+		db.update(instances).set({ packIconUrl: icon }).where(eq(instances.id, row.id)).run();
+		filled++;
+	}
+	return filled;
 }

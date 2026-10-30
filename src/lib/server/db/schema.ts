@@ -52,6 +52,7 @@ export const instances = sqliteTable('instances', {
 	packVersionId: text('pack_version_id'),
 	packVersionNumber: text('pack_version_number'),
 	packName: text('pack_name'),
+	packIconUrl: text('pack_icon_url'),
 	// how many backups to keep, oldest removed first; null keeps them all
 	backupKeep: integer('backup_keep').default(5),
 	// paths left out of a backup, one per line, relative to the server folder

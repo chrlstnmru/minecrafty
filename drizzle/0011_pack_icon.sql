@@ -1,0 +1,1 @@
+ALTER TABLE `instances` ADD `pack_icon_url` text;

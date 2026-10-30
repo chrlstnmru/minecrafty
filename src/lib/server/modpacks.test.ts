@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from 'vitest';
 
-const projects = vi.hoisted(() => ({ list: [] as { title: string }[], fail: false }));
+const projects = vi.hoisted(() => ({
+	list: [] as { title: string; icon_url?: string }[],
+	fail: false
+}));
 
 vi.mock('./modrinth', async (original) => ({
 	...(await original<typeof import('./modrinth')>()),
@@ -10,7 +13,7 @@ vi.mock('./modrinth', async (original) => ({
 	}
 }));
 
-const { projectTitle, safeJoin } = await import('./modpacks');
+const { projectInfo, safeJoin } = await import('./modpacks');
 
 // A modpack names the files it wants, and those names are data from a stranger.
 describe('safeJoin', () => {
@@ -43,17 +46,25 @@ describe('safeJoin', () => {
 	});
 });
 
-describe('projectTitle', () => {
-	it('names the pack by its Modrinth title, not by what the index says', async () => {
+describe('projectInfo', () => {
+	it('names the pack by its Modrinth title, not by what the index says, and gives its icon', async () => {
 		projects.fail = false;
-		projects.list = [{ title: 'Sodium Plus' }];
-		expect(await projectTitle('P', '2.3.7')).toBe('Sodium Plus');
+		projects.list = [{ title: 'Sodium Plus', icon_url: 'https://cdn.modrinth.com/icon.png' }];
+		expect(await projectInfo('P', '2.3.7')).toEqual({
+			name: 'Sodium Plus',
+			iconUrl: 'https://cdn.modrinth.com/icon.png'
+		});
+	});
+
+	it('has no icon for a project without one', async () => {
+		projects.list = [{ title: 'Plain' }];
+		expect((await projectInfo('P', 'x')).iconUrl).toBeNull();
 	});
 
 	it('falls back to the index name when Modrinth has no title or cannot be reached', async () => {
 		projects.list = [];
-		expect(await projectTitle('P', 'index name')).toBe('index name');
+		expect(await projectInfo('P', 'index name')).toEqual({ name: 'index name', iconUrl: null });
 		projects.fail = true;
-		expect(await projectTitle('P', 'index name')).toBe('index name');
+		expect(await projectInfo('P', 'index name')).toEqual({ name: 'index name', iconUrl: null });
 	});
 });
