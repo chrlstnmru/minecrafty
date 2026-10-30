@@ -1,7 +1,8 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { claim, writeBackup } from './backups';
+import { writeBackup } from './backups';
+import { claim } from './operations';
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
