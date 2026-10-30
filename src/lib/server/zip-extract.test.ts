@@ -11,7 +11,8 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { extractZip, safeEntryName } from './zip-extract';
+import { safeEntryName } from '#lib/safe-entry-name.js';
+import { extractZip } from './zip-extract';
 import { listZipEntries } from './zip-entries';
 import { zipStream, type ZipEntry } from './zip-writer';
 

@@ -13,14 +13,15 @@ import { pipeline } from 'node:stream/promises';
 import { and, desc, eq, inArray } from 'drizzle-orm';
 import { backupsDir } from './config';
 import { db } from './db';
-import { backups } from './db/schema';
+import { backups, instances } from './db/schema';
 import { isRunning } from './files';
 import { getInstance, instanceDir, serverDir } from './instances';
 import * as runner from './runner-client';
 import type { Subscription } from './runner-client';
 import type { ServerMessage } from '#runner/protocol.js';
 import { listZipEntries } from './zip-entries';
-import { extractZip, safeEntryName } from './zip-extract';
+import { safeEntryName } from '#lib/safe-entry-name.js';
+import { extractZip } from './zip-extract';
 import { zipStream } from './zip-writer';
 
 export type Backup = typeof backups.$inferSelect;
@@ -291,3 +292,16 @@ export async function restoreBackup(instanceId: number, backupId: number) {
 		release();
 	}
 }
+
+export function setBackupSettings(
+	instanceId: number,
+	settings: { backupKeep: number | null; backupExcludes: string }
+) {
+	if (!getInstance(instanceId)) throw new Error('Instance not found');
+	parseExcludes(settings.backupExcludes);
+	db.update(instances).set(settings).where(eq(instances.id, instanceId)).run();
+	pruneBackups(instanceId);
+}
+
+/** Whether a backup or restore is running for the instance right now. */
+export const backupBusy = (instanceId: number) => busy.get(instanceId) ?? null;

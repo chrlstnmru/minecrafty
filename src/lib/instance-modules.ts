@@ -66,8 +66,8 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'backups',
 		title: 'Backups',
 		icon: ArchiveIcon,
-		planned: 4,
-		description: 'Manual and scheduled backups with retention and restore.'
+		description:
+			'Back up the server folder, download or restore a backup, and set how many to keep.'
 	},
 	{
 		slug: 'schedules',

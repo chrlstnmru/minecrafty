@@ -94,7 +94,7 @@ Each instance has a dedicated page, `/instances/[id]`, with a shared header (nam
 | Logs           | Browse `logs/latest.log` and rotated `.gz` files with search and download    | 4         |
 | Properties     | `server.properties` editor with form fields for common keys                  | 4         |
 | Players        | Online players, whitelist, ops, bans, kick (RCON)                            | 4         |
-| Backups        | Manual and scheduled backups, restore                                        | 4         |
+| Backups        | Manual backups (scheduled ones come with Schedules), retention, restore      | 4         |
 | Schedules      | Cron tasks for this instance                                                 | 4         |
 | Loader         | Update the loader build or Minecraft version, with a backup prompt           | 4         |
 
@@ -167,10 +167,14 @@ Build your own modpack on the panel and create instances from it.
 
 ### Backups
 
-- Manual and scheduled zip backups of the instance root (configurable excludes).
-- Retention: keep last N.
-- Restore (instance must be stopped). Download a backup.
-- Run `save-off` / `save-all` before and `save-on` after when the server is running.
+- A backup is a zip of the server folder in `backups/<instance id>/<timestamp>.zip`, outside the instance folder so deleting or restoring the server never touches it. Streamed to disk (nothing is buffered), written to a `.partial` file first and renamed when complete, and refused up front when the disk could not hold it. One backup or restore per instance at a time.
+- A running server is paused first: `save-off`, then `save-all flush`, and the backup waits for the server's confirmation (it fails rather than copy an unflushed world); `save-on` is sent afterwards even when the backup fails.
+- Excludes: paths relative to the server folder, one per line (default `logs` and `crash-reports`); a folder leaves out everything in it. Symlinks are never followed.
+- Retention: keep the newest N manual and scheduled backups (default 5, empty keeps all); backups made just before a restore are never pruned.
+- Restore needs the server stopped. It first backs up what is there ("Before restore"), unpacks the archive next to the server with every path checked and every file's size and CRC verified, and swaps it in only when that succeeded, so a damaged archive leaves the server untouched. Excluded paths (logs) are carried over from the old folder. Mods tracked in the panel may no longer match the restored files.
+- Download goes through `/instances/[id]/backups/download?backup=<id>`.
+- Limits: the zip writer has no Zip64, so a backup is limited to 4 GiB and 65,535 files, and a larger server fails with a clear message. Zip64 is the follow-up if that bites.
+- Scheduled backups arrive with scheduled tasks.
 
 ### Scheduled tasks
 
@@ -238,7 +242,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), player management, loader update, backups, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), player management, loader update, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features

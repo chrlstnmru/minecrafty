@@ -11,6 +11,7 @@ import { dirname, resolve, sep } from 'node:path';
 import { Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 import { crc32, createInflateRaw } from 'node:zlib';
+import { safeEntryName } from '#lib/safe-entry-name.js';
 
 // Extracts a zip straight from disk, one entry at a time, so restoring a large backup never
 // holds it in memory. Every name is checked before anything is written, and each file's size
@@ -86,15 +87,6 @@ function readDirectory(fd: number): Entry[] {
 		at += 46 + nameLength + extraLength + commentLength;
 	}
 	return entries;
-}
-
-/** A path inside the archive that is safe to join onto the destination, or null. */
-export function safeEntryName(name: string) {
-	if (!name || name.includes('\0') || name.includes('\\') || name.startsWith('/')) return null;
-	if (/^[a-zA-Z]:/.test(name)) return null;
-	const parts = name.split('/').filter((part) => part !== '' && part !== '.');
-	if (!parts.length || parts.includes('..')) return null;
-	return parts.join('/');
 }
 
 /** Checks the CRC and size of what flows through, and refuses more than the archive declared. */

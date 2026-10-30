@@ -2,4 +2,4 @@
 // pipeline (and in the browser), so it must not pull in components.
 
 /** Instance modules that appear in the tab bar before they are built (see docs/SPEC.md). */
-export const plannedSlugs = ['players', 'backups', 'schedules', 'loader'] as const;
+export const plannedSlugs = ['players', 'schedules', 'loader'] as const;

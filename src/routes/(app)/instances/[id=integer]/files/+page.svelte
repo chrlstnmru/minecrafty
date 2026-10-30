@@ -28,6 +28,7 @@
 		tableFeatures,
 		type SortingState
 	} from '@tanstack/svelte-table';
+	import { formatBytes } from '#lib/format.js';
 	import { toast } from 'svelte-sonner';
 	import {
 		listFiles,
@@ -73,14 +74,7 @@
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
-	const size = (bytes: number) =>
-		bytes < 1024
-			? `${bytes} B`
-			: bytes < 1024 ** 2
-				? `${(bytes / 1024).toFixed(1)} KB`
-				: bytes < 1024 ** 3
-					? `${(bytes / 1024 ** 2).toFixed(1)} MB`
-					: `${(bytes / 1024 ** 3).toFixed(2)} GB`;
+	const size = formatBytes;
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium', timeStyle: 'short' });
 
 	type Prompt = { kind: 'folder' | 'file' | 'rename'; target?: string; value: string };
