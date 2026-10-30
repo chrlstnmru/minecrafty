@@ -147,9 +147,7 @@ export const deleteInstance = command(id, async (instanceId) => {
 
 export const restartInstance = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'control');
-	await userFacing(() => instances.stopInstance(instanceId));
-	await Bun.sleep(3000);
-	await userFacing(() => instances.startInstance(instanceId));
+	await userFacing(() => instances.restartInstance(instanceId));
 	record({ action: 'instance.restart', summary: 'Restarted the server', instanceId });
 });
 

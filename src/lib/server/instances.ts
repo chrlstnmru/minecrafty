@@ -275,6 +275,33 @@ export async function stopInstance(id: number) {
 	await runner.send(instanceDir(id), id, { type: 'stop' });
 }
 
+/** How long a restart waits for the server to stop; adjustable so tests need not wait. */
+export const stopTiming = { timeoutMs: 3 * 60_000, pollMs: 500 };
+
+/** Resolves true once the instance's server has exited, false if it still runs after the timeout. */
+export async function waitForExit(id: number) {
+	const deadline = Date.now() + stopTiming.timeoutMs;
+	for (;;) {
+		const live = await runner.status(instanceDir(id), id);
+		if (!live || live.state === 'exited') return true;
+		if (Date.now() >= deadline) return false;
+		await Bun.sleep(stopTiming.pollMs);
+	}
+}
+
+/**
+ * Stops the server, waits for it to exit (a modded server can take a minute to save), then starts
+ * it again. A server that is not running is just started.
+ */
+export async function restartInstance(id: number) {
+	const live = await runner.status(instanceDir(id), id);
+	if (live && live.state !== 'exited') {
+		await stopInstance(id);
+		if (!(await waitForExit(id))) throw new Error('The server did not stop within three minutes');
+	}
+	await startInstance(id);
+}
+
 export async function killInstance(id: number) {
 	await runner.send(instanceDir(id), id, { type: 'kill' });
 }
