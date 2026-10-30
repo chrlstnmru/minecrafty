@@ -1,5 +1,4 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
 import { type Permission } from '#lib/permissions.js';
 import { makeRole } from '#test/roles.js';
 import * as A from './access';
@@ -26,7 +25,7 @@ const give = (user: A.Actor, roleId: number, instanceId: number | null = null) =
 beforeEach(async () => {
 	db.delete(instances).run();
 	db.delete(users).run();
-	db.delete(roles).where(eq(roles.builtIn, false)).run();
+	db.delete(roles).run();
 	const make = async (name: string, r: 'owner' | 'user') => {
 		const u = await U.createAccount(name, 'a-long-password', r);
 		return { id: u.id, role: u.role } satisfies A.Actor;
@@ -87,12 +86,6 @@ describe('canEditRole and canDeleteRole', () => {
 		expect(G.canEditRole(boss, lower, rules(['logs']), 80).ok).toBe(false);
 	});
 
-	it('never edits or deletes a built-in role, even for an owner', () => {
-		const viewer = db.select().from(roles).where(eq(roles.name, 'Viewer')).get()!.id;
-		expect(G.canEditRole(owner, viewer, rules(['logs']), 10).ok).toBe(false);
-		expect(G.canDeleteRole(owner, viewer).ok).toBe(false);
-	});
-
 	it('applies the same rank and holding rules to deleting', () => {
 		const lower = role('Lower', 40, ['logs']);
 		expect(G.canDeleteRole(boss, lower).ok).toBe(true);
@@ -109,12 +102,6 @@ describe('roleLock', () => {
 		const lower = role('Lower', 40, ['logs']);
 		expect(G.roleLock(junior, row(lower))).toBe('read-only');
 		expect(G.roleLock(owner, row(lower))).toBeNull();
-	});
-
-	it('locks built-in roles for everyone, even an owner', () => {
-		const viewer = R.listRoles().find((r) => r.name === 'Viewer')!;
-		expect(G.roleLock(owner, viewer)).toBe('built-in');
-		expect(G.roleLock(boss, viewer)).toBe('built-in');
 	});
 
 	it('locks a role ranked at or above the actor, one they hold, and one with owner-only permissions', () => {

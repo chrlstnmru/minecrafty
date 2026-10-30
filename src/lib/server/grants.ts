@@ -22,10 +22,9 @@ function activeRole(roleId: number) {
 
 export function roleLock(
 	actor: Actor,
-	role: { id: number; rank: number; builtIn: boolean; permissions: readonly Permission[] }
+	role: { id: number; rank: number; permissions: readonly Permission[] }
 ): RoleLock | null {
 	if (!can(actor, 'roles.write')) return 'read-only';
-	if (role.builtIn) return 'built-in';
 	if (isOwner(actor)) return null;
 	if (!(role.rank < rankOf(actor))) return 'rank';
 	if (holdsRole(actor.id, role.id)) return 'held';
@@ -73,7 +72,6 @@ export function canEditRole(
 	const current = {
 		id: role.id,
 		rank: role.rank,
-		builtIn: role.builtIn,
 		permissions: [] as Permission[]
 	};
 	// the stored permissions matter for the owner-only check, so read them back
@@ -91,7 +89,6 @@ export function canDeleteRole(actor: Actor, roleId: number): GrantCheck {
 	const lock = roleLock(actor, {
 		id: role.id,
 		rank: role.rank,
-		builtIn: role.builtIn,
 		permissions: stored.allow ?? []
 	});
 	return lock ? deny(LOCK_MESSAGES[lock]) : allow;

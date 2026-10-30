@@ -197,51 +197,6 @@ export function permissionGroup(key: Permission): string {
 	return resource.charAt(0).toUpperCase() + resource.slice(1);
 }
 
-/** Starting points for a new role; the built-in roles are made from these. */
-export const ACCESS_PRESETS: {
-	name: string;
-	description: string;
-	rank: number;
-	permissions: Permission[];
-}[] = [
-	{
-		name: 'Viewer',
-		description: 'See the server and read its logs',
-		rank: 10,
-		permissions: ['logs']
-	},
-	{
-		name: 'Operator',
-		description: 'Run the server and use the console',
-		rank: 30,
-		permissions: ['logs', 'console', 'players', 'control']
-	},
-	{
-		name: 'Manager',
-		description: 'Everything except the loader and settings',
-		rank: 60,
-		permissions: [
-			'logs',
-			'console',
-			'players',
-			'control',
-			'files',
-			'properties',
-			'mods',
-			'modpack',
-			'resource-packs',
-			'backups',
-			'schedules'
-		]
-	},
-	{
-		name: 'Full',
-		description: 'Everything on the server',
-		rank: 90,
-		permissions: [...INSTANCE_PERMISSIONS]
-	}
-];
-
 export const hasPermission = (granted: readonly Permission[], needed: Permission) =>
 	granted.includes(needed);
 

@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
 import {
-	ACCESS_PRESETS,
 	MODULE_PERMISSION,
 	PERMISSIONS,
 	emptyRules,
@@ -9,7 +8,6 @@ import {
 	parseRules,
 	firstAllowedModule,
 	hasPermission,
-	INSTANCE_PERMISSIONS,
 	PANEL_PERMISSIONS,
 	closure,
 	isInstancePermission,
@@ -76,15 +74,6 @@ describe('what is defined', () => {
 	it('gates every instance tab, so a new tab cannot be left open to everyone', () => {
 		expect(slugs.length).toBeGreaterThan(8);
 		for (const slug of slugs) expect(MODULE_PERMISSION[slug], slug).toBeDefined();
-	});
-
-	it('every preset is a clean list, with a rank', () => {
-		for (const preset of ACCESS_PRESETS) {
-			expect(closure(preset.permissions).size).toBe(preset.permissions.length);
-			expect(preset.rank).toBeGreaterThanOrEqual(0);
-			expect(preset.rank).toBeLessThanOrEqual(99);
-		}
-		expect(ACCESS_PRESETS.at(-1)!.permissions).toEqual([...INSTANCE_PERMISSIONS]);
 	});
 });
 

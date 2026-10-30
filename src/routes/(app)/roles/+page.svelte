@@ -152,9 +152,11 @@
 
 	async function remove() {
 		if (!selected) return;
+		const role = selected;
+		removing = false;
 		try {
-			await removeRole(selected.id);
-			toast.success(`Deleted ${selected.name}`);
+			await removeRole(role.id);
+			toast.success(`Deleted ${role.name}`);
 			selectedId = undefined;
 			if (detailOpen) history.back();
 		} catch (err) {

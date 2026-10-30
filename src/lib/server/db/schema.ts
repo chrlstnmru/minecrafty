@@ -158,7 +158,6 @@ export const roles = sqliteTable(
 		description: text('description').notNull().default(''),
 		rules: text('rules').notNull(),
 		rank: integer('rank').notNull().default(0),
-		builtIn: integer('built_in', { mode: 'boolean' }).notNull().default(false),
 		deletedAt: integer('deleted_at', { mode: 'timestamp' })
 	},
 	(t) => [

@@ -1,12 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeInstance } from '#test/instance.js';
-import {
-	ACCESS_PRESETS,
-	INSTANCE_PERMISSIONS,
-	PERMISSIONS,
-	type Permission
-} from '#lib/permissions.js';
+import { INSTANCE_PERMISSIONS, PERMISSIONS, type Permission } from '#lib/permissions.js';
 import { makeRole } from '#test/roles.js';
 import * as A from './access';
 import { db } from './db';
@@ -23,7 +18,7 @@ let two: number;
 beforeEach(async () => {
 	db.delete(instances).run();
 	db.delete(users).run();
-	db.delete(roles).where(eq(roles.builtIn, false)).run();
+	db.delete(roles).run();
 	const make = async (name: string, role: 'owner' | 'user') => {
 		const u = await U.createAccount(name, 'a-long-password', role);
 		return { id: u.id, role: u.role } satisfies A.Actor;
@@ -31,6 +26,23 @@ beforeEach(async () => {
 	owner = await make('root', 'owner');
 	alice = await make('alice', 'user');
 	bob = await make('bob', 'user');
+	// a few roles of known ranks to hand out; the panel itself ships none
+	makeRole('Viewer', 10, ['logs']);
+	makeRole('Operator', 30, ['logs', 'console', 'players', 'control']);
+	makeRole('Manager', 60, [
+		'logs',
+		'console',
+		'players',
+		'control',
+		'files',
+		'properties',
+		'mods',
+		'modpack',
+		'resource-packs',
+		'backups',
+		'schedules'
+	]);
+	makeRole('Full', 90, [...INSTANCE_PERMISSIONS]);
 	one = makeInstance().id;
 	two = makeInstance().id;
 });
@@ -206,14 +218,9 @@ describe('rank', () => {
 });
 
 describe('roles', () => {
-	it('comes with the built-in roles, matching the presets and ranked', () => {
-		const builtIn = R.listRoles().filter((r) => r.builtIn);
-		expect(builtIn.map((r) => r.name).sort()).toEqual(ACCESS_PRESETS.map((p) => p.name).sort());
-		for (const preset of ACCESS_PRESETS) {
-			const role = builtIn.find((r) => r.name === preset.name)!;
-			expect(role.permissions).toEqual(preset.permissions);
-			expect(role.rank).toBe(preset.rank);
-		}
+	it('starts with no roles at all', () => {
+		db.delete(roles).run();
+		expect(R.listRoles()).toEqual([]);
 	});
 
 	it('lists highest rank first and counts the people holding each role', () => {
@@ -256,7 +263,7 @@ describe('roles', () => {
 			edits: [{ roleId: a, name: 'Alpha 2', description: 'x', permissions: ['logs', 'files'] }],
 			locked: new Set(
 				R.listRoles()
-					.filter((r) => r.builtIn)
+					.filter((r) => r.rank >= 10)
 					.map((r) => r.id)
 			)
 		});
@@ -307,7 +314,7 @@ describe('roles', () => {
 		const mine = R.createRole('Mine').id;
 		const locked = new Set(
 			R.listRoles()
-				.filter((r) => r.builtIn)
+				.filter((r) => r.rank >= 10)
 				.map((r) => r.id)
 		);
 		const order = R.listRoles()
@@ -326,8 +333,7 @@ describe('roles', () => {
 		expect(() => R.createRole('Reused')).not.toThrow();
 	});
 
-	it('protects the built-in roles from deleting', () => {
-		expect(() => R.deleteRole(roleOf('Viewer'))).toThrow('Built-in');
+	it('refuses to delete a role that does not exist', () => {
 		expect(() => R.deleteRole(999_999)).toThrow('not found');
 	});
 });

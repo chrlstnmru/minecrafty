@@ -24,7 +24,6 @@ export function listRoles() {
 			name: r.name,
 			description: r.description,
 			rank: r.rank,
-			builtIn: r.builtIn,
 			/** what was picked for the role */
 			permissions: parseRules(r.rules).allow,
 			/** what it grants, with what the picked ones imply */
@@ -170,6 +169,5 @@ export function applySave(plan: SavePlan) {
 export function deleteRole(id: number) {
 	const role = getRole(id);
 	if (!role) throw new Error('Role not found');
-	if (role.builtIn) throw new Error('Built-in roles cannot be deleted');
 	db.update(roles).set({ deletedAt: new Date() }).where(eq(roles.id, id)).run();
 }

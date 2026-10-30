@@ -127,6 +127,13 @@
       "when": 1793357819527,
       "tag": "0017_ranked_roles",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1793360524091,
+      "tag": "0018_no_builtin_roles",
+      "breakpoints": true
     }
   ]
 }
