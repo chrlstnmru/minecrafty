@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { createInstance, minecraftVersions } from '#lib/instances.remote.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import * as Form from '#lib/components/form/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
@@ -42,7 +43,12 @@
 		<div class="-mx-1 min-h-0 flex-1 overflow-y-auto px-1">
 			<Field.Group>
 				<Form.Input label="Name" field={name} />
-				<Form.Select label="Loader" field={loader} options={loaderOptions} />
+				<Form.Select label="Loader" field={loader} options={loaderOptions}>
+					{#snippet option(loader)}
+						<InstanceIcon loader={loader.value} class="size-5 p-0.5" />
+						{loader.label}
+					{/snippet}
+				</Form.Select>
 				<Form.Select
 					label="Minecraft version"
 					field={mcVersion}

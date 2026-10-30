@@ -1,10 +1,9 @@
-<script lang="ts">
+<script lang="ts" generics="T extends Option">
 	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
 	import * as Command from '#lib/components/ui/command/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 	import { cn } from '#lib/utils.js';
-
-	type Option = { value: string; label: string };
+	import type { Option, OptionSnippet, SelectionSnippet } from './option.js';
 
 	/**
 	 * A select with a search box, for lists too long to scroll (Minecraft and modpack versions).
@@ -13,6 +12,8 @@
 	let {
 		value = $bindable(''),
 		options,
+		option: optionContent,
+		selection,
 		placeholder = 'Choose…',
 		searchPlaceholder = 'Search…',
 		emptyText = 'Nothing found.',
@@ -24,7 +25,11 @@
 		onValueChange
 	}: {
 		value?: string;
-		options: Option[];
+		options: T[];
+		/** how a row looks; the label by default */
+		option?: OptionSnippet<T>;
+		/** how the trigger shows the chosen option; the `option` content by default */
+		selection?: SelectionSnippet<T>;
 		placeholder?: string;
 		searchPlaceholder?: string;
 		emptyText?: string;
@@ -83,9 +88,17 @@
 			className
 		)}
 	>
-		<span class={cn('truncate', !shown && 'text-muted-foreground')}>
-			{shown?.label ?? placeholder}
-		</span>
+		{#if shown && selection}
+			{@render selection(shown)}
+		{:else if shown && optionContent}
+			<span class="flex min-w-0 items-center gap-2">
+				{@render optionContent(shown, { selected: true })}
+			</span>
+		{:else}
+			<span class={cn('truncate', !shown && 'text-muted-foreground')}>
+				{shown?.label ?? placeholder}
+			</span>
+		{/if}
 		<SelectorIcon class="pointer-events-none size-3.5 shrink-0 text-muted-foreground" />
 	</Popover.Trigger>
 	<Popover.Content class="w-(--bits-popover-anchor-width) gap-0 p-0" align="start">
@@ -103,7 +116,11 @@
 							class="data-[checked=true]:bg-primary/10 data-[checked=true]:font-medium data-selected:data-[checked=true]:bg-primary/15"
 							onSelect={() => pick(option.value)}
 						>
-							<span class="truncate">{option.label}</span>
+							{#if optionContent}
+								{@render optionContent(option, { selected: option.value === value })}
+							{:else}
+								<span class="truncate">{option.label}</span>
+							{/if}
 						</Command.Item>
 					{/each}
 				</Command.Group>

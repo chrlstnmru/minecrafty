@@ -1,7 +1,8 @@
-<script lang="ts">
+<script lang="ts" generics="T extends Option">
 	import type { RemoteFormField } from '$app/server';
 	import Combobox from '#lib/components/combobox.svelte';
 	import SelectMenu from '#lib/components/select-menu.svelte';
+	import type { Option, OptionSnippet, SelectionSnippet } from '#lib/components/option.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { tryGetFieldRevalidateContext } from './context.js';
 
@@ -10,7 +11,11 @@
 		label?: string;
 		description?: string;
 		disabled?: boolean;
-		options?: { value: string; label: string }[];
+		options?: T[];
+		/** how a row looks, in the list and in the trigger; the label by default */
+		option?: OptionSnippet<T>;
+		/** how the trigger shows the chosen option, when it should differ from a row */
+		selection?: SelectionSnippet<T>;
 		placeholder?: string;
 		/** a search box, for lists too long to scroll */
 		searchable?: boolean;
@@ -22,6 +27,8 @@
 		description,
 		disabled = false,
 		options = [],
+		option,
+		selection,
 		placeholder,
 		searchable = false
 	}: Props = $props();
@@ -40,6 +47,8 @@
 			{id}
 			{disabled}
 			{options}
+			{option}
+			{selection}
 			{placeholder}
 			value={field.value() ?? ''}
 			aria-invalid={!!field.issues()?.length}
@@ -53,6 +62,8 @@
 			{id}
 			{disabled}
 			{options}
+			{option}
+			{selection}
 			{placeholder}
 			value={field.value() ?? ''}
 			aria-invalid={!!field.issues()?.length}
