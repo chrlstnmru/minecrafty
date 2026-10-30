@@ -23,7 +23,6 @@
 	import EulaCheckbox from './eula-checkbox.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import { LOADERS, type Loader } from '#lib/loader-list.js';
-	import { loaderColors } from '#lib/loader-colors.js';
 
 	let { onDone }: { onDone: () => void } = $props();
 
@@ -228,11 +227,10 @@
 							<dd>{s.mcVersion}</dd>
 							<dt class="text-muted-foreground">Loader</dt>
 							<dd>
-								<!-- the loader's own tint; text is mixed with the theme's so it reads on light and dark -->
 								<Badge
 									variant="muted"
-									class="gap-1 bg-[color-mix(in_oklab,var(--loader)_16%,transparent)] pl-1 text-[color-mix(in_oklab,var(--loader)_55%,var(--foreground))] capitalize"
-									style="--loader: {loaderColors[s.loader]}"
+									data-loader={s.loader}
+									class="gap-1 loader-badge pl-1 capitalize"
 								>
 									<InstanceIcon loader={s.loader} class="size-3.5 bg-transparent p-0" />
 									{s.loader}

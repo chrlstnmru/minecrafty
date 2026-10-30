@@ -12,6 +12,9 @@
  * highlight, amber warning). The main action is plain white, so tints never compete
  * with it.
  *
+ * Loader tokens (--loader-*) tint a loader's badge: darker in light mode so small text reads,
+ * the same hue as the icon in assets/loaders/ in dark mode.
+ *
  * State tokens (info, success, warning, danger) are what UI states use. Their light values
  * are darker than the tints so small text keeps 4.5:1 contrast; use them with opacity for
  * fills and borders (bg-warning/10 border-warning/40).
@@ -45,6 +48,13 @@
 	--success: #0b7f58;
 	--warning: #92600f;
 	--danger: var(--destructive);
+	--loader-vanilla: #3f8a1d;
+	--loader-paper: #2f6fd1;
+	--loader-purpur: #8b3fd6;
+	--loader-fabric: #8c5f3c;
+	--loader-quilt: #8a45b5;
+	--loader-forge: #5058c8;
+	--loader-neoforge: #c25a0f;
 	--chart-1: var(--tint-cyan);
 	--chart-2: var(--tint-violet);
 	--chart-3: var(--tint-mint);
@@ -90,6 +100,13 @@
 	--success: #6ee7b7;
 	--warning: #fbbf24;
 	--danger: var(--destructive);
+	--loader-vanilla: #79c14d;
+	--loader-paper: #6fa8ff;
+	--loader-purpur: #c084fc;
+	--loader-fabric: #dbb69b;
+	--loader-quilt: #c58be8;
+	--loader-forge: #959eef;
+	--loader-neoforge: #f99e5f;
 	--sidebar: #151518;
 	--sidebar-foreground: #ededf0;
 	--sidebar-primary: #f4f4f5;
@@ -112,6 +129,13 @@
 	--color-success: var(--success);
 	--color-warning: var(--warning);
 	--color-danger: var(--danger);
+	--color-loader-vanilla: var(--loader-vanilla);
+	--color-loader-paper: var(--loader-paper);
+	--color-loader-purpur: var(--loader-purpur);
+	--color-loader-fabric: var(--loader-fabric);
+	--color-loader-quilt: var(--loader-quilt);
+	--color-loader-forge: var(--loader-forge);
+	--color-loader-neoforge: var(--loader-neoforge);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -156,6 +180,45 @@
 @utility cn-rtl-flip {
 	&:where([dir='rtl'], [dir='rtl'] *) {
 		scale: -1 1;
+	}
+}
+
+/* a thin scrollbar that is visible against the card and popover surfaces */
+@utility scrollbar-subtle {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in oklab, var(--muted-foreground) 55%, transparent) transparent;
+}
+
+/* a badge tinted in its loader's color: put data-loader="fabric" on it. The attribute selector
+   outranks a variant's own background, which a plain utility class would lose to. */
+@utility loader-badge {
+	&[data-loader='vanilla'] {
+		background-color: color-mix(in oklab, var(--loader-vanilla) 16%, transparent);
+		color: var(--loader-vanilla);
+	}
+	&[data-loader='paper'] {
+		background-color: color-mix(in oklab, var(--loader-paper) 16%, transparent);
+		color: var(--loader-paper);
+	}
+	&[data-loader='purpur'] {
+		background-color: color-mix(in oklab, var(--loader-purpur) 16%, transparent);
+		color: var(--loader-purpur);
+	}
+	&[data-loader='fabric'] {
+		background-color: color-mix(in oklab, var(--loader-fabric) 16%, transparent);
+		color: var(--loader-fabric);
+	}
+	&[data-loader='quilt'] {
+		background-color: color-mix(in oklab, var(--loader-quilt) 16%, transparent);
+		color: var(--loader-quilt);
+	}
+	&[data-loader='forge'] {
+		background-color: color-mix(in oklab, var(--loader-forge) 16%, transparent);
+		color: var(--loader-forge);
+	}
+	&[data-loader='neoforge'] {
+		background-color: color-mix(in oklab, var(--loader-neoforge) 16%, transparent);
+		color: var(--loader-neoforge);
 	}
 }
 

@@ -89,7 +89,7 @@
 								label: 'Start',
 								tip: startHint,
 								icon: PlayerPlayFilledIcon,
-								tone: 'text-success',
+								tone: 'success',
 								disabled: installState !== 'ready',
 								run: () => run(startInstance)
 							})}
@@ -106,7 +106,7 @@
 							label: 'Stop',
 							tip: 'Stop the server and save the world',
 							icon: PlayerStopFilledIcon,
-							tone: 'text-warning',
+							tone: 'warning',
 							disabled: !active || status === 'stopping',
 							run: () => run(stopInstance)
 						})}
@@ -114,7 +114,7 @@
 							label: 'Kill',
 							tip: 'Kill the process now. Unsaved progress is lost',
 							icon: SkullIcon,
-							tone: 'text-danger',
+							tone: 'danger',
 							disabled: !active,
 							run: async () => void (confirmKill = true)
 						})}
@@ -150,7 +150,7 @@
 	label: string;
 	tip: string;
 	icon: typeof SkullIcon;
-	tone?: string;
+	tone?: 'success' | 'warning' | 'danger';
 	disabled?: boolean;
 	run: () => Promise<void>;
 })}
@@ -159,7 +159,13 @@
 			{#snippet child({ props })}
 				<Button
 					{...props}
-					class={a.tone}
+					class={a.tone === 'success'
+						? 'text-success'
+						: a.tone === 'warning'
+							? 'text-warning'
+							: a.tone === 'danger'
+								? 'text-danger'
+								: undefined}
 					variant="outline"
 					size="icon"
 					aria-label={a.label}

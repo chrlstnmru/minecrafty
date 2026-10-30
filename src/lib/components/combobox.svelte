@@ -190,12 +190,12 @@
 			id="{uid}-listbox"
 			role="listbox"
 			aria-label={ariaLabel ?? placeholder}
-			class="max-h-72 [scrollbar-width:thin] [scrollbar-color:color-mix(in_oklab,var(--muted-foreground)_55%,transparent)_transparent] overflow-y-auto p-1 outline-none"
+			class="max-h-72 scrollbar-subtle overflow-y-auto p-1 outline-none"
 		>
 			{#if !filtered.length}
 				<p class="py-6 text-center text-xs text-muted-foreground">{emptyText}</p>
 			{:else}
-				<div class="relative w-full" style="height: {$virtualizer.getTotalSize()}px">
+				<div class="relative h-(--total) w-full" style="--total: {$virtualizer.getTotalSize()}px">
 					{#each $virtualizer.getVirtualItems() as item (item.key)}
 						{@const row = filtered[item.index]}
 						{#if row}
@@ -211,11 +211,11 @@
 								data-selected={selected ? 'true' : undefined}
 								data-highlighted={item.index === highlighted ? 'true' : undefined}
 								class={cn(
-									'absolute top-0 left-0 flex w-full cursor-default items-center gap-2 rounded-md px-2.5 text-xs/relaxed select-none [&_svg]:pointer-events-none [&_svg]:shrink-0',
+									'absolute top-0 left-0 flex h-(--row) w-full translate-y-(--start) cursor-default items-center gap-2 rounded-md px-2.5 text-xs/relaxed select-none [&_svg]:pointer-events-none [&_svg]:shrink-0',
 									selected && 'bg-primary/10 font-medium',
 									item.index === highlighted && (selected ? 'bg-primary/15' : 'bg-muted')
 								)}
-								style="height: {rowHeight}px; transform: translateY({item.start}px)"
+								style="--row: {rowHeight}px; --start: {item.start}px"
 								onpointermove={(event) => hover(event, item.index)}
 								onclick={() => pick(row.value)}
 							>

@@ -305,7 +305,7 @@
 			{:else if !view?.current && !view?.error}
 				<div class="grid gap-2 px-3" role="status" aria-label="Loading the log">
 					{#each [60, 85, 40, 75, 55, 90, 45] as width, i (i)}
-						<Skeleton class="h-3" style="width: {width}%" />
+						<Skeleton class="h-3 w-(--w)" style="--w: {width}%" />
 					{/each}
 				</div>
 			{:else if view?.error}
@@ -329,19 +329,17 @@
 				{/if}
 			{/if}
 			<div
-				class="relative min-w-full"
-				style="height: {$virtualizer.getTotalSize()}px;{wrap
-					? ''
-					: ` width: calc(${widest}ch + 4.75rem)`}"
+				class="relative h-(--total) min-w-full {wrap ? '' : 'w-(--width)'}"
+				style="--total: {$virtualizer.getTotalSize()}px; --width: calc({widest}ch + 4.75rem)"
 			>
 				{#each $virtualizer.getVirtualItems() as item (item.key)}
 					{@const row = rows[item.index]}
 					{#if row}
 						<div
-							class="absolute top-0 left-0 flex w-full {wrap
+							class="absolute top-0 left-0 flex w-full translate-y-(--start) {wrap
 								? 'whitespace-pre-wrap'
 								: 'h-5 whitespace-pre'} {level(row.text)}"
-							style="transform: translateY({item.start}px)"
+							style="--start: {item.start}px"
 							data-index={item.index}
 							{@attach wrap ? measure : undefined}
 						>
