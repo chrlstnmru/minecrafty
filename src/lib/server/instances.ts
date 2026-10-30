@@ -2,7 +2,7 @@ import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
-import { backupsDir, instancesDir, javaOverride, runnerEntry } from './config';
+import { backupsDir, instancesDir, javaOverride, runnerCommand } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -243,7 +243,7 @@ export async function startInstance(id: number) {
 	writeFileSync(join(dir, 'launch.json'), JSON.stringify(spec, null, 2));
 
 	const logFile = Bun.file(join(dir, 'runner.log'));
-	const proc = Bun.spawn([process.execPath, runnerEntry, dir, String(id)], {
+	const proc = Bun.spawn(runnerCommand(dir, id), {
 		stdin: 'ignore',
 		stdout: logFile,
 		stderr: logFile,

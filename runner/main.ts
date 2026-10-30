@@ -7,7 +7,10 @@ import type { Socket } from 'bun';
 import type { ClientMessage, LaunchSpec, RunnerStatus, ServerMessage } from './protocol';
 import { socketPath } from './protocol';
 
-const [dir, id] = process.argv.slice(2);
+// the compiled binary is started as `minecrafty runner <dir> <id>`; a script as `main.ts <dir> <id>`
+const args = process.argv.slice(2);
+if (args[0] === 'runner') args.shift();
+const [dir, id] = args;
 if (!dir || !id) {
 	console.error('usage: runner <instanceDir> <instanceId>');
 	process.exit(2);
