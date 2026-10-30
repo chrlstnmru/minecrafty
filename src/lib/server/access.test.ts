@@ -51,7 +51,7 @@ describe('permissionsFor', () => {
 
 	it('gives what the role grants, plus what it implies, on that instance only', () => {
 		A.setAssignments(alice.id, one, [custom(['files', 'backups'])]);
-		expect(A.permissionsFor(alice, one)).toEqual(['view', 'files', 'backups']);
+		expect(A.permissionsFor(alice, one)).toEqual(['files', 'backups']);
 		expect(A.permissionsFor(alice, two)).toEqual([]);
 		expect(A.permissionsFor(bob, one)).toEqual([]);
 	});
@@ -69,14 +69,14 @@ describe('permissionsFor', () => {
 			custom(['backups', 'logs']),
 			custom(['mods'])
 		]);
-		expect(A.permissionsFor(alice, one)).toEqual(['view', 'logs', 'files', 'mods', 'backups']);
+		expect(A.permissionsFor(alice, one)).toEqual(['logs', 'files', 'mods', 'backups']);
 	});
 
 	it('keeps a per-server role to its server, next to a panel-wide one', () => {
 		A.setAssignments(alice.id, null, [roleOf('Viewer')]);
 		A.setAssignments(alice.id, two, [custom(['files'])]);
-		expect(A.permissionsFor(alice, one)).toEqual(['view', 'logs']);
-		expect(A.permissionsFor(alice, two)).toEqual(['view', 'logs', 'files']);
+		expect(A.permissionsFor(alice, one)).toEqual(['logs']);
+		expect(A.permissionsFor(alice, two)).toEqual(['logs', 'files']);
 	});
 
 	it('ignores a role that was deleted', () => {
@@ -96,7 +96,7 @@ describe('permissionsFor', () => {
 			.set({ rules: JSON.stringify({ allow: ['files', 'root', 'admin'] }) })
 			.where(eq(roles.id, id))
 			.run();
-		expect(A.permissionsFor(alice, one)).toEqual(['view', 'files']);
+		expect(A.permissionsFor(alice, one)).toEqual(['files']);
 	});
 });
 
@@ -122,8 +122,8 @@ describe('panel permissions', () => {
 
 	it('need an instance to ask about a per-server permission', () => {
 		A.setAssignments(alice.id, null, [roleOf('Viewer')]);
-		expect(A.can(alice, 'view')).toBe(false);
-		expect(A.can(alice, 'view', { instanceId: one })).toBe(true);
+		expect(A.can(alice, 'logs')).toBe(false);
+		expect(A.can(alice, 'logs', { instanceId: one })).toBe(true);
 	});
 });
 
@@ -132,16 +132,17 @@ describe('check', () => {
 		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
 		A.setAssignments(alice.id, two, [custom(['files'])]);
 		expect(A.check(alice, two, 'files')).toBe('ok');
-		expect(A.check(alice, two, 'view')).toBe('ok');
+		expect(A.canSee(alice, two)).toBe(true);
 		expect(A.check(alice, two, 'control')).toBe('denied');
 		expect(A.check(alice, one, 'logs')).toBe('ok');
 		expect(A.check(alice, one, 'files')).toBe('denied');
 	});
 
 	it('says "unknown" for a server the user has no access to, so its existence is not revealed', () => {
-		expect(A.check(alice, one, 'view')).toBe('unknown');
+		expect(A.canSee(alice, one)).toBe(false);
+		expect(A.check(alice, one, 'logs')).toBe('unknown');
 		expect(A.check(alice, two, 'files')).toBe('unknown');
-		expect(A.check(alice, 999_999, 'view')).toBe('unknown');
+		expect(A.check(alice, 999_999, 'logs')).toBe('unknown');
 	});
 
 	it('is always ok for an admin', () => {

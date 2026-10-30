@@ -63,8 +63,8 @@ describe('canGrantRolePermissions', () => {
 		const result = G.canGrantRolePermissions(boss, rules(['backups']), 10);
 		expect(result.ok).toBe(false);
 		expect(result.reason).toMatch(/do not hold/);
-		// implied permissions count: files brings view, which boss holds through files
-		expect(G.canGrantRolePermissions(boss, rules(['view']), 10).ok).toBe(true);
+		// implied permissions count: roles.assign brings users.read, which boss holds through users.write
+		expect(G.canGrantRolePermissions(boss, rules(['users.read']), 10).ok).toBe(true);
 	});
 
 	it("needs a rank below the giver's own, within 0 to 99", () => {

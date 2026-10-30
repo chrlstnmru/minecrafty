@@ -5,7 +5,7 @@ import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
 import { sessions, users } from './db/schema';
 import type { InstancePermission, PanelPermission } from '#lib/permissions.js';
-import { can, check } from './access';
+import { can, canSee, check } from './access';
 import { createAccount } from './user-admin';
 
 const COOKIE = 'session';
@@ -75,6 +75,13 @@ export function requirePermission(instanceId: number, needed: InstancePermission
 	const result = check(user, instanceId, needed);
 	if (result === 'unknown') error(404, 'Instance not found');
 	if (result === 'denied') error(403, 'You do not have permission to do that');
+	return user;
+}
+
+/** Any permission on the instance is enough to see it; one the user cannot see is 404. */
+export function requireInstance(instanceId: number) {
+	const user = requireUser();
+	if (!canSee(user, instanceId)) error(404, 'Instance not found');
 	return user;
 }
 

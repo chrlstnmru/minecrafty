@@ -101,8 +101,15 @@ export function visibleInstanceIds(user: Actor): number[] | null {
 		.from(instances)
 		.all()
 		.map((row) => row.id)
-		.filter((id) => resolve(entries, id).has('view'));
+		.filter((id) => seesAny(resolve(entries, id)));
 }
+
+/** Seeing a server means holding any permission on it. */
+const seesAny = (granted: ReadonlySet<Permission>) =>
+	INSTANCE_PERMISSIONS.some((p) => granted.has(p));
+
+/** Whether the user may see the instance at all. */
+export const canSee = (user: Actor, instanceId: number) => seesAny(grantedTo(user, instanceId));
 
 export type Check = 'ok' | 'unknown' | 'denied';
 
@@ -112,7 +119,7 @@ export type Check = 'ok' | 'unknown' | 'denied';
  */
 export function check(user: Actor, instanceId: number, needed: InstancePermission): Check {
 	const granted = grantedTo(user, instanceId);
-	if (!granted.has('view')) return 'unknown';
+	if (!seesAny(granted)) return 'unknown';
 	return granted.has(needed) ? 'ok' : 'denied';
 }
 

@@ -51,18 +51,16 @@ describe('the catalogue', () => {
 	});
 
 	it('follows implications all the way down', () => {
-		expect([...closure(['files'])].sort()).toEqual(['files', 'view']);
+		expect([...closure(['files'])].sort()).toEqual(['files']);
 		expect([...closure(['roles.assign'])].sort()).toEqual([
 			'roles.assign',
 			'roles.read',
 			'users.read'
 		]);
 		expect(closure([]).size).toBe(0);
-		expect(closure(['view']).size).toBe(1);
 	});
 
-	it('every instance permission brings view, and no panel one is an instance one', () => {
-		for (const p of INSTANCE_PERMISSIONS) expect(closure([p]).has('view')).toBe(true);
+	it('no panel permission is an instance one', () => {
 		for (const p of PANEL_PERMISSIONS) expect(isInstancePermission(p)).toBe(false);
 	});
 });
@@ -80,10 +78,9 @@ describe('what is defined', () => {
 		for (const slug of slugs) expect(MODULE_PERMISSION[slug], slug).toBeDefined();
 	});
 
-	it('every preset is a clean list that includes view, with a rank', () => {
+	it('every preset is a clean list, with a rank', () => {
 		for (const preset of ACCESS_PRESETS) {
 			expect(closure(preset.permissions).size).toBe(preset.permissions.length);
-			expect(preset.permissions).toContain('view');
 			expect(preset.rank).toBeGreaterThanOrEqual(0);
 			expect(preset.rank).toBeLessThanOrEqual(99);
 		}
@@ -93,16 +90,16 @@ describe('what is defined', () => {
 
 describe('hasPermission and firstAllowedModule', () => {
 	it('checks a list', () => {
-		expect(hasPermission(['view', 'files'], 'files')).toBe(true);
-		expect(hasPermission(['view'], 'files')).toBe(false);
+		expect(hasPermission(['logs', 'files'], 'files')).toBe(true);
+		expect(hasPermission(['logs'], 'files')).toBe(false);
 	});
 
 	it('picks the first tab a user may open', () => {
 		const order = slugs;
-		expect(firstAllowedModule(['view'], order)).toBeUndefined();
-		expect(firstAllowedModule(['view', 'logs'], order)).toBe('logs');
-		expect(firstAllowedModule(['view', 'console'], order)).toBe('console');
-		expect(firstAllowedModule(['view', 'logs', 'backups'], order)).toBe('logs');
+		expect(firstAllowedModule([], order)).toBeUndefined();
+		expect(firstAllowedModule(['logs'], order)).toBe('logs');
+		expect(firstAllowedModule(['console'], order)).toBe('console');
+		expect(firstAllowedModule(['logs', 'backups'], order)).toBe('logs');
 		expect(firstAllowedModule([], order)).toBeUndefined();
 	});
 });
@@ -117,7 +114,7 @@ describe('role rules', () => {
 	});
 
 	it('grants the picked permissions and what they imply, in catalogue order', () => {
-		expect(grantedBy({ allow: ['files', 'backups'] })).toEqual(['view', 'files', 'backups']);
+		expect(grantedBy({ allow: ['files', 'backups'] })).toEqual(['files', 'backups']);
 		expect(grantedBy({ allow: ['roles.write'] })).toEqual(['roles.read', 'roles.write']);
 		expect(grantedBy(emptyRules())).toEqual([]);
 	});

@@ -2,7 +2,7 @@ import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
 import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
-import { requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
+import { requireInstance, requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { userFacing } from '#lib/server/http.js';
@@ -32,7 +32,7 @@ export const listInstances = query.live(async function* () {
 });
 
 export const getInstance = query(id, async (instanceId) => {
-	const user = requirePermission(instanceId, 'view');
+	const user = requireInstance(instanceId);
 	const row = instances.getInstance(instanceId);
 	if (!row) error(404, 'Instance not found');
 	// the RCON password is for the panel's own use

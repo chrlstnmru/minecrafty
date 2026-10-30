@@ -10,86 +10,72 @@ import {
 
 export { MAX_RANK } from './rank-plan.js';
 
-/** Per server: one for each instance tab, plus view (the server itself) and control. */
+/** Per server: one for each instance tab, plus control. Holding any of them is what lets someone see the server. */
 const instance = definePermissions({
-	view: { label: 'View', description: 'See the server and its status', scope: 'instance' },
 	logs: {
 		label: 'Logs',
 		description: 'Read and download the log files',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	console: {
 		label: 'Console',
 		description: 'Read the console and run commands',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	players: {
 		label: 'Players',
 		description: 'See who is online; manage the whitelist, operators and bans',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	control: {
 		label: 'Start and stop',
 		description: 'Start, stop, restart and kill the server',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	files: {
 		label: 'Files',
 		description: 'Browse, edit, upload and download files',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	properties: {
 		label: 'Properties',
 		description: 'Edit server.properties',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	mods: {
 		label: 'Mods',
 		description: 'Install and update mods or plugins',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	modpack: {
 		label: 'Modpack',
 		description: 'Update the server to another modpack version',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	'resource-packs': {
 		label: 'Resource packs',
 		description: 'Install resource packs and set the server resource pack',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	backups: {
 		label: 'Backups',
 		description: 'Create, download, restore and delete backups',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	schedules: {
 		label: 'Schedules',
 		description: 'Create and change scheduled tasks',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	loader: {
 		label: 'Loader',
 		description: 'Update the loader build or the Minecraft version',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	},
 	settings: {
 		label: 'Settings',
 		description: 'Change name, memory, port, Java and JVM arguments',
-		scope: 'instance',
-		implies: ['view']
+		scope: 'instance'
 	}
 });
 
@@ -222,20 +208,19 @@ export const ACCESS_PRESETS: {
 		name: 'Viewer',
 		description: 'See the server and read its logs',
 		rank: 10,
-		permissions: ['view', 'logs']
+		permissions: ['logs']
 	},
 	{
 		name: 'Operator',
 		description: 'Run the server and use the console',
 		rank: 30,
-		permissions: ['view', 'logs', 'console', 'players', 'control']
+		permissions: ['logs', 'console', 'players', 'control']
 	},
 	{
 		name: 'Manager',
 		description: 'Everything except the loader and settings',
 		rank: 60,
 		permissions: [
-			'view',
 			'logs',
 			'console',
 			'players',
