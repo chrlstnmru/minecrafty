@@ -343,7 +343,13 @@ describe('user administration', () => {
 		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
 		A.setAssignments(alice.id, two, [roleOf('Viewer')]);
 		const list = U.listUsers();
-		expect(list.map((u) => [u.username, u.role, u.assignments])).toEqual([
+		// newest account first
+		expect(list.map((u) => u.username)).toEqual(['bob', 'alice', 'root']);
+		expect(
+			list
+				.map((u) => [u.username, u.role, u.assignments])
+				.sort((a, b) => String(a[0]).localeCompare(String(b[0])))
+		).toEqual([
 			['alice', 'user', 2],
 			['bob', 'user', 0],
 			['root', 'owner', 0]
