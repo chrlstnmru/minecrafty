@@ -202,7 +202,7 @@
 
 <svelte:head><title>{pack.current?.name ?? 'Modpack'} · Minecrafty</title></svelte:head>
 
-<div class="flex flex-col gap-4 p-4 lg:p-6">
+<div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
 	<div class="flex items-start gap-2">
 		<Button
 			variant="ghost"
@@ -246,262 +246,270 @@
 			</Tabs.List>
 		</Tabs.Root>
 
-		{#if tab === 'mods'}
-			<Card.Root>
-				<Card.Content class="px-0">
-					{#if pack.current.files.length}
-						<Table.Root>
-							<Table.Header>
-								<Table.Row>
-									<Table.Head class="ps-6">Mod</Table.Head>
-									<Table.Head>Version</Table.Head>
-									<Table.Head>Client</Table.Head>
-									<Table.Head>Server</Table.Head>
-									<Table.Head class="pe-6"><span class="sr-only">Actions</span></Table.Head>
-								</Table.Row>
-							</Table.Header>
-							<Table.Body>
-								{#each pack.current.files as file (file.id)}
+		<!-- the header and tabs stay put; the active tab scrolls inside this. The padding and matching
+		     negative margin leave room for a card's ring, which a scroll container would clip. -->
+		<div class="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1">
+			{#if tab === 'mods'}
+				<Card.Root>
+					<Card.Content class="px-0">
+						{#if pack.current.files.length}
+							<Table.Root>
+								<Table.Header>
 									<Table.Row>
-										<Table.Cell class="ps-6">
-											<div class="flex min-w-0 items-center gap-3">
-												{#if file.iconUrl}
-													<img
-														src={file.iconUrl}
-														alt=""
-														class="size-8 shrink-0 rounded-md bg-muted"
-													/>
-												{:else}
-													<div class="size-8 shrink-0 rounded-md bg-muted"></div>
-												{/if}
-												<div class="grid min-w-0">
-													<span class="truncate text-sm font-medium">{file.title}</span>
-													<span class="truncate text-xs text-muted-foreground">
-														{file.dependencyOf
-															? 'Needed by another mod'
-															: file.projectId
-																? file.path
-																: `${file.path} · not from Modrinth`}
-													</span>
-												</div>
-											</div>
-										</Table.Cell>
-										<Table.Cell>
-											{#if file.projectId && canWrite}
-												<Button
-													variant="ghost"
-													size="sm"
-													onclick={() => {
-														picker = {
-															projectId: file.projectId!,
-															title: file.title,
-															fileId: file.id,
-															versionId: file.versionId ?? ''
-														};
-														pickerOpen = true;
-													}}
-												>
-													{file.versionNumber}
-												</Button>
-											{:else}
-												<span class="text-sm text-muted-foreground"
-													>{file.versionNumber ?? '–'}</span
-												>
-											{/if}
-										</Table.Cell>
-										<Table.Cell class="text-muted-foreground"
-											>{sideLabel(file.clientSide)}</Table.Cell
-										>
-										<Table.Cell class="text-muted-foreground"
-											>{sideLabel(file.serverSide)}</Table.Cell
-										>
-										<Table.Cell class="pe-6 text-end">
-											{#if canWrite}
-												<Button
-													variant="ghost"
-													size="icon"
-													aria-label="Remove {file.title}"
-													onClickPromise={() => remove(file.id, file.title)}
-												>
-													<TrashIcon />
-												</Button>
-											{/if}
-										</Table.Cell>
+										<Table.Head class="ps-6">Mod</Table.Head>
+										<Table.Head>Version</Table.Head>
+										<Table.Head>Client</Table.Head>
+										<Table.Head>Server</Table.Head>
+										<Table.Head class="pe-6"><span class="sr-only">Actions</span></Table.Head>
 									</Table.Row>
-								{/each}
-							</Table.Body>
-						</Table.Root>
-					{:else}
-						<Empty.Root class="p-8">
-							<Empty.Header>
-								<Empty.Title>No mods yet</Empty.Title>
-								<Empty.Description>
-									{canWrite ? 'Search below and add the first one.' : 'This pack has no mods.'}
-								</Empty.Description>
-							</Empty.Header>
-						</Empty.Root>
-					{/if}
-				</Card.Content>
-			</Card.Root>
+								</Table.Header>
+								<Table.Body>
+									{#each pack.current.files as file (file.id)}
+										<Table.Row>
+											<Table.Cell class="ps-6">
+												<div class="flex min-w-0 items-center gap-3">
+													{#if file.iconUrl}
+														<img
+															src={file.iconUrl}
+															alt=""
+															class="size-8 shrink-0 rounded-md bg-muted"
+														/>
+													{:else}
+														<div class="size-8 shrink-0 rounded-md bg-muted"></div>
+													{/if}
+													<div class="grid min-w-0">
+														<span class="truncate text-sm font-medium">{file.title}</span>
+														<span class="truncate text-xs text-muted-foreground">
+															{file.dependencyOf
+																? 'Needed by another mod'
+																: file.projectId
+																	? file.path
+																	: `${file.path} · not from Modrinth`}
+														</span>
+													</div>
+												</div>
+											</Table.Cell>
+											<Table.Cell>
+												{#if file.projectId && canWrite}
+													<Button
+														variant="ghost"
+														size="sm"
+														onclick={() => {
+															picker = {
+																projectId: file.projectId!,
+																title: file.title,
+																fileId: file.id,
+																versionId: file.versionId ?? ''
+															};
+															pickerOpen = true;
+														}}
+													>
+														{file.versionNumber}
+													</Button>
+												{:else}
+													<span class="text-sm text-muted-foreground"
+														>{file.versionNumber ?? '–'}</span
+													>
+												{/if}
+											</Table.Cell>
+											<Table.Cell class="text-muted-foreground"
+												>{sideLabel(file.clientSide)}</Table.Cell
+											>
+											<Table.Cell class="text-muted-foreground"
+												>{sideLabel(file.serverSide)}</Table.Cell
+											>
+											<Table.Cell class="pe-6 text-end">
+												{#if canWrite}
+													<Button
+														variant="ghost"
+														size="icon"
+														aria-label="Remove {file.title}"
+														onClickPromise={() => remove(file.id, file.title)}
+													>
+														<TrashIcon />
+													</Button>
+												{/if}
+											</Table.Cell>
+										</Table.Row>
+									{/each}
+								</Table.Body>
+							</Table.Root>
+						{:else}
+							<Empty.Root class="p-8">
+								<Empty.Header>
+									<Empty.Title>No mods yet</Empty.Title>
+									<Empty.Description>
+										{canWrite ? 'Search below and add the first one.' : 'This pack has no mods.'}
+									</Empty.Description>
+								</Empty.Header>
+							</Empty.Root>
+						{/if}
+					</Card.Content>
+				</Card.Root>
 
-			{#if canWrite}
-				<PackBrowser
-					kind="pack"
-					instanceId={id}
-					noun="mod"
-					description="Mods for {pack.current.loader} on Minecraft {pack.current
-						.mcVersion}. Required dependencies come with them, each pinned to one version."
-					actionLabel="Add"
-					installedIds={inPack}
-					onInstall={add}
-				/>
-			{/if}
-		{:else if tab === 'configs'}
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Config files</Card.Title>
-					<Card.Description>
-						Copied into every server made from this pack, and into the .mrpack under overrides/.
-					</Card.Description>
-				</Card.Header>
-				<Card.Content class="grid gap-4">
-					{#each pack.current.overrides as file (file.path)}
-						<div class="flex items-center gap-3 border-b pb-2 last:border-b-0">
-							<span class="min-w-0 flex-1 truncate font-mono text-sm">{file.path}</span>
-							<span class="text-xs text-muted-foreground">{size(file.size)}</span>
-							{#if canWrite}
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label="Remove {file.path}"
-									onClickPromise={() => removeConfig(file.path)}
-								>
-									<TrashIcon />
-								</Button>
-							{/if}
-						</div>
-					{:else}
-						<p class="text-sm text-muted-foreground">No config files.</p>
-					{/each}
-					{#if canWrite}
-						<div class="flex flex-wrap items-end gap-3">
-							<Field.Field class="w-56">
-								<Field.Label for="config-folder">Folder in the server</Field.Label>
-								<Input
-									id="config-folder"
-									bind:value={folder}
-									class="font-mono"
-									autocomplete="off"
-								/>
-							</Field.Field>
-							<input
-								bind:this={fileInput}
-								type="file"
-								class="hidden"
-								onchange={(e) => uploadConfig(e.currentTarget.files?.[0])}
-							/>
-							<Button variant="outline" loading={uploading} onclick={() => fileInput?.click()}>
-								<UploadIcon />Add a file
-							</Button>
-						</div>
-					{/if}
-				</Card.Content>
-			</Card.Root>
-		{:else if tab === 'settings' && canWrite}
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Details</Card.Title>
-				</Card.Header>
-				<Card.Content class="grid max-w-xl gap-4">
-					<Field.Field>
-						<Field.Label for="pack-name">Name</Field.Label>
-						<Input id="pack-name" bind:value={name} maxlength={60} autocomplete="off" />
-					</Field.Field>
-					<Field.Field>
-						<Field.Label for="pack-description">Description</Field.Label>
-						<Input
-							id="pack-description"
-							bind:value={description}
-							maxlength={500}
-							autocomplete="off"
-						/>
-					</Field.Field>
-					<div><Button disabled={!dirty || !name.trim()} onclick={saveSettings}>Save</Button></div>
-				</Card.Content>
-			</Card.Root>
-
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Minecraft version</Card.Title>
-					<Card.Description>
-						Pick another version to see which mods carry over. It only changes once you apply it.
-					</Card.Description>
-				</Card.Header>
-				<Card.Content class="grid max-w-xl gap-4">
-					<Combobox
-						options={mcOptions}
-						bind:value={nextMc}
-						placeholder="Currently {pack.current.mcVersion}"
+				{#if canWrite}
+					<PackBrowser
+						kind="pack"
+						instanceId={id}
+						noun="mod"
+						description="Mods for {pack.current.loader} on Minecraft {pack.current
+							.mcVersion}. Required dependencies come with them, each pinned to one version."
+						actionLabel="Add"
+						installedIds={inPack}
+						onInstall={add}
 					/>
-					{#if change}
-						{#if change.loading && !change.current}
-							<p class="text-sm text-muted-foreground">Checking each mod…</p>
-						{:else if change.error}
-							<p class="text-sm text-destructive" role="alert">Could not check that version.</p>
-						{:else if change.current}
-							<div class="grid gap-2 text-sm">
-								<p>
-									{change.current.compatible.length} of {pack.current.files.length} mods have a version
-									for
-									{nextMc}.
-								</p>
-								{#if change.current.unchecked}
-									<p class="text-muted-foreground">
-										{change.current.unchecked} files are not from Modrinth and are left as they are.
-									</p>
-								{/if}
-								{#if change.current.incompatible.length}
-									<div class="grid gap-1 rounded-lg border border-warning/40 p-3">
-										<p class="font-medium">No version for {nextMc}:</p>
-										<ul class="list-inside list-disc text-muted-foreground">
-											{#each change.current.incompatible as mod (mod.id)}<li>{mod.title}</li>{/each}
-										</ul>
-									</div>
+				{/if}
+			{:else if tab === 'configs'}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Config files</Card.Title>
+						<Card.Description>
+							Copied into every server made from this pack, and into the .mrpack under overrides/.
+						</Card.Description>
+					</Card.Header>
+					<Card.Content class="grid gap-4">
+						{#each pack.current.overrides as file (file.path)}
+							<div class="flex items-center gap-3 border-b pb-2 last:border-b-0">
+								<span class="min-w-0 flex-1 truncate font-mono text-sm">{file.path}</span>
+								<span class="text-xs text-muted-foreground">{size(file.size)}</span>
+								{#if canWrite}
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label="Remove {file.path}"
+										onClickPromise={() => removeConfig(file.path)}
+									>
+										<TrashIcon />
+									</Button>
 								{/if}
 							</div>
-							<div class="flex flex-wrap gap-2">
-								{#if change.current.incompatible.length}
-									<Button
-										variant="destructive"
-										loading={applying}
-										onclick={() => applyChange(true)}
-									>
-										Remove those and change
-									</Button>
-								{:else}
-									<Button loading={applying} onclick={() => applyChange(false)}
-										>Change to {nextMc}</Button
-									>
-								{/if}
-								<Button variant="ghost" onclick={() => (nextMc = '')}>Cancel</Button>
+						{:else}
+							<p class="text-sm text-muted-foreground">No config files.</p>
+						{/each}
+						{#if canWrite}
+							<div class="flex flex-wrap items-end gap-3">
+								<Field.Field class="w-56">
+									<Field.Label for="config-folder">Folder in the server</Field.Label>
+									<Input
+										id="config-folder"
+										bind:value={folder}
+										class="font-mono"
+										autocomplete="off"
+									/>
+								</Field.Field>
+								<input
+									bind:this={fileInput}
+									type="file"
+									class="hidden"
+									onchange={(e) => uploadConfig(e.currentTarget.files?.[0])}
+								/>
+								<Button variant="outline" loading={uploading} onclick={() => fileInput?.click()}>
+									<UploadIcon />Add a file
+								</Button>
 							</div>
 						{/if}
-					{/if}
-				</Card.Content>
-			</Card.Root>
+					</Card.Content>
+				</Card.Root>
+			{:else if tab === 'settings' && canWrite}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Details</Card.Title>
+					</Card.Header>
+					<Card.Content class="grid max-w-xl gap-4">
+						<Field.Field>
+							<Field.Label for="pack-name">Name</Field.Label>
+							<Input id="pack-name" bind:value={name} maxlength={60} autocomplete="off" />
+						</Field.Field>
+						<Field.Field>
+							<Field.Label for="pack-description">Description</Field.Label>
+							<Input
+								id="pack-description"
+								bind:value={description}
+								maxlength={500}
+								autocomplete="off"
+							/>
+						</Field.Field>
+						<div>
+							<Button disabled={!dirty || !name.trim()} onclick={saveSettings}>Save</Button>
+						</div>
+					</Card.Content>
+				</Card.Root>
 
-			<Card.Root>
-				<Card.Header>
-					<Card.Title>Delete pack</Card.Title>
-					<Card.Description
-						>Removes the pack and its config files. Servers made from it are not touched.</Card.Description
-					>
-				</Card.Header>
-				<Card.Footer>
-					<Button variant="destructive" onclick={() => (deleting = true)}>Delete pack</Button>
-				</Card.Footer>
-			</Card.Root>
-		{/if}
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Minecraft version</Card.Title>
+						<Card.Description>
+							Pick another version to see which mods carry over. It only changes once you apply it.
+						</Card.Description>
+					</Card.Header>
+					<Card.Content class="grid max-w-xl gap-4">
+						<Combobox
+							options={mcOptions}
+							bind:value={nextMc}
+							placeholder="Currently {pack.current.mcVersion}"
+						/>
+						{#if change}
+							{#if change.loading && !change.current}
+								<p class="text-sm text-muted-foreground">Checking each mod…</p>
+							{:else if change.error}
+								<p class="text-sm text-destructive" role="alert">Could not check that version.</p>
+							{:else if change.current}
+								<div class="grid gap-2 text-sm">
+									<p>
+										{change.current.compatible.length} of {pack.current.files.length} mods have a version
+										for
+										{nextMc}.
+									</p>
+									{#if change.current.unchecked}
+										<p class="text-muted-foreground">
+											{change.current.unchecked} files are not from Modrinth and are left as they are.
+										</p>
+									{/if}
+									{#if change.current.incompatible.length}
+										<div class="grid gap-1 rounded-lg border border-warning/40 p-3">
+											<p class="font-medium">No version for {nextMc}:</p>
+											<ul class="list-inside list-disc text-muted-foreground">
+												{#each change.current.incompatible as mod (mod.id)}<li>
+														{mod.title}
+													</li>{/each}
+											</ul>
+										</div>
+									{/if}
+								</div>
+								<div class="flex flex-wrap gap-2">
+									{#if change.current.incompatible.length}
+										<Button
+											variant="destructive"
+											loading={applying}
+											onclick={() => applyChange(true)}
+										>
+											Remove those and change
+										</Button>
+									{:else}
+										<Button loading={applying} onclick={() => applyChange(false)}
+											>Change to {nextMc}</Button
+										>
+									{/if}
+									<Button variant="ghost" onclick={() => (nextMc = '')}>Cancel</Button>
+								</div>
+							{/if}
+						{/if}
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Delete pack</Card.Title>
+						<Card.Description
+							>Removes the pack and its config files. Servers made from it are not touched.</Card.Description
+						>
+					</Card.Header>
+					<Card.Footer>
+						<Button variant="destructive" onclick={() => (deleting = true)}>Delete pack</Button>
+					</Card.Footer>
+				</Card.Root>
+			{/if}
+		</div>
 	{/if}
 </div>
 
