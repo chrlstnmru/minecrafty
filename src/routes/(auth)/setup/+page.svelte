@@ -6,7 +6,7 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { setupSchema } from '#lib/schemas/auth.js';
 
-	const { username, _password, _confirm } = setup.fields;
+	const { _code, username, _password, _confirm } = setup.fields;
 </script>
 
 <svelte:head><title>Setup · Minecrafty</title></svelte:head>
@@ -20,6 +20,13 @@
 		<Form.Root schema={setupSchema} remoteFunction={setup}>
 			{#snippet children({ pending })}
 				<Field.Group>
+					<Form.Input
+						label="Setup code"
+						description="Printed in the panel's log when it starts, and saved as setup-token.txt in its data folder"
+						field={_code}
+						autocomplete="off"
+						spellcheck={false}
+					/>
 					<Form.Input label="Username" field={username} autocomplete="username" />
 					<Form.Input
 						label="Password"

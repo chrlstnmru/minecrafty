@@ -25,19 +25,32 @@ describe('login and setup', () => {
 	});
 
 	it('setup checks the username, password length and confirmation', () => {
-		expect(issues(setupSchema, { username: 'ab', _password: 'short', _confirm: 'other' })).toEqual([
+		expect(
+			issues(setupSchema, { username: 'ab', _password: 'short', _confirm: 'other', _code: ' ' })
+		).toEqual([
 			['username', 'Use 3-32 letters, numbers, . _ -'],
 			['_password', 'At least 8 characters'],
+			['_code', 'Enter the setup code'],
 			['_confirm', 'Passwords do not match'] // they really do differ too
 		]);
 	});
 
 	it('puts a mismatch on the confirmation field', () => {
 		expect(
-			issues(setupSchema, { username: 'admin', _password: 'password123', _confirm: 'password124' })
+			issues(setupSchema, {
+				username: 'admin',
+				_password: 'password123',
+				_confirm: 'password124',
+				_code: 'c'
+			})
 		).toEqual([['_confirm', 'Passwords do not match']]);
 		expect(
-			issues(setupSchema, { username: 'admin', _password: 'password123', _confirm: 'password123' })
+			issues(setupSchema, {
+				username: 'admin',
+				_password: 'password123',
+				_confirm: 'password123',
+				_code: 'c'
+			})
 		).toEqual([]);
 	});
 
@@ -45,7 +58,8 @@ describe('login and setup', () => {
 		const result = v.safeParse(setupSchema, {
 			username: '  admin  ',
 			_password: 'password123',
-			_confirm: 'password123'
+			_confirm: 'password123',
+			_code: 'c'
 		});
 		expect(result.success && result.output.username).toBe('admin');
 	});
