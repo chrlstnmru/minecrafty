@@ -38,6 +38,11 @@
 		);
 	});
 
+	// a denied View leaves nothing to see, so it counts as nothing granted
+	const canSave = $derived(
+		stance.view !== 'deny' && PERMISSIONS.some((p) => stance[p] === 'allow')
+	);
+
 	async function save() {
 		const pick = (s: Stance) => PERMISSIONS.filter((p): p is Permission => stance[p] === s);
 		const input = { name, description, rules: { allow: pick('allow'), deny: pick('deny') } };
@@ -101,16 +106,35 @@
 							onValueChange={(next) => next && (stance[permission] = next as Stance)}
 							aria-label={PERMISSION_INFO[permission].label}
 						>
-							<ToggleGroup.Item value="allow">Allow</ToggleGroup.Item>
-							<ToggleGroup.Item value="unset">Not set</ToggleGroup.Item>
-							<ToggleGroup.Item value="deny">Deny</ToggleGroup.Item>
+							<ToggleGroup.Item
+								value="allow"
+								class="data-[state=on]:bg-success/20 data-[state=on]:text-success"
+							>
+								Allow
+							</ToggleGroup.Item>
+							<ToggleGroup.Item value="unset" class="data-[state=on]:bg-foreground/15">
+								Not set
+							</ToggleGroup.Item>
+							<ToggleGroup.Item
+								value="deny"
+								class="data-[state=on]:bg-danger/20 data-[state=on]:text-danger"
+							>
+								Deny
+							</ToggleGroup.Item>
 						</ToggleGroup.Root>
 					</div>
 				{/each}
 			</section>
 		</div>
 		<Sheet.Footer class="border-t">
-			<Button loading={saving} onclick={save}>{role?.id ? 'Save role' : 'Create role'}</Button>
+			{#if !canSave}
+				<p class="text-xs text-muted-foreground">
+					Allow at least one permission, and do not deny View, to save the role.
+				</p>
+			{/if}
+			<Button loading={saving} disabled={!canSave} onclick={save}
+				>{role?.id ? 'Save role' : 'Create role'}</Button
+			>
 		</Sheet.Footer>
 	</Sheet.Content>
 </Sheet.Root>
