@@ -122,6 +122,31 @@ export const backups = sqliteTable(
 	(t) => [index('backups_instance').on(t.instanceId)]
 );
 
+// recurring tasks of an instance, run by the scheduler once a minute
+export const schedules = sqliteTable(
+	'schedules',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		instanceId: integer('instance_id')
+			.notNull()
+			.references(() => instances.id, { onDelete: 'cascade' }),
+		name: text('name').notNull(),
+		// five fields, in the host's local time (see src/lib/cron.ts)
+		cron: text('cron').notNull(),
+		action: text('action', { enum: ['start', 'stop', 'restart', 'backup', 'command'] }).notNull(),
+		// the console command to send, for the `command` action
+		command: text('command'),
+		// minutes of in-game warning before a stop or restart; 0 for none
+		warnMinutes: integer('warn_minutes').notNull().default(0),
+		enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+		lastRunAt: integer('last_run_at', { mode: 'timestamp' }),
+		lastStatus: text('last_status', { enum: ['ok', 'failed', 'skipped'] }),
+		lastMessage: text('last_message'),
+		createdAt: createdAt()
+	},
+	(t) => [index('schedules_instance').on(t.instanceId)]
+);
+
 // panel-wide key/value settings (public URL, later the CurseForge API key)
 export const settings = sqliteTable('settings', {
 	key: text('key').primaryKey(),

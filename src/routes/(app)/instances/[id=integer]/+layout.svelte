@@ -131,7 +131,6 @@
 				size="sm"
 				href="/instances/{id}/{m.slug}"
 				aria-current={slug === m.slug ? 'page' : undefined}
-				class={m.planned ? 'text-muted-foreground' : ''}
 			>
 				<m.icon />{labelOf(m)}
 			</Button>

@@ -10,19 +10,16 @@ import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import TerminalIcon from '@tabler/icons-svelte/icons/terminal-2';
 import UsersGroupIcon from '@tabler/icons-svelte/icons/users-group';
-import { plannedSlugs } from './instance-slugs.js';
 import type { Icon } from '@tabler/icons-svelte';
 
 export type InstanceModule = {
 	slug: string;
 	title: string;
 	icon: Icon;
-	/** milestone (see docs/SPEC.md) that delivers the module; undefined once it exists */
-	planned?: 3 | 4;
 	description: string;
 };
 
-// order is the tab order; modules without `planned` have their own route under [id=integer]/
+// order is the tab order; every module has its own route under [id=integer]/
 export const instanceModules: InstanceModule[] = [
 	{
 		slug: 'console',
@@ -79,7 +76,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'schedules',
 		title: 'Schedules',
 		icon: CalendarTimeIcon,
-		planned: 4,
 		description: 'Cron tasks: start, stop, restart, backup or send a command.'
 	},
 	{
@@ -101,10 +97,3 @@ export const instanceModules: InstanceModule[] = [
 		description: 'Name, memory, JVM arguments, port and auto-start.'
 	}
 ];
-
-// keep the matcher's list and the tab list in step
-if (import.meta.env.DEV) {
-	const planned = instanceModules.filter((m) => m.planned).map((m) => m.slug);
-	if (planned.join() !== plannedSlugs.join())
-		console.warn('instance-slugs.ts is out of date with instance-modules.ts');
-}

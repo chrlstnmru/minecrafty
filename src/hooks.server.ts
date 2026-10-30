@@ -3,6 +3,7 @@ import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
+import { startScheduler } from '#lib/server/schedules.js';
 import { sweepUploads } from '#lib/server/uploads.js';
 
 const PUBLIC = ['/login', '/setup'];
@@ -52,6 +53,8 @@ export const init: ServerInit = () => {
 	if (building) return;
 	failInterruptedInstalls();
 	sweepUploads();
+	// scheduled tasks run from here on, once a minute
+	startScheduler();
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
 };

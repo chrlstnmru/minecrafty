@@ -83,7 +83,7 @@ Servers must keep running when the panel restarts or updates.
 
 ### Instance page
 
-Each instance has a dedicated page, `/instances/[id]`, with a shared header (name, loader and version, port, status, start/stop/kill) and a tab bar. Every module is its own nested route (`/instances/[id]/console`, `/files`, ...) so it can be linked to and loaded on its own. Modules not yet built show a "planned" placeholder.
+Each instance has a dedicated page, `/instances/[id]`, with a shared header (name, loader and version, port, status, start/stop/kill) and a tab bar. Every module is its own nested route (`/instances/[id]/console`, `/files`, ...) so it can be linked to and loaded on its own.
 
 | Module         | Purpose                                                                      | Milestone |
 | -------------- | ---------------------------------------------------------------------------- | --------- |
@@ -95,7 +95,7 @@ Each instance has a dedicated page, `/instances/[id]`, with a shared header (nam
 | Logs           | Browse `logs/latest.log` and rotated `.gz` files with search and download    | 4         |
 | Properties     | `server.properties` editor with form fields for common keys                  | 4         |
 | Players        | Online players, whitelist, ops, bans, kick (RCON)                            | 4         |
-| Backups        | Manual backups (scheduled ones come with Schedules), retention, restore      | 4         |
+| Backups        | Manual and scheduled backups, retention, restore                             | 4         |
 | Schedules      | Cron tasks for this instance                                                 | 4         |
 | Loader         | Update the loader build or Minecraft version, with a backup first            | 4         |
 
@@ -180,7 +180,7 @@ Build your own modpack on the panel and create instances from it.
 - Restore needs the server stopped. It first backs up what is there ("Before restore"), unpacks the archive next to the server with every path checked and every file's size and CRC verified, and swaps it in only when that succeeded, so a damaged archive leaves the server untouched. Excluded paths (logs) are carried over from the old folder. Mods tracked in the panel may no longer match the restored files.
 - Download goes through `/instances/[id]/backups/download?backup=<id>`.
 - Limits: the zip writer has no Zip64, so a backup is limited to 4 GiB and 65,535 files, and a larger server fails with a clear message. Zip64 is the follow-up if that bites.
-- Scheduled backups arrive with scheduled tasks.
+- Scheduled backups come from scheduled tasks and are pruned by the same retention.
 
 ### Loader update
 
@@ -200,9 +200,11 @@ Build your own modpack on the panel and create instances from it.
 
 ### Scheduled tasks
 
-- Cron expressions per instance.
-- Actions: start, stop, restart, backup, send console command.
-- Optional in-game warning before restart/stop.
+- A task belongs to an instance and has a name, a cron expression, an action and an on/off switch. Actions: start, stop, restart, back up, or send a console command. Presets cover the common times (every day at 04:00, every Monday, every 6 hours, ...), and the field takes any five-field cron expression: lists, ranges, steps (`*/15`, `10-20/5`), month and weekday names, `7` as Sunday, and the `@hourly`/`@daily`/`@weekly`/`@monthly`/`@yearly` shortcuts. As in cron, when both day-of-month and day-of-week are given, either one matching is enough. The form shows the next few run times as it is typed, and a mistake says what is wrong.
+- A clock in the panel wakes once a minute, just after the minute turns, and runs every switched-on task whose expression names that minute. A minute is handled once, so a late timer cannot run a task twice, and a task still running (a restart waiting for the server to stop) is never started again. Times are the clock of the machine the panel runs on. A task whose time passes while the panel is down is skipped, not made up.
+- What each action does: start leaves a running server alone; stop asks for the usual graceful stop (the world is saved) and skips a stopped server; restart stops, waits up to three minutes for the server to be gone, then starts it (and gives up without starting a second copy if it never stops); back up makes a "scheduled" backup named after the task, with the save-off handling and retention of any backup; a command is typed into the console of a running server and skipped when it is stopped. A task that cannot run is recorded as skipped or failed with the reason, never as a crash.
+- A stop or restart can warn players first: with a warning of N minutes the server says "The server is restarting in N minutes" (or "stopping") N minutes before, and again a minute before. The warning goes through the console (`say`), so it needs no RCON, and is not sent to a server that is not running.
+- The list shows each task's next run and how the last one went; a task can be run now, edited, switched off or deleted from there. Planned: a dashboard card for tasks due soon.
 
 ### Live stats
 
@@ -264,7 +266,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), loader update (done), player management (done), scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
