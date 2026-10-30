@@ -1,5 +1,4 @@
 import * as v from 'valibot';
-import { isIP } from 'node:net';
 import { idSchema } from './common.js';
 
 /** A Java name (3 to 16 letters, digits and underscores), or a Bedrock one behind the "." prefix Floodgate adds. */
@@ -21,10 +20,21 @@ const reason = v.optional(
 	)
 );
 
-const ip = v.pipe(
-	v.string(),
-	v.check((value) => isIP(value) !== 0, 'Not a valid IP address')
-);
+/** An IPv4 or IPv6 address. Not `node:net`, so the page can run the same check as the server. */
+export function isIpAddress(value: string) {
+	const four = value.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+	if (four)
+		return four.slice(1).every((part) => Number(part) <= 255 && String(Number(part)) === part);
+	// the URL parser knows every shape of IPv6; the character check keeps out zone ids and brackets
+	if (!value.includes(':') || !/^[0-9a-fA-F:.]+$/.test(value)) return false;
+	try {
+		return new URL(`http://[${value}]/`).hostname.length > 0;
+	} catch {
+		return false;
+	}
+}
+
+const ip = v.pipe(v.string(), v.check(isIpAddress, 'Not a valid IP address'));
 
 export const playerActionSchema = v.object({
 	id: idSchema,
