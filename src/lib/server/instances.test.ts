@@ -128,3 +128,35 @@ describe('the instance list', () => {
 		expect(listed?.progress).toBeNull();
 	});
 });
+
+describe('RCON', () => {
+	it('gets a port and a password the first time, and keeps them', () => {
+		const id = makeInstance().id;
+		const first = I.ensureRcon(id);
+		expect(first.port).toBeGreaterThanOrEqual(25575);
+		expect(first.password).toMatch(/^[0-9a-f]{32}$/);
+		expect(I.ensureRcon(id)).toEqual(first);
+	});
+
+	it('gives every instance its own port, never one that is a game port', () => {
+		const a = makeInstance({ port: 25575 }).id;
+		const b = makeInstance().id;
+		const ports = [I.ensureRcon(a).port, I.ensureRcon(b).port];
+		expect(new Set(ports).size).toBe(2);
+		expect(ports).not.toContain(25575);
+	});
+
+	it('gives each instance a different password', () => {
+		const a = I.ensureRcon(makeInstance().id).password;
+		const b = I.ensureRcon(makeInstance().id).password;
+		expect(a).not.toBe(b);
+	});
+
+	it('is kept out of the instance list', async () => {
+		const id = makeInstance().id;
+		I.ensureRcon(id);
+		const row = (await I.listInstances()).find((i) => i.id === id)!;
+		expect(row).not.toHaveProperty('rconPassword');
+		expect(JSON.stringify(row)).not.toContain(I.ensureRcon(id).password);
+	});
+});

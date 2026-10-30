@@ -15,9 +15,34 @@ export type Instance = typeof instances.$inferSelect;
 export type InstanceState = 'stopped' | RunnerStatus['state'];
 
 export const PORT_START = 25565;
+const RCON_PORT_START = 25575;
 
 export const instanceDir = (id: number) => join(instancesDir, String(id));
 export const serverDir = (id: number) => join(instanceDir(id), 'server');
+
+/** RCON gets its own port and a password the first time it is needed; both stay the same after. */
+export function ensureRcon(id: number) {
+	const inst = getInstance(id);
+	if (!inst) throw new Error('Instance not found');
+	if (inst.rconPort && inst.rconPassword)
+		return { port: inst.rconPort, password: inst.rconPassword };
+
+	const taken = new Set(
+		db
+			.select({ port: instances.port, rcon: instances.rconPort })
+			.from(instances)
+			.all()
+			.flatMap((r) => [r.port, r.rcon])
+	);
+	let port = RCON_PORT_START;
+	while (taken.has(port)) port++;
+	const password = crypto.randomUUID().replaceAll('-', '');
+	db.update(instances)
+		.set({ rconPort: port, rconPassword: password })
+		.where(eq(instances.id, id))
+		.run();
+	return { port, password };
+}
 
 export function nextFreePort() {
 	const used = new Set(
@@ -104,7 +129,7 @@ export function getInstance(id: number) {
 export async function listInstances() {
 	const rows = db.select().from(instances).all();
 	return Promise.all(
-		rows.map(async (row) => {
+		rows.map(async ({ rconPassword: _secret, ...row }) => {
 			const s = await runner.status(instanceDir(row.id), row.id);
 			return {
 				...row,
@@ -143,7 +168,14 @@ export async function startInstance(id: number) {
 	if (!inst.eulaAccepted) throw new Error('The Minecraft EULA has not been accepted');
 
 	writeFileSync(join(server, 'eula.txt'), 'eula=true\n');
-	setProperties(join(server, 'server.properties'), { 'server-port': inst.port });
+	// RCON is how the panel lists players and runs commands; it is switched on for every start
+	const rcon = ensureRcon(id);
+	setProperties(join(server, 'server.properties'), {
+		'server-port': inst.port,
+		'enable-rcon': true,
+		'rcon.port': rcon.port,
+		'rcon.password': rcon.password
+	});
 
 	const spec: LaunchSpec = {
 		command: javaOverride ?? (await ensureJava(await javaFor(inst))),

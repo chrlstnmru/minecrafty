@@ -31,7 +31,9 @@ export const getInstance = query(id, async (instanceId) => {
 	requireAdmin();
 	const row = instances.getInstance(instanceId);
 	if (!row) error(404, 'Instance not found');
-	return row;
+	// the RCON password is for the panel's own use
+	const { rconPassword: _secret, ...visible } = row;
+	return visible;
 });
 
 const loader = v.picklist(LOADERS);

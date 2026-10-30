@@ -53,6 +53,10 @@ export const instances = sqliteTable('instances', {
 	packVersionNumber: text('pack_version_number'),
 	packName: text('pack_name'),
 	packIconUrl: text('pack_icon_url'),
+	// RCON, which the panel enables on every start to run commands and read the player list; the
+	// password is generated once and never leaves the server side
+	rconPort: integer('rcon_port'),
+	rconPassword: text('rcon_password'),
 	// how many backups to keep, oldest removed first; null keeps them all
 	backupKeep: integer('backup_keep').default(5),
 	// paths left out of a backup, one per line, relative to the server folder
