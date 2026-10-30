@@ -204,7 +204,7 @@
 	</div>
 </div>
 
-<NewInstanceSheet bind:open={createOpen} />
+<NewInstanceSheet bind:open={createOpen} canUsePacks={data.panel.includes('modpacks.read')} />
 
 <AlertDialog.Root bind:open={deleteOpen}>
 	<AlertDialog.Content>

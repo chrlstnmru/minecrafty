@@ -3,10 +3,18 @@
 	import { importModpack } from '#lib/modpacks.remote.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import LocalPackForm from './local-pack-form.svelte';
 	import ModpackForm from './modpack-form.svelte';
 	import ScratchForm from './scratch-form.svelte';
 
-	let { open = $bindable(false) }: { open?: boolean } = $props();
+	let {
+		open = $bindable(false),
+		canUsePacks = false
+	}: {
+		open?: boolean;
+		/** the user may see the Modpack builder's packs, so "From local" is offered */
+		canUsePacks?: boolean;
+	} = $props();
 
 	// The sheet itself never scrolls: header and tabs stay put and each tab scrolls its own content.
 	let tab = $state('scratch');
@@ -44,6 +52,7 @@
 			<Tabs.List class="w-full">
 				<Tabs.Trigger value="scratch">From scratch</Tabs.Trigger>
 				<Tabs.Trigger value="modpack">From modpack</Tabs.Trigger>
+				{#if canUsePacks}<Tabs.Trigger value="local">From local</Tabs.Trigger>{/if}
 			</Tabs.List>
 			<Tabs.Content
 				value="scratch"
@@ -57,6 +66,14 @@
 			>
 				<ModpackForm onDone={() => (open = false)} />
 			</Tabs.Content>
+			{#if canUsePacks}
+				<Tabs.Content
+					value="local"
+					class="flex min-h-0 flex-1 flex-col pt-4 data-[state=inactive]:hidden"
+				>
+					<LocalPackForm onDone={() => (open = false)} />
+				</Tabs.Content>
+			{/if}
 		</Tabs.Root>
 	</Sheet.Content>
 </Sheet.Root>
