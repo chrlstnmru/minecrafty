@@ -35,8 +35,7 @@
 	const summary = (instanceId: number) => {
 		const role = roles.current?.find((r) => r.id === roleOn(instanceId));
 		if (!role) return 'Cannot see this server.';
-		const locks = role.rules.lockedProperties.length + role.rules.lockedSettings.length;
-		return `${grantedBy(role.rules).length} permissions${locks ? `, ${locks} locked` : ''}`;
+		return `${grantedBy(role.rules).length} permissions`;
 	};
 </script>
 

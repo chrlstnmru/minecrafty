@@ -1,7 +1,7 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
-import { permissionsFor, restrictionsFor, visibleInstanceIds } from '#lib/server/access.js';
+import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
 import { requireAdmin, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
@@ -39,8 +39,7 @@ export const getInstance = query(id, async (instanceId) => {
 	const { rconPassword: _secret, ...visible } = row;
 	return {
 		...visible,
-		permissions: permissionsFor(user, instanceId),
-		locked: restrictionsFor(user, instanceId)
+		permissions: permissionsFor(user, instanceId)
 	};
 });
 
@@ -80,22 +79,10 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 export const updateInstance = form(
 	updateInstanceSchema,
 	async ({ id: instanceId, ...settings }, issue) => {
-		const user = requirePermission(instanceId, 'settings');
-		const current = instances.getInstance(instanceId);
-		if (!current) error(404, 'Instance not found');
-		// a locked field keeps its stored value whatever was sent; the form shows it read-only
-		const lockedNow = new Set(restrictionsFor(user, instanceId).settings);
-		const kept = {
-			...settings,
-			...(lockedNow.has('name') && { name: current.name }),
-			...(lockedNow.has('port') && { port: current.port }),
-			...(lockedNow.has('ram') && { ramMinMb: current.ramMinMb, ramMaxMb: current.ramMaxMb }),
-			...(lockedNow.has('java') && { javaMajor: current.javaMajor }),
-			...(lockedNow.has('jvmArgs') && { jvmArgs: current.jvmArgs }),
-			...(lockedNow.has('autoStart') && { autoStart: current.autoStart })
-		};
+		requirePermission(instanceId, 'settings');
+		if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
 		try {
-			instances.updateSettings(instanceId, { ...kept, jvmArgs: kept.jvmArgs.trim() });
+			instances.updateSettings(instanceId, { ...settings, jvmArgs: settings.jvmArgs.trim() });
 		} catch (e) {
 			if (String(e).includes('UNIQUE'))
 				invalid(issue.port('Port is already used by another instance'));

@@ -4,8 +4,8 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
 import { sessions, users } from './db/schema';
-import type { Permission, SettingField } from '#lib/permissions.js';
-import { check, restrictionsFor } from './access';
+import type { Permission } from '#lib/permissions.js';
+import { check } from './access';
 import { createAccount } from './user-admin';
 
 const COOKIE = 'session';
@@ -75,14 +75,6 @@ export function requirePermission(instanceId: number, needed: Permission) {
 	const result = check(user, instanceId, needed);
 	if (result === 'unknown') error(404, 'Instance not found');
 	if (result === 'denied') error(403, 'You do not have permission to do that');
-	return user;
-}
-
-/** Refuses a change to a setting the user's role locks. */
-export function requireUnlocked(instanceId: number, field: SettingField) {
-	const user = requireUser();
-	if (restrictionsFor(user, instanceId).settings.includes(field))
-		error(403, 'Your role cannot change this');
 	return user;
 }
 

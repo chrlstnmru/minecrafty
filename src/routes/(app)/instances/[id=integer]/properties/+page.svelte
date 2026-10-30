@@ -27,7 +27,6 @@
 	const properties = $derived(serverProperties(id));
 
 	const defaults = Object.fromEntries([...propertyFields.values()].map((f) => [f.key, f.default]));
-	const locked = $derived(new Set(properties.current?.locked ?? []));
 	const saved = $derived({ ...defaults, ...properties.current?.values });
 	const others = $derived(
 		Object.keys(properties.current?.values ?? {})
@@ -136,7 +135,6 @@
 								<Input
 									id="prop-{key}"
 									class="font-mono"
-									readonly={locked.has(key)}
 									value={draft[key]}
 									oninput={(e) => set(key, e.currentTarget.value)}
 									autocomplete="off"
@@ -157,15 +155,12 @@
 		<Field.Field orientation="horizontal">
 			<Checkbox
 				{id}
-				disabled={locked.has(field.key)}
 				checked={draft[field.key] === 'true'}
 				onCheckedChange={(on) => set(field.key, String(!!on))}
 			/>
 			<Field.Content>
 				<Field.Label for={id} class="font-normal">{field.label}</Field.Label>
-				{#if locked.has(field.key)}
-					<Field.Description>Locked by your role.</Field.Description>
-				{:else if field.description}<Field.Description>{field.description}</Field.Description>{/if}
+				{#if field.description}<Field.Description>{field.description}</Field.Description>{/if}
 			</Field.Content>
 		</Field.Field>
 	{:else}
@@ -174,7 +169,6 @@
 			{#if field.type === 'select'}
 				<SelectMenu
 					{id}
-					disabled={locked.has(field.key)}
 					value={draft[field.key]}
 					options={optionsOf(field)}
 					onValueChange={(next) => set(field.key, next)}
@@ -183,7 +177,6 @@
 				<Input
 					{id}
 					type={field.type === 'number' ? 'number' : 'text'}
-					readonly={locked.has(field.key)}
 					min={field.type === 'number' ? field.min : undefined}
 					max={field.type === 'number' ? field.max : undefined}
 					value={draft[field.key]}
@@ -192,9 +185,7 @@
 					aria-invalid={!!errors[field.key]}
 				/>
 			{/if}
-			{#if locked.has(field.key)}
-				<Field.Description>Locked by your role.</Field.Description>
-			{:else if field.description}<Field.Description>{field.description}</Field.Description>{/if}
+			{#if field.description}<Field.Description>{field.description}</Field.Description>{/if}
 			{#if errors[field.key]}<Field.Error errors={[{ message: errors[field.key] }]} />{/if}
 		</Field.Field>
 	{/if}

@@ -93,25 +93,12 @@ describe('role rules', () => {
 		expect(parseRules('{oops')).toEqual(emptyRules());
 		expect(parseRules('"files"')).toEqual(emptyRules());
 		expect(
-			parseRules(
-				JSON.stringify({
-					allow: ['files', 'root'],
-					deny: ['mods', 7],
-					lockedProperties: ['difficulty', 'bad key!', 'difficulty'],
-					lockedSettings: ['jvmArgs', 'nope']
-				})
-			)
-		).toEqual({
-			allow: ['files'],
-			deny: ['mods'],
-			lockedProperties: ['difficulty'],
-			lockedSettings: ['jvmArgs']
-		});
+			parseRules(JSON.stringify({ allow: ['files', 'root', 'logs'], deny: ['mods', 7], extra: 1 }))
+		).toEqual({ allow: ['logs', 'files'], deny: ['mods'] });
 	});
 
 	it('grants the allowed permissions minus the denied ones, with view', () => {
 		const rules = {
-			...emptyRules(),
 			allow: ['files', 'backups'] as Permission[],
 			deny: ['backups'] as Permission[]
 		};

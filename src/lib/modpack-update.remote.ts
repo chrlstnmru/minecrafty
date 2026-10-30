@@ -14,7 +14,7 @@ const versionId = v.pipe(v.string(), v.minLength(1), v.maxLength(64));
 
 /** The pack the instance came from, every version of it, and how the last update ended. */
 export const modpackStatus = query(idSchema, async (instanceId) => {
-	requirePermission(instanceId, 'mods');
+	requirePermission(instanceId, 'modpack');
 	return { ...(await userFacing(() => modpackInfo(instanceId))), outcome: lastOutcome(instanceId) };
 });
 
@@ -22,7 +22,7 @@ export const modpackStatus = query(idSchema, async (instanceId) => {
 export const modpackUpdatePreview = query(
 	v.object({ id: idSchema, versionId, replaceConfigs: v.boolean() }),
 	async ({ id, versionId, replaceConfigs }) => {
-		requirePermission(id, 'mods');
+		requirePermission(id, 'modpack');
 		return userFacing(() => previewModpackUpdate(id, versionId, { replaceConfigs }));
 	}
 );
@@ -31,7 +31,7 @@ export const modpackUpdatePreview = query(
 export const updateModpack = command(
 	v.object({ id: idSchema, versionId, backup: v.boolean(), replaceConfigs: v.boolean() }),
 	async ({ id, versionId, backup, replaceConfigs }) => {
-		requirePermission(id, 'mods');
+		requirePermission(id, 'modpack');
 		const { finished, plan } = await userFacing(() =>
 			startModpackUpdate(id, { versionId, backup, replaceConfigs })
 		);

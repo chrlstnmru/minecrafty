@@ -68,15 +68,6 @@ describe('saveServerProperties', () => {
 		);
 	});
 
-	it('refuses a changed value for a locked key, but lets an unchanged one through', () => {
-		writeFileSync(file, 'difficulty=hard\nmotd=Old\n');
-		expect(() => saveServerProperties(id, { difficulty: 'easy' }, ['difficulty'])).toThrow(
-			'difficulty is locked'
-		);
-		saveServerProperties(id, { difficulty: 'hard', motd: 'New' }, ['difficulty']);
-		expect(readFileSync(file, 'utf8')).toBe('difficulty=hard\nmotd=New\n');
-	});
-
 	it('does not touch the file when nothing differs from the defaults', () => {
 		saveServerProperties(id, { pvp: 'true', 'max-players': '20' });
 		expect(() => readFileSync(file)).toThrow();

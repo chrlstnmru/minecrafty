@@ -1,6 +1,5 @@
 <script lang="ts">
 	import CopyIcon from '@tabler/icons-svelte/icons/copy';
-	import LockIcon from '@tabler/icons-svelte/icons/lock';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
@@ -64,14 +63,12 @@
 			<Table.Row>
 				<Table.Head>Role</Table.Head>
 				<Table.Head>Allows</Table.Head>
-				<Table.Head>Locks</Table.Head>
 				<Table.Head>In use</Table.Head>
 				<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
 			</Table.Row>
 		</Table.Header>
 		<Table.Body>
 			{#each roles.current ?? [] as role (role.id)}
-				{@const locks = role.rules.lockedProperties.length + role.rules.lockedSettings.length}
 				<Table.Row>
 					<Table.Cell>
 						<div class="flex items-center gap-2 font-medium">
@@ -84,9 +81,6 @@
 					</Table.Cell>
 					<Table.Cell class="text-muted-foreground">
 						{grantedBy(role.rules).length} permissions
-					</Table.Cell>
-					<Table.Cell class="text-muted-foreground">
-						{#if locks}<LockIcon class="me-1 inline size-3.5" />{locks}{:else}–{/if}
 					</Table.Cell>
 					<Table.Cell class="text-muted-foreground">{role.used}</Table.Cell>
 					<Table.Cell>

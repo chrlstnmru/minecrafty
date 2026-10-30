@@ -1,5 +1,5 @@
 import * as v from 'valibot';
-import { PERMISSIONS, SETTING_FIELDS } from '#lib/permissions.js';
+import { PERMISSIONS } from '#lib/permissions.js';
 import { idSchema } from './common.js';
 
 export const roleInputSchema = v.object({
@@ -7,9 +7,7 @@ export const roleInputSchema = v.object({
 	description: v.pipe(v.string(), v.maxLength(200)),
 	rules: v.object({
 		allow: v.array(v.picklist(PERMISSIONS)),
-		deny: v.array(v.picklist(PERMISSIONS)),
-		lockedProperties: v.array(v.pipe(v.string(), v.regex(/^[A-Za-z0-9._-]{1,100}$/))),
-		lockedSettings: v.array(v.picklist(SETTING_FIELDS))
+		deny: v.array(v.picklist(PERMISSIONS))
 	})
 });
 

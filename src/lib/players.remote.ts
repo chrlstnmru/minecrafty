@@ -8,19 +8,19 @@ import * as players from '#lib/server/players.js';
 
 /** The whitelist, operators and bans, read from the server's own files. */
 export const playerLists = query(idSchema, async (instanceId) => {
-	requirePermission(instanceId, 'console');
+	requirePermission(instanceId, 'players');
 	return userFacing(async () => players.readPlayerLists(instanceId));
 });
 
 /** Who is on the server right now; the page asks again every few seconds. */
 export const onlineNow = query(idSchema, async (instanceId) => {
-	requirePermission(instanceId, 'console');
+	requirePermission(instanceId, 'players');
 	return userFacing(() => players.onlinePlayers(instanceId));
 });
 
 /** Runs one action and returns what the server (or the panel, with the server stopped) answered. */
 export const playerAction = command(playerActionSchema, async ({ id, action }) => {
-	requirePermission(id, 'console');
+	requirePermission(id, 'players');
 	const message = await userFacing(() => players.runPlayerAction(id, action));
 	await Promise.all([playerLists(id).refresh(), onlineNow(id).refresh()]);
 	return message;
@@ -29,7 +29,7 @@ export const playerAction = command(playerActionSchema, async ({ id, action }) =
 export const setWhitelist = command(
 	v.object({ id: idSchema, enabled: v.boolean() }),
 	async ({ id, enabled }) => {
-		requirePermission(id, 'console');
+		requirePermission(id, 'players');
 		await userFacing(() => players.setWhitelistEnabled(id, enabled));
 		await playerLists(id).refresh();
 	}

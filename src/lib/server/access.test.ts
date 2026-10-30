@@ -79,30 +79,6 @@ describe('permissionsFor', () => {
 	});
 });
 
-describe('restrictionsFor', () => {
-	it('has none for an admin and for a user without access', () => {
-		expect(A.restrictionsFor(admin, one)).toEqual({ properties: [], settings: [] });
-		expect(A.restrictionsFor(alice, one)).toEqual({ properties: [], settings: [] });
-	});
-
-	it('returns what the role locks', () => {
-		A.setAccess(
-			alice.id,
-			one,
-			custom({
-				allow: ['files', 'settings'],
-				lockedProperties: ['difficulty', 'level-seed'],
-				lockedSettings: ['jvmArgs', 'loader']
-			})
-		);
-		expect(A.restrictionsFor(alice, one)).toEqual({
-			properties: ['difficulty', 'level-seed'],
-			settings: ['jvmArgs', 'loader']
-		});
-		expect(A.restrictionsFor(alice, two)).toEqual({ properties: [], settings: [] });
-	});
-});
-
 describe('check', () => {
 	it('is ok when granted, denied when the server is visible but the permission is not', () => {
 		A.setAccess(alice.id, one, roleOf('Viewer'));
@@ -175,7 +151,7 @@ describe('roles', () => {
 	});
 
 	it('creates, edits and deletes a custom role, counting where it is used', () => {
-		const id = custom({ allow: ['console'], lockedProperties: ['gamemode'] }, 'Helper');
+		const id = custom({ allow: ['console'] }, 'Helper');
 		R.updateRole(id, {
 			name: 'Helper 2',
 			description: 'x',

@@ -16,27 +16,27 @@ const projectId = projectIdSchema;
 const versionId = versionIdSchema;
 
 export const searchPacks = query(searchArgsSchema, async ({ id: instanceId, query, limit }) => {
-	requirePermission(instanceId, 'mods');
+	requirePermission(instanceId, 'resource-packs');
 	return userFacing(() => packs.search(instanceId, query.trim(), limit));
 });
 
 export const packVersions = query(
 	v.object({ id, projectId }),
 	async ({ id: instanceId, projectId }) => {
-		requirePermission(instanceId, 'mods');
+		requirePermission(instanceId, 'resource-packs');
 		return userFacing(() => packs.listPackVersions(instanceId, projectId));
 	}
 );
 
 export const serverPack = query(id, async (instanceId) => {
-	requirePermission(instanceId, 'mods');
+	requirePermission(instanceId, 'resource-packs');
 	return packs.serverPack(instanceId);
 });
 
 export const useResourcePack = command(
 	v.object({ id, projectId, versionId }),
 	async ({ id: instanceId, projectId, versionId }) => {
-		requirePermission(instanceId, 'mods');
+		requirePermission(instanceId, 'resource-packs');
 		const result = await userFacing(() => packs.useAsServerPack(instanceId, projectId, versionId));
 		await serverPack(instanceId).refresh();
 		return result;
@@ -46,7 +46,7 @@ export const useResourcePack = command(
 export const removePack = command(
 	v.object({ id, rowId: idSchema }),
 	async ({ id: instanceId, rowId }) => {
-		requirePermission(instanceId, 'mods');
+		requirePermission(instanceId, 'resource-packs');
 		await userFacing(async () => packs.removePack(instanceId, rowId));
 		await serverPack(instanceId).refresh();
 	}
@@ -55,7 +55,7 @@ export const removePack = command(
 export const setPackOptions = form(
 	packOptionsSchema,
 	async ({ id: instanceId, required, prompt }) => {
-		requirePermission(instanceId, 'mods');
+		requirePermission(instanceId, 'resource-packs');
 		await userFacing(async () => packs.setServerPackOptions(instanceId, { required, prompt }));
 		await serverPack(instanceId).refresh();
 	}

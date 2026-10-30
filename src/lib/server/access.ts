@@ -1,11 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import {
-	PERMISSIONS,
-	grantedBy,
-	parseRules,
-	type Permission,
-	type Restrictions
-} from '#lib/permissions.js';
+import { PERMISSIONS, grantedBy, parseRules, type Permission } from '#lib/permissions.js';
 import { db } from './db';
 import { instancePermissions, roles } from './db/schema';
 
@@ -28,14 +22,6 @@ export function permissionsFor(user: Actor, instanceId: number): Permission[] {
 	if (user.role === 'admin') return [...PERMISSIONS];
 	const rules = ruleFor(user.id, instanceId);
 	return rules ? grantedBy(rules) : [];
-}
-
-/** What the user's role locks on this instance: values they may read but not change. Admins have none. */
-export function restrictionsFor(user: Actor, instanceId: number): Restrictions {
-	if (user.role === 'admin') return { properties: [], settings: [] };
-	const rules = ruleFor(user.id, instanceId);
-	if (!rules || !grantedBy(rules).length) return { properties: [], settings: [] };
-	return { properties: rules.lockedProperties, settings: rules.lockedSettings };
 }
 
 /** The instances the user may see, or null for all of them (an admin). */

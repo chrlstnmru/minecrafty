@@ -14,7 +14,6 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(getInstance(id));
-	const locked = $derived(new Set<string>(instance.current?.locked.settings ?? []));
 	const { name, port, ramMinMb, ramMaxMb, javaMajor, jvmArgs, autoStart } = updateInstance.fields;
 
 	// load the stored values into the form when the instance changes or after a save
@@ -55,11 +54,7 @@
 	<Card.Root>
 		<Card.Header>
 			<Card.Title>General</Card.Title>
-			<Card.Description>
-				Changes apply the next time the server starts.{locked.size
-					? ' Fields your role locks are read-only.'
-					: ''}
-			</Card.Description>
+			<Card.Description>Changes apply the next time the server starts.</Card.Description>
 		</Card.Header>
 		<Card.Content>
 			<Form.Root
@@ -72,42 +67,26 @@
 				{#snippet children({ pending })}
 					<input {...updateInstance.fields.id.as('number')} type="hidden" />
 					<Field.Group>
-						<Form.Input label="Name" field={name} readonly={locked.has('name')} />
+						<Form.Input label="Name" field={name} />
 						<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-							<Form.Input label="Port" type="number" field={port} readonly={locked.has('port')} />
-							<Form.Input
-								label="Min RAM (MB)"
-								type="number"
-								field={ramMinMb}
-								readonly={locked.has('ram')}
-							/>
-							<Form.Input
-								label="Max RAM (MB)"
-								type="number"
-								field={ramMaxMb}
-								readonly={locked.has('ram')}
-							/>
+							<Form.Input label="Port" type="number" field={port} />
+							<Form.Input label="Min RAM (MB)" type="number" field={ramMinMb} />
+							<Form.Input label="Max RAM (MB)" type="number" field={ramMaxMb} />
 						</div>
 						<Form.Select
 							label="Java"
 							field={javaMajor}
-							disabled={locked.has('java')}
 							description="Temurin is downloaded the first time a server needs it."
 							options={javaOptions}
 						/>
 						<Form.Input
 							label="JVM arguments"
 							field={jvmArgs}
-							readonly={locked.has('jvmArgs')}
 							class="font-mono"
 							placeholder="-XX:+UseG1GC"
 							description="Added after the memory flags, separated by spaces."
 						/>
-						<Form.Checkbox
-							field={autoStart}
-							label="Start automatically when the panel starts"
-							disabled={locked.has('autoStart')}
-						/>
+						<Form.Checkbox field={autoStart} label="Start automatically when the panel starts" />
 						<Form.Errors form={updateInstance} />
 						<div>
 							<Button type="submit" loading={pending > 0}>Save changes</Button>

@@ -5,98 +5,65 @@ export const PERMISSIONS = [
 	'view',
 	'logs',
 	'console',
+	'players',
 	'control',
 	'files',
+	'properties',
 	'mods',
+	'modpack',
+	'resource-packs',
 	'backups',
 	'schedules',
+	'loader',
 	'settings'
 ] as const;
 
 export type Permission = (typeof PERMISSIONS)[number];
 
+/** One per instance tab, plus view (the server itself) and control (start and stop). */
 export const PERMISSION_INFO: Record<Permission, { label: string; description: string }> = {
 	view: { label: 'View', description: 'See the server and its status' },
 	logs: { label: 'Logs', description: 'Read and download the log files' },
-	console: { label: 'Console', description: 'Read the console and run commands; manage players' },
-	control: { label: 'Start and stop', description: 'Start, stop, restart and kill the server' },
-	files: {
-		label: 'Files',
-		description: 'Browse, edit and upload files, and edit server.properties'
+	console: { label: 'Console', description: 'Read the console and run commands' },
+	players: {
+		label: 'Players',
+		description: 'See who is online; manage the whitelist, operators and bans'
 	},
-	mods: {
-		label: 'Mods',
-		description: 'Install and update mods, plugins, resource packs and the modpack'
+	control: { label: 'Start and stop', description: 'Start, stop, restart and kill the server' },
+	files: { label: 'Files', description: 'Browse, edit, upload and download files' },
+	properties: { label: 'Properties', description: 'Edit server.properties' },
+	mods: { label: 'Mods', description: 'Install and update mods or plugins' },
+	modpack: { label: 'Modpack', description: 'Update the server to another modpack version' },
+	'resource-packs': {
+		label: 'Resource packs',
+		description: 'Install resource packs and set the server resource pack'
 	},
 	backups: { label: 'Backups', description: 'Create, download, restore and delete backups' },
 	schedules: { label: 'Schedules', description: 'Create and change scheduled tasks' },
-	settings: {
-		label: 'Settings',
-		description: 'Change name, memory and port, and update the loader'
-	}
+	loader: { label: 'Loader', description: 'Update the loader build or the Minecraft version' },
+	settings: { label: 'Settings', description: 'Change name, memory, port, Java and JVM arguments' }
 };
 
-/** The permission each instance tab needs to be shown. */
+/** The permission each instance tab needs to be shown: the tab's own name. */
 export const MODULE_PERMISSION: Record<string, Permission> = {
 	console: 'console',
-	files: 'files',
+	players: 'players',
 	logs: 'logs',
-	players: 'console',
+	files: 'files',
+	properties: 'properties',
 	mods: 'mods',
-	modpack: 'mods',
-	'resource-packs': 'mods',
+	modpack: 'modpack',
+	'resource-packs': 'resource-packs',
 	backups: 'backups',
 	schedules: 'schedules',
-	properties: 'files',
-	loader: 'settings',
+	loader: 'loader',
 	settings: 'settings'
 };
 
-/** Settings a role can lock: the user sees the value but cannot change it. */
-export const SETTING_FIELDS = [
-	'name',
-	'port',
-	'ram',
-	'java',
-	'jvmArgs',
-	'autoStart',
-	'loader'
-] as const;
-export type SettingField = (typeof SETTING_FIELDS)[number];
-
-export const SETTING_INFO: Record<SettingField, { label: string; description: string }> = {
-	name: { label: 'Name', description: 'The instance name' },
-	port: { label: 'Port', description: 'The game port' },
-	ram: { label: 'Memory', description: 'Minimum and maximum RAM' },
-	java: { label: 'Java version', description: 'Which Java runs the server' },
-	jvmArgs: { label: 'JVM arguments', description: 'Extra flags for the JVM' },
-	autoStart: { label: 'Auto-start', description: 'Start with the panel' },
-	loader: {
-		label: 'Loader and Minecraft version',
-		description: 'The Loader tab: update the build or the version'
-	}
-};
-
 /** What a role says. A permission is allowed, denied (which wins) or left out, which is not granted. */
-export type RoleRules = {
-	allow: Permission[];
-	deny: Permission[];
-	/** `server.properties` keys the user may read but not change, such as difficulty or level-seed */
-	lockedProperties: string[];
-	lockedSettings: SettingField[];
-};
+export type RoleRules = { allow: Permission[]; deny: Permission[] };
 
-export type Restrictions = { properties: string[]; settings: SettingField[] };
-
-export const emptyRules = (): RoleRules => ({
-	allow: [],
-	deny: [],
-	lockedProperties: [],
-	lockedSettings: []
-});
-
-const strings = (value: unknown): string[] =>
-	Array.isArray(value) ? value.filter((v): v is string => typeof v === 'string') : [];
+export const emptyRules = (): RoleRules => ({ allow: [], deny: [] });
 
 /** Reads stored rules, dropping what it does not know; damaged rules grant nothing. */
 export function parseRules(text: string): RoleRules {
@@ -108,16 +75,9 @@ export function parseRules(text: string): RoleRules {
 	}
 	if (!raw || typeof raw !== 'object') return emptyRules();
 	const r = raw as Record<string, unknown>;
-	const known = <T extends string>(list: readonly T[], value: unknown) =>
-		list.filter((item) => strings(value).includes(item));
-	return {
-		allow: known(PERMISSIONS, r.allow),
-		deny: known(PERMISSIONS, r.deny),
-		lockedProperties: [...new Set(strings(r.lockedProperties))].filter((k) =>
-			/^[A-Za-z0-9._-]{1,100}$/.test(k)
-		),
-		lockedSettings: known(SETTING_FIELDS, r.lockedSettings)
-	};
+	const known = (value: unknown) =>
+		PERMISSIONS.filter((p) => Array.isArray(value) && value.includes(p));
+	return { allow: known(r.allow), deny: known(r.deny) };
 }
 
 /** What a role grants: the allowed permissions minus the denied ones, with view whenever any remain. */
@@ -136,12 +96,25 @@ export const ACCESS_PRESETS: { name: string; description: string; permissions: P
 	{
 		name: 'Operator',
 		description: 'Run the server and use the console',
-		permissions: ['view', 'logs', 'console', 'control']
+		permissions: ['view', 'logs', 'console', 'players', 'control']
 	},
 	{
 		name: 'Manager',
-		description: 'Everything except settings',
-		permissions: ['view', 'logs', 'console', 'control', 'files', 'mods', 'backups', 'schedules']
+		description: 'Everything except the loader and settings',
+		permissions: [
+			'view',
+			'logs',
+			'console',
+			'players',
+			'control',
+			'files',
+			'properties',
+			'mods',
+			'modpack',
+			'resource-packs',
+			'backups',
+			'schedules'
+		]
 	},
 	{ name: 'Full', description: 'Everything on the server', permissions: [...PERMISSIONS] }
 ];

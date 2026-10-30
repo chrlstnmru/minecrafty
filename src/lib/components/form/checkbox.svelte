@@ -9,13 +9,12 @@
 		field: RemoteFormField<boolean>;
 		label?: string;
 		description?: string;
-		disabled?: boolean;
 		/** label content when it is more than text (a link, say); replaces `label` */
 		children?: Snippet;
 	};
 
 	// no error text on purpose: an unticked required box is shown by its red invalid state
-	let { field, label, description, disabled = false, children }: Props = $props();
+	let { field, label, description, children }: Props = $props();
 
 	const id = $props.id();
 	const revalidate = tryGetFieldRevalidateContext();
@@ -30,7 +29,6 @@
 <Field.Field orientation="horizontal" data-invalid={!!field.issues()?.length}>
 	<Checkbox
 		{id}
-		{disabled}
 		{...attrs}
 		onCheckedChange={(checked) => {
 			field.set(checked);
