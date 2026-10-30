@@ -1,6 +1,7 @@
 import { existsSync, readdirSync } from 'node:fs';
 import { rm } from 'node:fs/promises';
 import { join, relative } from 'node:path';
+import { compareVersions } from '../versions';
 import { downloadFile, type Download, type Hash } from './download';
 
 export { LOADERS, type Loader } from '../loader-list';
@@ -36,17 +37,6 @@ async function getJson<T>(url: string): Promise<T> {
 }
 
 const RELEASE = /^\d+(\.\d+)*$/;
-
-/** Sorts newest first (negative when `a` is newer); works for 1.21.4 and the newer 26.3 style. */
-export function compareVersions(a: string, b: string) {
-	const pa = a.split('.').map(Number);
-	const pb = b.split('.').map(Number);
-	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
-		const d = (pb[i] ?? 0) - (pa[i] ?? 0);
-		if (d) return d;
-	}
-	return 0;
-}
 
 const newestFirst = (versions: Iterable<string>) =>
 	[...new Set(versions)].filter((v) => RELEASE.test(v)).sort(compareVersions);

@@ -7,10 +7,10 @@ import { db } from './db';
 import { installedMods, instances } from './db/schema';
 import { isRunning } from './files';
 import { clearProgress, setProgress } from './install-progress';
+import { updateKind } from '../versions';
 import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';
 import {
-	compareVersions,
 	getMinecraftVersions,
 	installServer,
 	isKnownVersion,
@@ -84,14 +84,6 @@ export async function loaderInfo(instanceId: number): Promise<LoaderInfo> {
 		mods
 	};
 }
-
-export type UpdateKind = 'build' | 'upgrade' | 'downgrade';
-
-/** What switching to `mc` would be, relative to the Minecraft version the instance has now. */
-export const updateKind = (current: string, mc: string): UpdateKind => {
-	const order = compareVersions(mc, current);
-	return order === 0 ? 'build' : order < 0 ? 'upgrade' : 'downgrade';
-};
 
 /** Replaces what the loader installed in `server` with what is in `staging`, then deletes `staging`. */
 function swapIn(server: string, staging: string, loader: Loader) {

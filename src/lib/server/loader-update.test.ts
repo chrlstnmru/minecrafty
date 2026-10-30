@@ -238,15 +238,6 @@ describe('Java choice', () => {
 	});
 });
 
-describe('updateKind', () => {
-	it('tells a build update, an upgrade and a downgrade apart', () => {
-		expect(U.updateKind('1.21.4', '1.21.4')).toBe('build');
-		expect(U.updateKind('1.21.4', '1.21.10')).toBe('upgrade');
-		expect(U.updateKind('1.21.10', '1.21.4')).toBe('downgrade');
-		expect(U.updateKind('1.21.4', '26.1')).toBe('upgrade');
-	});
-});
-
 describe('loaderInfo', () => {
 	it('reports the current build, the newest one and the versions on offer', async () => {
 		const info = await U.loaderInfo(id);

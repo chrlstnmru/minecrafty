@@ -86,7 +86,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'loader',
 		title: 'Loader',
 		icon: RefreshIcon,
-		planned: 4,
 		description: 'Update the loader build or Minecraft version, with a backup first.'
 	},
 	{

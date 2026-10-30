@@ -96,7 +96,7 @@ Each instance has a dedicated page, `/instances/[id]`, with a shared header (nam
 | Players        | Online players, whitelist, ops, bans, kick (RCON)                            | 4         |
 | Backups        | Manual backups (scheduled ones come with Schedules), retention, restore      | 4         |
 | Schedules      | Cron tasks for this instance                                                 | 4         |
-| Loader         | Update the loader build or Minecraft version, with a backup prompt           | 4         |
+| Loader         | Update the loader build or Minecraft version, with a backup first            | 4         |
 
 Console is the live server output with command input; Logs is the history of log files on disk.
 
@@ -176,6 +176,15 @@ Build your own modpack on the panel and create instances from it.
 - Limits: the zip writer has no Zip64, so a backup is limited to 4 GiB and 65,535 files, and a larger server fails with a clear message. Zip64 is the follow-up if that bites.
 - Scheduled backups arrive with scheduled tasks.
 
+### Loader update
+
+- Moves an instance to the newest build of a Minecraft version, which may be the current one (a build update) or another (an upgrade or a downgrade). Only the newest build of a version is offered; the Loader tab shows the installed build and whether a newer one exists.
+- The server must be stopped. The instance shows as installing while it runs in the background, with progress, and the outcome of the last update stays visible on the tab.
+- The new loader files are built in `server.updating` next to the server (the installer runs there for Quilt, Forge and NeoForge) and swapped in only after the install succeeded, so a failed download or installer leaves the old server exactly as it was. The swap first removes what the old loader left that would be picked up ahead of the new files (`libraries/`, `forge-*.jar`, `run.sh`) and never overwrites `user_jvm_args.txt`.
+- "Back up first" is on by default; the backup is kept as "Before update" and is never pruned.
+- Upgrading warns that the world is converted when the server next starts, downgrading warns that it can be damaged, and changing version warns about the installed mods (check the Mods tab for compatible versions afterwards). A Java version chosen by hand that is too old for the new Minecraft version goes back to automatic.
+- A panel restart during the swap marks the install failed, like any interrupted install.
+
 ### Scheduled tasks
 
 - Cron expressions per instance.
@@ -242,7 +251,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), player management, loader update, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), loader update (done), player management, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
