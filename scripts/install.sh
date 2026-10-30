@@ -208,6 +208,7 @@ IP="${IP:-localhost}"
 say "Minecrafty is running"
 if curl -fsS -o /dev/null -w '%{http_code}' "http://127.0.0.1:$PORT/setup" 2> /dev/null | grep -q '^200$'; then
   echo "    First run: open  http://$IP:$PORT/setup  to create the owner account."
+  [ -f "$DATA_DIR/setup-token.txt" ] && echo "    Setup code: $(cat "$DATA_DIR/setup-token.txt")"
 else
   echo "    Open  http://$IP:$PORT"
 fi

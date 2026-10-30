@@ -4,6 +4,7 @@ import { building } from '$app/env';
 import { getRequestEvent } from '$app/server';
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
+import { announceSetupToken } from '#lib/server/setup-token.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
 import { startStats } from '#lib/server/stats.js';
@@ -59,6 +60,7 @@ export const init: ServerInit = () => {
 		const user = getRequestEvent().locals.user;
 		return user ? { id: user.id, name: user.username } : null;
 	});
+	if (!hasUsers()) announceSetupToken();
 	pruneAudit();
 	setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
 	failInterruptedInstalls();

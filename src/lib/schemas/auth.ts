@@ -17,7 +17,8 @@ export const setupSchema = v.pipe(
 			v.regex(/^[\w.-]{3,32}$/, 'Use 3-32 letters, numbers, . _ -')
 		),
 		_password: v.pipe(v.string(), v.minLength(8, 'At least 8 characters')),
-		_confirm: v.string()
+		_confirm: v.string(),
+		_code: v.pipe(v.string(), v.trim(), v.minLength(1, 'Enter the setup code'))
 	}),
 	v.forward(
 		v.partialCheck(

@@ -152,6 +152,8 @@ try {
   if (-not $ip) { $ip = 'localhost' }
   Say 'Minecrafty is running'
   Write-Host "    First run: open  http://${ip}:$Port/setup  to create the owner account."
+  $tokenFile = Join-Path $DataDir 'setup-token.txt'
+  if (Test-Path $tokenFile) { Write-Host "    Setup code: $((Get-Content $tokenFile -Raw).Trim())" }
   Write-Host "    Already set up: open  http://${ip}:$Port"
   Write-Host "    Data: $DataDir"
 } finally {

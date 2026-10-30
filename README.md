@@ -13,7 +13,9 @@ curl -fsSL https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/
 ```
 
 It installs one program to `/opt/minecrafty`, keeps data in `/var/lib/minecrafty`, and runs it as a
-systemd service on port 3000. Open `http://<the machine>:3000/setup` and make the owner account.
+systemd service on port 3000. Open `http://<the machine>:3000/setup` and make the owner account with
+the setup code the script prints (it is also in the panel's log and in `setup-token.txt` in the data
+folder).
 Run it again to upgrade; game servers keep running through the upgrade.
 
 **Proxmox VE**, on the host, to make a container and install in it:
