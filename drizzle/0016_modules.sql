@@ -12,4 +12,5 @@ UPDATE `roles` SET `rules` = json_object(
 		'"console"', '"console","players"'),
 		'"settings"', '"settings","loader"'))
 );
+--> statement-breakpoint
 UPDATE `roles` SET `description` = 'Everything except the loader and settings' WHERE `built_in` = 1 AND `name` = 'Manager';

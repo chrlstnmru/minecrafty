@@ -18,9 +18,9 @@ export const addUserSchema = v.object({
 export const userRoleSchema = v.object({ id: idSchema, role: roleSchema });
 export const userPasswordSchema = v.object({ id: idSchema, password: passwordSchema });
 
-/** roleId null takes the access away */
+/** the roles a user has on one instance, or panel-wide with instanceId null; empty takes them all away */
 export const userAccessSchema = v.object({
 	userId: idSchema,
-	instanceId: idSchema,
-	roleId: v.nullable(idSchema)
+	instanceId: v.nullable(idSchema),
+	roleIds: v.array(idSchema)
 });

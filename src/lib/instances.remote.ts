@@ -2,7 +2,7 @@ import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
 import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
-import { requireAdmin, requirePermission, requireUser } from '#lib/server/auth.js';
+import { requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { userFacing } from '#lib/server/http.js';
@@ -46,17 +46,17 @@ export const getInstance = query(id, async (instanceId) => {
 const loader = v.picklist(LOADERS);
 
 export const minecraftVersions = query(loader, async (l) => {
-	requireAdmin();
+	requirePanel('instances.create');
 	return getMinecraftVersions(l);
 });
 
 export const nextPort = query(() => {
-	requireAdmin();
+	requirePanel('instances.create');
 	return instances.nextFreePort();
 });
 
 export const createInstance = form(createInstanceSchema, async (data, issue) => {
-	requireAdmin();
+	requirePanel('instances.create');
 	if (!(await isKnownVersion(data.loader, data.mcVersion)))
 		invalid(issue.mcVersion('Unknown Minecraft version'));
 	const loaderVersion = await latestBuild(data.loader, data.mcVersion);
@@ -108,7 +108,7 @@ export const killInstance = command(id, async (instanceId) => {
 });
 
 export const deleteInstance = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePanel('instances.delete');
 	await userFacing(() => instances.deleteInstance(instanceId));
 });
 
@@ -198,7 +198,7 @@ export const sendCommand = command(
 
 /** Fetches the icon of modpack instances made before it was kept; the instance list picks it up. */
 export const refreshPackIcons = command(async () => {
-	requireAdmin();
+	requireUser();
 	return userFacing(() => backfillPackIcons());
 });
 

@@ -1,11 +1,10 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { listInstances } from '#lib/instances.remote.js';
-	import { grantedBy } from '#lib/permissions.js';
 	import { allRoles } from '#lib/roles.remote.js';
 	import { setUserAccess, userAccess } from '#lib/users.remote.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 
 	let {
 		user,
@@ -15,53 +14,63 @@
 	const servers = listInstances();
 	const roles = allRoles();
 	const access = $derived(user ? userAccess(user.id) : null);
-	const roleOn = (instanceId: number) =>
-		access?.current?.find((a) => a.instanceId === instanceId)?.roleId;
+	const rolesOn = (instanceId: number | null) =>
+		(access?.current ?? []).filter((a) => a.instanceId === instanceId).map((a) => a.roleId);
 
-	const options = $derived([
-		{ value: '', label: 'No access' },
-		...(roles.current ?? []).map((r) => ({ value: String(r.id), label: r.name }))
-	]);
-
-	async function give(instanceId: number, value: string) {
+	async function give(instanceId: number | null, next: number[]) {
 		if (!user) return;
 		try {
-			await setUserAccess({ userId: user.id, instanceId, roleId: value ? Number(value) : null });
+			await setUserAccess({ userId: user.id, instanceId, roleIds: next });
 		} catch (e) {
 			toast.error((e as { body?: { message?: string } }).body?.message ?? 'Could not save');
 		}
 	}
-
-	const summary = (instanceId: number) => {
-		const role = roles.current?.find((r) => r.id === roleOn(instanceId));
-		if (!role) return 'Cannot see this server.';
-		return `${grantedBy(role.rules).length} permissions`;
-	};
 </script>
 
 <Sheet.Root bind:open>
 	<Sheet.Content class="w-full gap-0 sm:max-w-md">
 		<Sheet.Header>
-			<Sheet.Title>Access for {user?.username}</Sheet.Title>
+			<Sheet.Title>Roles for {user?.username}</Sheet.Title>
 			<Sheet.Description>
-				Pick a role for each server. Changes save as you choose. Roles are made in the Roles tab.
+				Roles given to all servers apply everywhere, and panel permissions only come from there. A
+				user can hold several; what they grant adds up and a deny wins. Changes save as you choose.
 			</Sheet.Description>
 		</Sheet.Header>
 		<div class="flex flex-1 scrollbar-subtle flex-col gap-3 overflow-y-auto p-4">
+			{@render target('All servers and the panel', null)}
 			{#each servers.current ?? [] as server (server.id)}
-				<section class="flex flex-col gap-2 rounded-lg border p-3">
-					<h3 class="truncate text-sm font-medium">{server.name}</h3>
-					<SelectMenu
-						{options}
-						value={String(roleOn(server.id) ?? '')}
-						aria-label="Role on {server.name}"
-						onValueChange={(next) => give(server.id, next)}
-					/>
-					<p class="text-xs text-muted-foreground">{summary(server.id)}</p>
-				</section>
-			{:else}
-				<p class="text-sm text-muted-foreground">There are no servers yet.</p>
+				{@render target(server.name, server.id)}
 			{/each}
 		</div>
 	</Sheet.Content>
 </Sheet.Root>
+
+{#snippet target(title: string, instanceId: number | null)}
+	<section class="flex flex-col gap-2 rounded-lg border p-3">
+		<h3 class="truncate text-sm font-medium">{title}</h3>
+		<ToggleGroup.Root
+			type="multiple"
+			variant="outline"
+			size="sm"
+			class="flex-wrap"
+			value={rolesOn(instanceId).map(String)}
+			aria-label="Roles on {title}"
+			onValueChange={(next) => give(instanceId, next.map(Number))}
+		>
+			{#each roles.current ?? [] as role (role.id)}
+				<ToggleGroup.Item
+					value={String(role.id)}
+					disabled={!role.assignable && !rolesOn(instanceId).includes(role.id)}
+					class="data-[state=on]:bg-primary/15"
+				>
+					{role.name}
+				</ToggleGroup.Item>
+			{/each}
+		</ToggleGroup.Root>
+		{#if !rolesOn(instanceId).length}
+			<p class="text-xs text-muted-foreground">
+				{instanceId === null ? 'No roles on all servers.' : 'No role on this server.'}
+			</p>
+		{/if}
+	</section>
+{/snippet}

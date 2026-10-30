@@ -1,12 +1,5 @@
 import { sql } from 'drizzle-orm';
-import {
-	index,
-	integer,
-	primaryKey,
-	sqliteTable,
-	text,
-	uniqueIndex
-} from 'drizzle-orm/sqlite-core';
+import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>
 	integer('created_at', { mode: 'timestamp' })
@@ -154,30 +147,43 @@ export const schedules = sqliteTable(
 	(t) => [index('schedules_instance').on(t.instanceId)]
 );
 
-// a named set of rules (see RoleRules in permissions.ts); the built-in ones cannot be edited
-export const roles = sqliteTable('roles', {
-	id: integer('id').primaryKey({ autoIncrement: true }),
-	name: text('name').notNull().unique(),
-	description: text('description').notNull().default(''),
-	rules: text('rules').notNull(),
-	builtIn: integer('built_in', { mode: 'boolean' }).notNull().default(false)
-});
-
-// the role a user (not an admin) has on one instance; no row means no access
-export const instancePermissions = sqliteTable(
-	'instance_permissions',
+// a named set of rules (see RoleRules in permissions.ts). Rank orders roles: someone can only
+// grant, edit or assign roles ranked below their own. Deleting keeps the row, so an assignment
+// that still points at it simply stops counting.
+export const roles = sqliteTable(
+	'roles',
 	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		name: text('name').notNull(),
+		description: text('description').notNull().default(''),
+		rules: text('rules').notNull(),
+		rank: integer('rank').notNull().default(0),
+		builtIn: integer('built_in', { mode: 'boolean' }).notNull().default(false),
+		deletedAt: integer('deleted_at', { mode: 'timestamp' })
+	},
+	(t) => [
+		uniqueIndex('roles_name_active')
+			.on(t.name)
+			.where(sql`${t.deletedAt} is null`)
+	]
+);
+
+// a role given to a user: on one instance, or on the whole panel when instanceId is null. A user
+// may hold several; what they grant adds up and any deny wins.
+export const roleAssignments = sqliteTable(
+	'role_assignments',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
 		userId: integer('user_id')
 			.notNull()
 			.references(() => users.id, { onDelete: 'cascade' }),
-		instanceId: integer('instance_id')
-			.notNull()
-			.references(() => instances.id, { onDelete: 'cascade' }),
 		roleId: integer('role_id')
 			.notNull()
-			.references(() => roles.id, { onDelete: 'restrict' })
+			.references(() => roles.id, { onDelete: 'cascade' }),
+		instanceId: integer('instance_id').references(() => instances.id, { onDelete: 'cascade' })
 	},
-	(t) => [primaryKey({ columns: [t.userId, t.instanceId] })]
+	// SQL also holds a unique (user_id, role_id) where instance_id is null, since NULLs never collide
+	(t) => [uniqueIndex('role_assignments_unique').on(t.userId, t.roleId, t.instanceId)]
 );
 
 // panel-wide key/value settings (public URL, later the CurseForge API key)

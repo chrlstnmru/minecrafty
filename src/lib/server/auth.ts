@@ -4,8 +4,8 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
 import { sessions, users } from './db/schema';
-import type { Permission } from '#lib/permissions.js';
-import { check } from './access';
+import type { InstancePermission, PanelPermission } from '#lib/permissions.js';
+import { can, check } from './access';
 import { createAccount } from './user-admin';
 
 const COOKIE = 'session';
@@ -70,7 +70,7 @@ export function requireUser() {
 }
 
 /** Guards one instance: unseen instances are 404, seen but not allowed is 403. */
-export function requirePermission(instanceId: number, needed: Permission) {
+export function requirePermission(instanceId: number, needed: InstancePermission) {
 	const user = requireUser();
 	const result = check(user, instanceId, needed);
 	if (result === 'unknown') error(404, 'Instance not found');
@@ -78,7 +78,14 @@ export function requirePermission(instanceId: number, needed: Permission) {
 	return user;
 }
 
-/** Host-wide and account operations. */
+/** A panel-wide permission: creating instances, managing users and roles. */
+export function requirePanel(needed: PanelPermission) {
+	const user = requireUser();
+	if (!can(user, needed)) error(403, 'You do not have permission to do that');
+	return user;
+}
+
+/** What only an admin may do. */
 export function requireAdmin() {
 	const { locals } = getRequestEvent();
 	if (!locals.user) error(401, 'Not signed in');

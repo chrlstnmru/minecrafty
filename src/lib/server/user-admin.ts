@@ -1,10 +1,10 @@
 import { and, count, eq, ne } from 'drizzle-orm';
 import { db } from './db';
-import { instancePermissions, sessions, users } from './db/schema';
+import { roleAssignments, sessions, users } from './db/schema';
 
 export type Role = 'admin' | 'user';
 
-/** Every account, with how many servers a non-admin has been given. */
+/** Every account, with how many role assignments each has. */
 export function listUsers() {
 	return db
 		.select({
@@ -12,10 +12,10 @@ export function listUsers() {
 			username: users.username,
 			role: users.role,
 			createdAt: users.createdAt,
-			instances: count(instancePermissions.instanceId)
+			assignments: count(roleAssignments.id)
 		})
 		.from(users)
-		.leftJoin(instancePermissions, eq(instancePermissions.userId, users.id))
+		.leftJoin(roleAssignments, eq(roleAssignments.userId, users.id))
 		.groupBy(users.id)
 		.orderBy(users.username)
 		.all();

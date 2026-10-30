@@ -3,7 +3,7 @@ import { form, query } from '$app/server';
 import * as v from 'valibot';
 import { projectIdSchema } from '#lib/schemas/common.js';
 import { importModpackSchema } from '#lib/schemas/modpack.js';
-import { requireAdmin } from '#lib/server/auth.js';
+import { requirePanel } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import * as modpacks from '#lib/server/modpacks.js';
 
@@ -13,13 +13,13 @@ export const searchModpacks = query(
 		limit: v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(100))
 	}),
 	async ({ query, limit }) => {
-		requireAdmin();
+		requirePanel('instances.create');
 		return userFacing(() => modpacks.searchModpacks(query.trim(), limit));
 	}
 );
 
 export const modpackVersions = query(projectIdSchema, async (projectId) => {
-	requireAdmin();
+	requirePanel('instances.create');
 	return userFacing(() => modpacks.listModpackVersions(projectId));
 });
 
@@ -27,14 +27,14 @@ export const modpackVersions = query(projectIdSchema, async (projectId) => {
 export const modpackPreview = query(
 	v.pipe(v.string(), v.minLength(1), v.maxLength(64)),
 	async (versionId) => {
-		requireAdmin();
+		requirePanel('instances.create');
 		return userFacing(() => modpacks.previewModpack(versionId));
 	}
 );
 
 /** Creates the instance at once; the install itself carries on in the background. */
 export const importModpack = form(importModpackSchema, async (data, issue) => {
-	requireAdmin();
+	requirePanel('instances.create');
 	try {
 		await modpacks.startImport(data);
 	} catch (e) {

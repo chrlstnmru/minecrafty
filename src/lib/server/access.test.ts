@@ -1,10 +1,16 @@
 import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { makeInstance } from '#test/instance.js';
-import { ACCESS_PRESETS, PERMISSIONS, emptyRules, type RoleRules } from '#lib/permissions.js';
+import {
+	ACCESS_PRESETS,
+	INSTANCE_PERMISSIONS,
+	PERMISSIONS,
+	emptyRules,
+	type RoleRules
+} from '#lib/permissions.js';
 import * as A from './access';
 import { db } from './db';
-import { instancePermissions, instances, roles, sessions, users } from './db/schema';
+import { instances, roleAssignments, roles, sessions, users } from './db/schema';
 import * as R from './roles';
 import * as U from './user-admin';
 
@@ -30,45 +36,68 @@ beforeEach(async () => {
 });
 
 const roleOf = (name: string) => db.select().from(roles).where(eq(roles.name, name)).get()!.id;
-const custom = (rules: Partial<RoleRules>, name = `role-${Math.random()}`) =>
-	R.createRole({ name, description: '', rules: { ...emptyRules(), ...rules } }).id;
+const custom = (rules: Partial<RoleRules>, name = `role-${Math.random()}`, rank = 10) =>
+	R.createRole({ name, description: '', rank, rules: { ...emptyRules(), ...rules } }).id;
 
 describe('permissionsFor', () => {
 	it('gives an admin everything on every instance, with nothing granted', () => {
-		expect(A.permissionsFor(admin, one)).toEqual([...PERMISSIONS]);
-		expect(A.permissionsFor(admin, 999_999)).toEqual([...PERMISSIONS]);
+		expect(A.permissionsFor(admin, one)).toEqual([...INSTANCE_PERMISSIONS]);
+		expect(A.permissionsFor(admin, 999_999)).toEqual([...INSTANCE_PERMISSIONS]);
 	});
 
-	it('gives a user nothing until a role is given', () => {
+	it('gives a user nothing until a role is assigned', () => {
 		expect(A.permissionsFor(alice, one)).toEqual([]);
 	});
 
-	it('gives a user what the role grants, on that instance only', () => {
-		A.setAccess(alice.id, one, custom({ allow: ['files', 'backups'] }));
+	it('gives what the role grants, plus what it implies, on that instance only', () => {
+		A.setAssignments(alice.id, one, [custom({ allow: ['files', 'backups'] })]);
 		expect(A.permissionsFor(alice, one)).toEqual(['view', 'files', 'backups']);
 		expect(A.permissionsFor(alice, two)).toEqual([]);
 		expect(A.permissionsFor(bob, one)).toEqual([]);
 	});
 
-	it('lets a deny beat an allow, and a denied view removes all access', () => {
-		A.setAccess(alice.id, one, custom({ allow: ['files', 'backups', 'logs'], deny: ['backups'] }));
+	it('applies a panel-wide role to every instance', () => {
+		A.setAssignments(alice.id, null, [roleOf('Operator')]);
+		expect(A.permissionsFor(alice, one)).toEqual(A.permissionsFor(alice, two));
+		expect(A.permissionsFor(alice, one)).toContain('control');
+		expect(A.visibleInstanceIds(alice)!.sort()).toEqual([one, two].sort());
+	});
+
+	it('adds up the roles a user holds, and lets a deny in any of them win', () => {
+		A.setAssignments(alice.id, one, [
+			custom({ allow: ['files'] }),
+			custom({ allow: ['backups', 'logs'], deny: ['backups'] }),
+			custom({ allow: ['backups'] })
+		]);
 		expect(A.permissionsFor(alice, one)).toEqual(['view', 'logs', 'files']);
-		const noView = db
-			.insert(roles)
-			.values({
-				name: 'No view',
-				rules: JSON.stringify({ ...emptyRules(), allow: ['files'], deny: ['view'] })
-			})
-			.returning()
-			.get().id;
-		A.setAccess(bob.id, one, noView);
-		expect(A.permissionsFor(bob, one)).toEqual([]);
-		expect(A.check(bob, one, 'files')).toBe('unknown');
+	});
+
+	it('lets a deny on one server take back what a panel-wide role gave', () => {
+		A.setAssignments(alice.id, null, [roleOf('Manager')]);
+		A.setAssignments(alice.id, two, [custom({ allow: ['logs'], deny: ['files', 'view'] })]);
+		expect(A.permissionsFor(alice, one)).toContain('files');
+		expect(A.permissionsFor(alice, two)).not.toContain('files');
+		expect(A.check(alice, two, 'logs')).toBe('unknown');
+		expect(A.visibleInstanceIds(alice)).toEqual([one]);
+	});
+
+	it('leaves nothing on a server whose View is denied', () => {
+		A.setAssignments(alice.id, one, [custom({ allow: ['files', 'backups'], deny: ['view'] })]);
+		expect(A.permissionsFor(alice, one)).toEqual([]);
+		expect(A.check(alice, one, 'files')).toBe('unknown');
+	});
+
+	it('ignores a role that was deleted', () => {
+		const id = custom({ allow: ['files'] });
+		A.setAssignments(alice.id, one, [id]);
+		R.deleteRole(id);
+		expect(A.permissionsFor(alice, one)).toEqual([]);
+		expect(A.listAssignments(alice.id)).toEqual([]);
 	});
 
 	it('treats damaged or unknown rules as no access rather than as everything', () => {
 		const id = custom({ allow: ['files'] });
-		A.setAccess(alice.id, one, id);
+		A.setAssignments(alice.id, one, [id]);
 		db.update(roles).set({ rules: '{oops' }).where(eq(roles.id, id)).run();
 		expect(A.permissionsFor(alice, one)).toEqual([]);
 		db.update(roles)
@@ -79,10 +108,37 @@ describe('permissionsFor', () => {
 	});
 });
 
+describe('panel permissions', () => {
+	it('come only from a role assigned panel-wide, never from a per-server one', () => {
+		const id = custom({ allow: ['instances.create', 'logs'] });
+		A.setAssignments(alice.id, one, [id]);
+		expect(A.can(alice, 'instances.create')).toBe(false);
+		expect(A.panelPermissionsFor(alice)).toEqual([]);
+		A.setAssignments(alice.id, one, []);
+		A.setAssignments(alice.id, null, [id]);
+		expect(A.can(alice, 'instances.create')).toBe(true);
+		expect(A.panelPermissionsFor(alice)).toEqual(['instances.create']);
+	});
+
+	it('bring what they imply, and an admin has them all', () => {
+		A.setAssignments(alice.id, null, [custom({ allow: ['roles.assign'] })]);
+		expect(A.panelPermissionsFor(alice)).toEqual(['users.read', 'roles.assign']);
+		expect(A.panelPermissionsFor(admin)).toHaveLength(
+			PERMISSIONS.length - INSTANCE_PERMISSIONS.length
+		);
+	});
+
+	it('need an instance to ask about a per-server permission', () => {
+		A.setAssignments(alice.id, null, [roleOf('Viewer')]);
+		expect(A.can(alice, 'view')).toBe(false);
+		expect(A.can(alice, 'view', { instanceId: one })).toBe(true);
+	});
+});
+
 describe('check', () => {
 	it('is ok when granted, denied when the server is visible but the permission is not', () => {
-		A.setAccess(alice.id, one, roleOf('Viewer'));
-		A.setAccess(alice.id, two, custom({ allow: ['files'] }));
+		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
+		A.setAssignments(alice.id, two, [custom({ allow: ['files'] })]);
 		expect(A.check(alice, two, 'files')).toBe('ok');
 		expect(A.check(alice, two, 'view')).toBe('ok');
 		expect(A.check(alice, two, 'control')).toBe('denied');
@@ -97,7 +153,7 @@ describe('check', () => {
 	});
 
 	it('is always ok for an admin', () => {
-		for (const p of PERMISSIONS) expect(A.check(admin, one, p)).toBe('ok');
+		for (const p of INSTANCE_PERMISSIONS) expect(A.check(admin, one, p)).toBe('ok');
 	});
 });
 
@@ -106,47 +162,64 @@ describe('visibleInstanceIds', () => {
 		expect(A.visibleInstanceIds(admin)).toBeNull();
 	});
 
-	it('lists the servers a user was given, and none before', () => {
+	it('lists the servers a user has a role on, and none before', () => {
 		expect(A.visibleInstanceIds(alice)).toEqual([]);
-		A.setAccess(alice.id, two, roleOf('Viewer'));
+		A.setAssignments(alice.id, two, [roleOf('Viewer')]);
 		expect(A.visibleInstanceIds(alice)).toEqual([two]);
-		A.setAccess(alice.id, one, roleOf('Operator'));
+		A.setAssignments(alice.id, one, [roleOf('Operator')]);
 		expect(A.visibleInstanceIds(alice)!.sort()).toEqual([one, two].sort());
 		expect(A.visibleInstanceIds(bob)).toEqual([]);
 	});
 });
 
-describe('setAccess', () => {
-	it('gives a role, replaces it, and removes access with null', () => {
-		A.setAccess(alice.id, one, roleOf('Viewer'));
-		A.setAccess(alice.id, one, roleOf('Operator'));
-		expect(A.listAccess(alice.id)).toEqual([{ instanceId: one, roleId: roleOf('Operator') }]);
-		A.setAccess(alice.id, one, null);
-		expect(A.listAccess(alice.id)).toEqual([]);
-		expect(A.permissionsFor(alice, one)).toEqual([]);
+describe('assignments', () => {
+	it('replaces the roles on a target and leaves other targets alone', () => {
+		A.setAssignments(alice.id, one, [roleOf('Viewer'), roleOf('Operator')]);
+		A.setAssignments(alice.id, null, [roleOf('Manager')]);
+		A.setAssignments(alice.id, one, [roleOf('Operator')]);
+		expect(A.listAssignments(alice.id).sort((a, b) => a.roleId - b.roleId)).toEqual([
+			{ roleId: roleOf('Operator'), instanceId: one },
+			{ roleId: roleOf('Manager'), instanceId: null }
+		]);
+		A.setAssignments(alice.id, one, []);
+		expect(A.listAssignments(alice.id)).toEqual([{ roleId: roleOf('Manager'), instanceId: null }]);
 	});
 
-	it('refuses a role that does not exist', () => {
-		expect(() => A.setAccess(alice.id, one, 999_999)).toThrow('Role not found');
+	it('refuses a role that does not exist or was deleted', () => {
+		expect(() => A.setAssignments(alice.id, one, [999_999])).toThrow('Role not found');
+		const id = custom({ allow: ['logs'] });
+		R.deleteRole(id);
+		expect(() => A.setAssignments(alice.id, one, [id])).toThrow('Role not found');
 	});
 
 	it('goes when the instance or the user does', async () => {
-		A.setAccess(alice.id, one, roleOf('Viewer'));
-		A.setAccess(bob.id, two, roleOf('Viewer'));
+		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
+		A.setAssignments(bob.id, two, [roleOf('Viewer')]);
 		db.delete(instances).where(eq(instances.id, one)).run();
-		expect(A.listAccess(alice.id)).toEqual([]);
+		expect(A.listAssignments(alice.id)).toEqual([]);
 		U.removeUser(bob.id, admin.id);
-		expect(db.select().from(instancePermissions).all()).toEqual([]);
+		expect(db.select().from(roleAssignments).all()).toEqual([]);
+	});
+});
+
+describe('rank', () => {
+	it('is unlimited for an admin, the highest role for a user, and none without a role', () => {
+		expect(A.rankOf(admin)).toBe(Infinity);
+		expect(A.rankOf(alice)).toBe(-Infinity);
+		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
+		A.setAssignments(alice.id, null, [roleOf('Manager')]);
+		expect(A.rankOf(alice)).toBe(60);
 	});
 });
 
 describe('roles', () => {
-	it('comes with the built-in roles, matching the presets', () => {
+	it('comes with the built-in roles, matching the presets and ranked', () => {
 		const builtIn = R.listRoles().filter((r) => r.builtIn);
-		expect(builtIn.map((r) => r.name)).toEqual(ACCESS_PRESETS.map((p) => p.name));
+		expect(builtIn.map((r) => r.name).sort()).toEqual(ACCESS_PRESETS.map((p) => p.name).sort());
 		for (const preset of ACCESS_PRESETS) {
 			const role = builtIn.find((r) => r.name === preset.name)!;
 			expect(role.rules.allow).toEqual(preset.permissions);
+			expect(role.rank).toBe(preset.rank);
 		}
 	});
 
@@ -155,42 +228,54 @@ describe('roles', () => {
 		R.updateRole(id, {
 			name: 'Helper 2',
 			description: 'x',
+			rank: 25,
 			rules: { ...emptyRules(), allow: ['console', 'logs'] }
 		});
-		A.setAccess(alice.id, one, id);
-		expect(R.listRoles().find((r) => r.id === id)).toMatchObject({ name: 'Helper 2', used: 1 });
-		expect(() => R.deleteRole(id)).toThrow('1 grant uses this role');
-		A.setAccess(alice.id, one, null);
+		A.setAssignments(alice.id, one, [id]);
+		expect(R.listRoles().find((r) => r.id === id)).toMatchObject({
+			name: 'Helper 2',
+			rank: 25,
+			used: 1
+		});
 		R.deleteRole(id);
 		expect(R.listRoles().find((r) => r.id === id)).toBeUndefined();
+		expect(db.select().from(roles).where(eq(roles.id, id)).get()?.deletedAt).toBeTruthy();
 	});
 
-	it('protects the built-in roles and refuses empty or duplicate roles', () => {
+	it("frees a deleted role's name for a new one", () => {
+		const id = custom({ allow: ['logs'] }, 'Reused');
+		R.deleteRole(id);
+		expect(() => custom({ allow: ['logs'] }, 'Reused')).not.toThrow();
+	});
+
+	it('protects the built-in roles and refuses empty, out-of-range or duplicate roles', () => {
 		const viewer = roleOf('Viewer');
 		expect(() => R.deleteRole(viewer)).toThrow('Built-in');
 		expect(() =>
 			R.updateRole(viewer, {
 				name: 'V',
 				description: '',
+				rank: 1,
 				rules: { ...emptyRules(), allow: ['logs'] }
 			})
 		).toThrow('Built-in');
 		expect(() => custom({}, 'Nothing')).toThrow('Allow at least one');
-		expect(() => custom({ allow: ['files'], deny: ['files'] }, 'Cancelled')).toThrow(
+		expect(() => custom({ allow: ['files'], deny: ['files', 'view'] }, 'Cancelled')).toThrow(
 			'Allow at least one'
 		);
 		expect(() => custom({ allow: ['files'] }, ' ')).toThrow('name');
+		expect(() => custom({ allow: ['files'] }, 'High', 100)).toThrow('Rank');
 		custom({ allow: ['files'] }, 'Once');
 		expect(() => custom({ allow: ['files'] }, 'Once')).toThrow('exists');
 	});
 });
 
 describe('user administration', () => {
-	it('lists accounts with how many servers each was given', async () => {
-		A.setAccess(alice.id, one, roleOf('Viewer'));
-		A.setAccess(alice.id, two, roleOf('Viewer'));
+	it('lists accounts with how many role assignments each has', async () => {
+		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
+		A.setAssignments(alice.id, two, [roleOf('Viewer')]);
 		const list = U.listUsers();
-		expect(list.map((u) => [u.username, u.role, u.instances])).toEqual([
+		expect(list.map((u) => [u.username, u.role, u.assignments])).toEqual([
 			['alice', 'user', 2],
 			['bob', 'user', 0],
 			['root', 'admin', 0]

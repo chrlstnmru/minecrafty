@@ -13,6 +13,8 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import RoleSheet from './role-sheet.svelte';
 
+	let { isAdmin, canWrite }: { isAdmin: boolean; canWrite: boolean } = $props();
+
 	const roles = allRoles();
 	type Role = NonNullable<typeof roles.current>[number];
 
@@ -20,17 +22,29 @@
 		id?: number;
 		name: string;
 		description: string;
+		rank: number;
 		rules: Role['rules'];
 	} | null>(null);
 	let open = $state(false);
 	let removing = $state<Role | null>(null);
 
 	const edit = (role: Role) => {
-		editing = { id: role.id, name: role.name, description: role.description, rules: role.rules };
+		editing = {
+			id: role.id,
+			name: role.name,
+			description: role.description,
+			rank: role.rank,
+			rules: role.rules
+		};
 		open = true;
 	};
 	const duplicate = (role: Role) => {
-		editing = { name: `${role.name} copy`, description: role.description, rules: role.rules };
+		editing = {
+			name: `${role.name} copy`,
+			description: role.description,
+			rank: isAdmin ? role.rank : Math.max(0, role.rank - 1),
+			rules: role.rules
+		};
 		open = true;
 	};
 	const create = () => {
@@ -54,15 +68,17 @@
 <div class="flex flex-col gap-3">
 	<div class="flex items-center justify-between gap-2">
 		<p class="text-sm text-muted-foreground">
-			Give a user one role per server. Built-in roles can be duplicated, not edited.
+			A user can hold several roles, on the panel or on a server. Built-in roles can be duplicated,
+			not edited.
 		</p>
-		<Button onclick={create}><PlusIcon />New role</Button>
+		{#if canWrite}<Button onclick={create}><PlusIcon />New role</Button>{/if}
 	</div>
 	<Table.Root>
 		<Table.Header>
 			<Table.Row>
 				<Table.Head>Role</Table.Head>
-				<Table.Head>Allows</Table.Head>
+				<Table.Head>Rank</Table.Head>
+				<Table.Head>Grants</Table.Head>
 				<Table.Head>In use</Table.Head>
 				<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
 			</Table.Row>
@@ -79,17 +95,20 @@
 							<div class="text-xs text-muted-foreground">{role.description}</div>
 						{/if}
 					</Table.Cell>
+					<Table.Cell class="text-muted-foreground tabular-nums">{role.rank}</Table.Cell>
 					<Table.Cell class="text-muted-foreground">
 						{grantedBy(role.rules).length} permissions
 					</Table.Cell>
 					<Table.Cell class="text-muted-foreground">{role.used}</Table.Cell>
 					<Table.Cell>
 						<div class="flex justify-end gap-1">
-							{#if !role.builtIn}
+							{#if role.canEdit}
 								{@render tip('Edit', PencilIcon, () => edit(role))}
 							{/if}
-							{@render tip('Duplicate', CopyIcon, () => duplicate(role))}
-							{#if !role.builtIn}
+							{#if canWrite}
+								{@render tip('Duplicate', CopyIcon, () => duplicate(role))}
+							{/if}
+							{#if role.canDelete}
 								{@render tip('Delete', TrashIcon, () => (removing = role))}
 							{/if}
 						</div>
@@ -113,14 +132,16 @@
 	</Tooltip.Root>
 {/snippet}
 
-<RoleSheet role={editing} bind:open />
+<RoleSheet role={editing} bind:open {isAdmin} />
 
 <AlertDialog.Root open={!!removing} onOpenChange={(o) => !o && (removing = null)}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Delete {removing?.name}?</AlertDialog.Title>
 			<AlertDialog.Description>
-				A role that is in use cannot be deleted; take it off those servers first.
+				{removing?.used
+					? `${removing.used} ${removing.used === 1 ? 'assignment stops' : 'assignments stop'} granting anything.`
+					: 'Nobody has this role.'}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

@@ -9,8 +9,12 @@
 
 	let {
 		user,
+		panel,
 		...restProps
-	}: ComponentProps<typeof Sidebar.Root> & { user: { name: string; role: string } } = $props();
+	}: ComponentProps<typeof Sidebar.Root> & {
+		user: { name: string; role: string };
+		panel: readonly string[];
+	} = $props();
 </script>
 
 <Sidebar.Root collapsible="icon" {...restProps}>
@@ -38,7 +42,9 @@
 	<Sidebar.Content>
 		<NavMain items={navMain} />
 		<NavSecondary
-			items={user.role === 'admin' ? navSecondary : navSecondary.filter((i) => i.url !== '/users')}
+			items={panel.includes('users.read')
+				? navSecondary
+				: navSecondary.filter((i) => i.url !== '/users')}
 			class="mt-auto"
 		/>
 	</Sidebar.Content>

@@ -97,7 +97,7 @@
 		</Card.Content>
 	</Card.Root>
 
-	{#if data.user.role === 'admin'}
+	{#if data.panel.includes('instances.delete')}
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Delete instance</Card.Title>

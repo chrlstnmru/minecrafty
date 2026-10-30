@@ -27,10 +27,19 @@
 	import AccessSheet from './access-sheet.svelte';
 	import RolesPanel from './roles-panel.svelte';
 
-	type Row = { id: number; username: string; role: 'admin' | 'user'; instances: number };
+	type Row = {
+		id: number;
+		username: string;
+		role: 'admin' | 'user';
+		assignments: number;
+		canManage: boolean;
+		canAssign: boolean;
+	};
 
 	let { data }: PageProps = $props();
 	const users = allUsers();
+	const isAdmin = $derived(data.user.role === 'admin');
+	const canAddUsers = $derived(data.panel.includes('users.write'));
 	const { username, role } = addAccount.fields;
 
 	let tab = $state('users');
@@ -83,7 +92,7 @@
 <div class="flex flex-col gap-4 p-4 lg:p-6">
 	<PageHeader
 		title="Users"
-		description="Admins manage everything. Other users get a role on each server you give them."
+		description="Admins manage everything. Other users get roles, panel-wide or on a server."
 	></PageHeader>
 
 	<Tabs.Root bind:value={tab}>
@@ -94,18 +103,20 @@
 	</Tabs.Root>
 
 	{#if tab === 'roles'}
-		<RolesPanel />
+		<RolesPanel {isAdmin} canWrite={data.panel.includes('roles.write')} />
 	{:else}
-		<div class="flex justify-end">
-			<Button onclick={() => (adding = true)}><PlusIcon />Add user</Button>
-		</div>
+		{#if canAddUsers}
+			<div class="flex justify-end">
+				<Button onclick={() => (adding = true)}><PlusIcon />Add user</Button>
+			</div>
+		{/if}
 
 		<Table.Root>
 			<Table.Header>
 				<Table.Row>
 					<Table.Head>Username</Table.Head>
 					<Table.Head>Role</Table.Head>
-					<Table.Head>Servers</Table.Head>
+					<Table.Head>Roles</Table.Head>
 					<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
 				</Table.Row>
 			</Table.Header>
@@ -121,27 +132,38 @@
 							<Badge variant={row.role === 'admin' ? 'default' : 'secondary'}>{row.role}</Badge>
 						</Table.Cell>
 						<Table.Cell class="text-muted-foreground">
-							{row.role === 'admin' ? 'All' : row.instances}
+							{row.role === 'admin' ? 'Everything' : row.assignments}
 						</Table.Cell>
 						<Table.Cell>
 							<div class="flex justify-end gap-1">
-								{#if row.role !== 'admin'}
-									{@render tip('Choose servers and permissions', ShieldIcon, 'Edit access', () => {
-										accessFor = row;
-										accessOpen = true;
+								{#if row.role !== 'admin' && row.canAssign}
+									{@render tip(
+										'Give roles, panel-wide or per server',
+										ShieldIcon,
+										'Edit access',
+										() => {
+											accessFor = row;
+											accessOpen = true;
+										}
+									)}
+								{/if}
+								{#if row.canManage || self}
+									{@render tip('Set a new password', KeyIcon, 'Set password', () => {
+										password = '';
+										passwordFor = row;
 									})}
 								{/if}
-								{@render tip('Set a new password', KeyIcon, 'Set password', () => {
-									password = '';
-									passwordFor = row;
-								})}
 								{#if !self}
-									<Button variant="ghost" size="sm" onclick={() => changeRole(row)}>
-										{row.role === 'admin' ? 'Make user' : 'Make admin'}
-									</Button>
-									{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
-										removing = row;
-									})}
+									{#if isAdmin}
+										<Button variant="ghost" size="sm" onclick={() => changeRole(row)}>
+											{row.role === 'admin' ? 'Make user' : 'Make admin'}
+										</Button>
+									{/if}
+									{#if row.canManage}
+										{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
+											removing = row;
+										})}
+									{/if}
 								{/if}
 							</div>
 						</Table.Cell>
@@ -196,8 +218,8 @@
 						label="Role"
 						field={role}
 						options={[
-							{ value: 'user', label: 'User (only the servers they are given)' },
-							{ value: 'admin', label: 'Admin (everything)' }
+							{ value: 'user', label: 'User (only what their roles give them)' },
+							...(isAdmin ? [{ value: 'admin', label: 'Admin (everything)' }] : [])
 						]}
 					/>
 					<Form.Errors form={addAccount} />

@@ -3,15 +3,19 @@ import {
 	ACCESS_PRESETS,
 	MODULE_PERMISSION,
 	PERMISSIONS,
-	PERMISSION_INFO,
 	emptyRules,
 	grantedBy,
 	parseRules,
 	type Permission,
 	firstAllowedModule,
 	hasPermission,
-	normalizePermissions
+	INSTANCE_PERMISSIONS,
+	PANEL_PERMISSIONS,
+	closure,
+	isInstancePermission,
+	registry
 } from './permissions';
+import { validateRegistry, type Permission as PermissionDef } from './permission-define';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -22,39 +26,48 @@ const slugs = [
 	)
 ].map((m) => m[1]);
 
-describe('normalizePermissions', () => {
-	it('keeps nothing for nothing, so no access stays no access', () => {
-		expect(normalizePermissions([])).toEqual([]);
+describe('the catalogue', () => {
+	it('is valid: every implied permission exists, with no cycle, and no per-server one implies a panel one', () => {
+		expect(() => validateRegistry(registry)).not.toThrow();
 	});
 
-	it('adds view whenever anything is granted', () => {
-		expect(normalizePermissions(['files'])).toEqual(['view', 'files']);
-		expect(normalizePermissions(['backups', 'control'])).toEqual(['view', 'control', 'backups']);
+	it('rejects an unknown implication, a cycle, and a per-server permission implying a panel one', () => {
+		const make = (extra: Record<string, Partial<PermissionDef>>) => {
+			const out: Record<string, PermissionDef> = {};
+			for (const [key, value] of Object.entries(extra))
+				out[key] = { key, label: key, scope: 'instance', ...value };
+			return out;
+		};
+		expect(() => validateRegistry(make({ a: { implies: ['ghost'] } }))).toThrow('unknown');
+		expect(() => validateRegistry(make({ a: { implies: ['b'] }, b: { implies: ['a'] } }))).toThrow(
+			'cycle'
+		);
+		expect(() => validateRegistry(make({ a: { implies: ['b'] }, b: { scope: 'panel' } }))).toThrow(
+			'panel-wide'
+		);
+		expect(() =>
+			validateRegistry(make({ a: { scope: 'panel', implies: ['b'] }, b: { scope: 'instance' } }))
+		).not.toThrow();
 	});
 
-	it('drops unknown names and repeats, and uses the usual order', () => {
-		expect(normalizePermissions(['mods', 'bogus', 'view', 'mods', '__proto__'])).toEqual([
-			'view',
-			'mods'
-		]);
-		expect(normalizePermissions(['settings', 'console', 'view'])).toEqual([
-			'view',
-			'console',
-			'settings'
-		]);
+	it('follows implications all the way down', () => {
+		expect([...closure(['files'])].sort()).toEqual(['files', 'view']);
+		expect([...closure(['roles.assign'])].sort()).toEqual(['roles.assign', 'users.read']);
+		expect(closure([]).size).toBe(0);
+		expect(closure(['view']).size).toBe(1);
 	});
 
-	it('is stable: normalising twice changes nothing', () => {
-		const once = normalizePermissions(['schedules', 'console']);
-		expect(normalizePermissions(once)).toEqual(once);
+	it('every instance permission brings view, and no panel one is an instance one', () => {
+		for (const p of INSTANCE_PERMISSIONS) expect(closure([p]).has('view')).toBe(true);
+		for (const p of PANEL_PERMISSIONS) expect(isInstancePermission(p)).toBe(false);
 	});
 });
 
 describe('what is defined', () => {
 	it('describes every permission', () => {
 		for (const p of PERMISSIONS) {
-			expect(PERMISSION_INFO[p].label).toBeTruthy();
-			expect(PERMISSION_INFO[p].description).toBeTruthy();
+			expect(registry[p].label).toBeTruthy();
+			expect(registry[p].description).toBeTruthy();
 		}
 	});
 
@@ -63,12 +76,14 @@ describe('what is defined', () => {
 		for (const slug of slugs) expect(MODULE_PERMISSION[slug], slug).toBeDefined();
 	});
 
-	it('every preset is a clean list that includes view', () => {
+	it('every preset is a clean list that includes view, with a rank', () => {
 		for (const preset of ACCESS_PRESETS) {
-			expect(normalizePermissions(preset.permissions)).toEqual(preset.permissions);
+			expect(closure(preset.permissions).size).toBe(preset.permissions.length);
 			expect(preset.permissions).toContain('view');
+			expect(preset.rank).toBeGreaterThanOrEqual(0);
+			expect(preset.rank).toBeLessThanOrEqual(99);
 		}
-		expect(ACCESS_PRESETS.at(-1)!.permissions).toEqual([...PERMISSIONS]);
+		expect(ACCESS_PRESETS.at(-1)!.permissions).toEqual([...INSTANCE_PERMISSIONS]);
 	});
 });
 
@@ -97,13 +112,13 @@ describe('role rules', () => {
 		).toEqual({ allow: ['logs', 'files'], deny: ['mods'] });
 	});
 
-	it('grants the allowed permissions minus the denied ones, with view', () => {
+	it('grants the allowed permissions and what they imply, minus the denied ones', () => {
 		const rules = {
 			allow: ['files', 'backups'] as Permission[],
 			deny: ['backups'] as Permission[]
 		};
 		expect(grantedBy(rules)).toEqual(['view', 'files']);
-		expect(grantedBy({ ...rules, deny: ['view'] })).toEqual([]);
+		expect(grantedBy({ ...rules, deny: ['view'] })).toEqual(['files', 'backups']);
 		expect(grantedBy(emptyRules())).toEqual([]);
 	});
 });

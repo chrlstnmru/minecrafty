@@ -30,7 +30,8 @@
 	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
 
 	let { data }: PageProps = $props();
-	const isAdmin = $derived(data.user.role === 'admin');
+	const canCreate = $derived(data.panel.includes('instances.create'));
+	const seesHost = $derived(data.panel.includes('host.view'));
 	const instances = $derived(await listInstances());
 	const live = liveStats();
 	const stats = $derived(live.current);
@@ -199,7 +200,7 @@
 	<PageHeader title="Dashboard" description="How the host and your servers are doing right now." />
 
 	<div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-		{#if isAdmin}
+		{#if seesHost}
 			<StatCard
 				title="CPU"
 				value={stats?.host.cpu != null ? formatPercent(stats.host.cpu) : '–'}
@@ -298,7 +299,7 @@
 							<Empty.Media variant="icon"><ServerIcon /></Empty.Media>
 							<Empty.Title>No servers yet</Empty.Title>
 							<Empty.Description>
-								{isAdmin
+								{canCreate
 									? 'Create your first one to see it here.'
 									: 'An admin can give you access to one.'}
 							</Empty.Description>

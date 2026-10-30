@@ -13,7 +13,7 @@ describe('remote functions', () => {
 			expect(parts.length).toBeGreaterThan(0);
 			for (const part of parts) {
 				const name = part.split(/\s/)[0];
-				expect(part, name).toMatch(/require(Admin|User|Permission)\(/);
+				expect(part, name).toMatch(/require(Admin|User|Panel|Permission)\(/);
 			}
 		});
 	}

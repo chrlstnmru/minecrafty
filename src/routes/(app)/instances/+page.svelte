@@ -26,7 +26,8 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 
 	let { data }: PageProps = $props();
-	const isAdmin = $derived(data.user.role === 'admin');
+	const canCreate = $derived(data.panel.includes('instances.create'));
+	const canDelete = $derived(data.panel.includes('instances.delete'));
 	const instances = $derived(await listInstances());
 
 	// modpack servers made before their icon was kept get it from Modrinth, once
@@ -88,7 +89,7 @@
 <div class="flex flex-col gap-4 p-4 lg:p-6">
 	<PageHeader title="Instances" description="Create and manage your Minecraft servers.">
 		{#snippet actions()}
-			{#if isAdmin}
+			{#if canCreate}
 				<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
 			{/if}
 		{/snippet}
@@ -100,12 +101,12 @@
 				<Empty.Media variant="icon"><ServerIcon /></Empty.Media>
 				<Empty.Title>No instances yet</Empty.Title>
 				<Empty.Description>
-					{isAdmin
+					{canCreate
 						? 'Create your first server to get started.'
 						: 'An admin can give you access to one.'}
 				</Empty.Description>
 			</Empty.Header>
-			{#if isAdmin}
+			{#if canCreate}
 				<Empty.Content>
 					<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
 				</Empty.Content>
@@ -166,7 +167,7 @@
 								Retry
 							</Button>
 						{/if}
-						{#if isAdmin}
+						{#if canDelete}
 							<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button
 							>
 						{/if}
@@ -192,7 +193,7 @@
 							</Button>
 						{:else}
 							<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>Start</Button>
-							{#if isAdmin}
+							{#if canDelete}
 								<Button variant="ghost" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
 							{/if}
 						{/if}

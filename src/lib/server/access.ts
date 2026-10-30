@@ -1,40 +1,119 @@
-import { and, eq } from 'drizzle-orm';
-import { PERMISSIONS, grantedBy, parseRules, type Permission } from '#lib/permissions.js';
+import { and, eq, isNull } from 'drizzle-orm';
+import {
+	PERMISSIONS,
+	INSTANCE_PERMISSIONS,
+	PANEL_PERMISSIONS,
+	grantedBy,
+	isInstancePermission,
+	parseRules,
+	type InstancePermission,
+	type PanelPermission,
+	type Permission
+} from '#lib/permissions.js';
 import { db } from './db';
-import { instancePermissions, roles } from './db/schema';
+import { instances, roleAssignments, roles } from './db/schema';
 
 export type Actor = { id: number; role: 'admin' | 'user' };
 
-function ruleFor(userId: number, instanceId: number) {
-	const row = db
-		.select({ rules: roles.rules })
-		.from(instancePermissions)
-		.innerJoin(roles, eq(roles.id, instancePermissions.roleId))
-		.where(
-			and(eq(instancePermissions.userId, userId), eq(instancePermissions.instanceId, instanceId))
-		)
-		.get();
-	return row ? parseRules(row.rules) : null;
+/** One role given to a user, with what it grants and denies already worked out. */
+export type Entry = {
+	roleId: number;
+	rank: number;
+	/** null: assigned on the whole panel */
+	instanceId: number | null;
+	granted: Set<Permission>;
+	denied: Set<Permission>;
+};
+
+/** A user's role assignments, read fresh each time so a change applies on the very next request. */
+export function entriesFor(userId: number): Entry[] {
+	return db
+		.select({
+			roleId: roles.id,
+			rank: roles.rank,
+			rules: roles.rules,
+			instanceId: roleAssignments.instanceId
+		})
+		.from(roleAssignments)
+		.innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+		.where(and(eq(roleAssignments.userId, userId), isNull(roles.deletedAt)))
+		.all()
+		.map((row) => {
+			const rules = parseRules(row.rules);
+			return {
+				roleId: row.roleId,
+				rank: row.rank,
+				instanceId: row.instanceId,
+				granted: new Set(grantedBy(rules)),
+				denied: new Set(rules.deny)
+			};
+		});
 }
 
-/** What this user may do on this instance: everything for an admin, what their role grants for anyone else. */
-export function permissionsFor(user: Actor, instanceId: number): Permission[] {
-	if (user.role === 'admin') return [...PERMISSIONS];
-	const rules = ruleFor(user.id, instanceId);
-	return rules ? grantedBy(rules) : [];
+/**
+ * What the entries amount to on an instance (or on the panel itself, with null). A permission is
+ * granted by any applicable role and removed by a deny in any applicable role. Panel permissions
+ * only come from roles assigned panel-wide; instance permissions come from those and from roles
+ * assigned to this instance.
+ */
+export function resolve(entries: readonly Entry[], instanceId: number | null): Set<Permission> {
+	const granted = new Set<Permission>();
+	const denied = new Set<Permission>();
+	for (const entry of entries) {
+		const panelWide = entry.instanceId === null;
+		const here = panelWide || (instanceId !== null && entry.instanceId === instanceId);
+		for (const key of entry.granted) {
+			if (isInstancePermission(key) ? here : panelWide) granted.add(key);
+		}
+		for (const key of entry.denied) {
+			if (isInstancePermission(key) ? here : panelWide) denied.add(key);
+		}
+	}
+	for (const key of denied) granted.delete(key);
+	// without View there is no server to act on, whatever else was granted
+	if (instanceId !== null && !granted.has('view')) {
+		for (const key of [...granted]) if (isInstancePermission(key)) granted.delete(key);
+	}
+	return granted;
+}
+
+const allKeys = () => new Set<Permission>(PERMISSIONS);
+
+function grantedTo(user: Actor, instanceId: number | null) {
+	return user.role === 'admin' ? allKeys() : resolve(entriesFor(user.id), instanceId);
+}
+
+/** What this user may do on this instance: everything for an admin, what their roles grant otherwise. */
+export function permissionsFor(user: Actor, instanceId: number): InstancePermission[] {
+	const granted = grantedTo(user, instanceId);
+	return INSTANCE_PERMISSIONS.filter((p) => granted.has(p));
+}
+
+/** What this user may do on the panel as a whole. */
+export function panelPermissionsFor(user: Actor): PanelPermission[] {
+	const granted = grantedTo(user, null);
+	return PANEL_PERMISSIONS.filter((p) => granted.has(p));
+}
+
+/** Whether the user holds a permission, on the given instance for per-server ones. */
+export function can(user: Actor, key: Permission, options?: { instanceId?: number }): boolean {
+	if (user.role === 'admin') return true;
+	const instanceId = isInstancePermission(key) ? (options?.instanceId ?? null) : null;
+	if (isInstancePermission(key) && instanceId === null) return false;
+	return grantedTo(user, instanceId).has(key);
 }
 
 /** The instances the user may see, or null for all of them (an admin). */
 export function visibleInstanceIds(user: Actor): number[] | null {
 	if (user.role === 'admin') return null;
+	const entries = entriesFor(user.id);
+	if (!entries.length) return [];
 	return db
-		.select({ id: instancePermissions.instanceId, rules: roles.rules })
-		.from(instancePermissions)
-		.innerJoin(roles, eq(roles.id, instancePermissions.roleId))
-		.where(eq(instancePermissions.userId, user.id))
+		.select({ id: instances.id })
+		.from(instances)
 		.all()
-		.filter((row) => grantedBy(parseRules(row.rules)).length > 0)
-		.map((row) => row.id);
+		.map((row) => row.id)
+		.filter((id) => resolve(entries, id).has('view'));
 }
 
 export type Check = 'ok' | 'unknown' | 'denied';
@@ -43,37 +122,75 @@ export type Check = 'ok' | 'unknown' | 'denied';
  * Whether the user may do `needed` on the instance. "unknown" means they may not even see it, which
  * callers report as not found, so a server they have no access to does not reveal that it exists.
  */
-export function check(user: Actor, instanceId: number, needed: Permission): Check {
-	const granted = permissionsFor(user, instanceId);
-	if (!granted.includes('view')) return 'unknown';
-	return granted.includes(needed) ? 'ok' : 'denied';
+export function check(user: Actor, instanceId: number, needed: InstancePermission): Check {
+	const granted = grantedTo(user, instanceId);
+	if (!granted.has('view')) return 'unknown';
+	return granted.has(needed) ? 'ok' : 'denied';
 }
 
-/** The role a user has on every instance, for the page that edits it. */
-export function listAccess(userId: number) {
+/** The user's own rank: an admin outranks every role, someone with no role has none. */
+export function rankOf(user: Actor): number {
+	if (user.role === 'admin') return Infinity;
+	return entriesFor(user.id).reduce((max, e) => Math.max(max, e.rank), -Infinity);
+}
+
+/** The highest rank among the user's roles that grant `key` where it applies (admin: unlimited). */
+export function grantingRank(user: Actor, key: Permission, instanceId: number | null): number {
+	if (user.role === 'admin') return Infinity;
+	return entriesFor(user.id)
+		.filter(
+			(e) =>
+				e.granted.has(key) &&
+				!e.denied.has(key) &&
+				(e.instanceId === null || (instanceId !== null && e.instanceId === instanceId))
+		)
+		.reduce((max, e) => Math.max(max, e.rank), -Infinity);
+}
+
+/** Whether the user holds the role through any assignment. */
+export function holdsRole(userId: number, roleId: number): boolean {
+	return !!db
+		.select({ id: roleAssignments.id })
+		.from(roleAssignments)
+		.where(and(eq(roleAssignments.userId, userId), eq(roleAssignments.roleId, roleId)))
+		.get();
+}
+
+/** A user's role assignments, for the page that edits them: instanceId null is panel-wide. */
+export function listAssignments(userId: number) {
 	return db
-		.select({ instanceId: instancePermissions.instanceId, roleId: instancePermissions.roleId })
-		.from(instancePermissions)
-		.where(eq(instancePermissions.userId, userId))
+		.select({ roleId: roleAssignments.roleId, instanceId: roleAssignments.instanceId })
+		.from(roleAssignments)
+		.innerJoin(roles, eq(roles.id, roleAssignments.roleId))
+		.where(and(eq(roleAssignments.userId, userId), isNull(roles.deletedAt)))
 		.all();
 }
 
-/** Gives a user a role on an instance, or takes their access away with null. */
-export function setAccess(userId: number, instanceId: number, roleId: number | null) {
-	if (roleId === null) {
-		db.delete(instancePermissions)
+/** Replaces the roles a user has on an instance (null: panel-wide) with exactly these. */
+export function setAssignments(userId: number, instanceId: number | null, roleIds: number[]) {
+	const unique = [...new Set(roleIds)];
+	for (const roleId of unique) {
+		if (
+			!db
+				.select()
+				.from(roles)
+				.where(and(eq(roles.id, roleId), isNull(roles.deletedAt)))
+				.get()
+		)
+			throw new Error('Role not found');
+	}
+	db.transaction((tx) => {
+		tx.delete(roleAssignments)
 			.where(
-				and(eq(instancePermissions.userId, userId), eq(instancePermissions.instanceId, instanceId))
+				and(
+					eq(roleAssignments.userId, userId),
+					instanceId === null
+						? isNull(roleAssignments.instanceId)
+						: eq(roleAssignments.instanceId, instanceId)
+				)
 			)
 			.run();
-		return;
-	}
-	if (!db.select().from(roles).where(eq(roles.id, roleId)).get()) throw new Error('Role not found');
-	db.insert(instancePermissions)
-		.values({ userId, instanceId, roleId })
-		.onConflictDoUpdate({
-			target: [instancePermissions.userId, instancePermissions.instanceId],
-			set: { roleId }
-		})
-		.run();
+		for (const roleId of unique)
+			tx.insert(roleAssignments).values({ userId, roleId, instanceId }).run();
+	});
 }
