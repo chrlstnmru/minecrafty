@@ -15,7 +15,7 @@
 	import { followLog, listLogs, readLog, searchLog } from '#lib/logs.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
+	import Combobox from '#lib/components/combobox.svelte';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
@@ -204,7 +204,7 @@
 
 <div class="flex min-h-0 flex-1 flex-col gap-3">
 	<div class="flex flex-wrap items-center gap-2">
-		<SelectMenu
+		<Combobox
 			class="w-64 max-w-full"
 			aria-label="Log file"
 			value={name}

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { RemoteFormField } from '$app/server';
+	import Combobox from '#lib/components/combobox.svelte';
 	import SelectMenu from '#lib/components/select-menu.svelte';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { tryGetFieldRevalidateContext } from './context.js';
@@ -11,9 +12,19 @@
 		disabled?: boolean;
 		options?: { value: string; label: string }[];
 		placeholder?: string;
+		/** a search box, for lists too long to scroll */
+		searchable?: boolean;
 	};
 
-	let { field, label, description, disabled = false, options = [], placeholder }: Props = $props();
+	let {
+		field,
+		label,
+		description,
+		disabled = false,
+		options = [],
+		placeholder,
+		searchable = false
+	}: Props = $props();
 
 	const id = $props.id();
 	const revalidate = tryGetFieldRevalidateContext();
@@ -24,18 +35,33 @@
 	{#if label}<Field.Label for={id}>{label}</Field.Label>{/if}
 	<!-- the submitted value is this input's; the select only edits the field -->
 	<input type="hidden" {name} value={field.value() ?? ''} />
-	<SelectMenu
-		{id}
-		{disabled}
-		{options}
-		{placeholder}
-		value={field.value() ?? ''}
-		aria-invalid={!!field.issues()?.length}
-		onValueChange={(next) => {
-			field.set(next);
-			if (field.dirty()) revalidate?.();
-		}}
-	/>
+	{#if searchable}
+		<Combobox
+			{id}
+			{disabled}
+			{options}
+			{placeholder}
+			value={field.value() ?? ''}
+			aria-invalid={!!field.issues()?.length}
+			onValueChange={(next) => {
+				field.set(next);
+				if (field.dirty()) revalidate?.();
+			}}
+		/>
+	{:else}
+		<SelectMenu
+			{id}
+			{disabled}
+			{options}
+			{placeholder}
+			value={field.value() ?? ''}
+			aria-invalid={!!field.issues()?.length}
+			onValueChange={(next) => {
+				field.set(next);
+				if (field.dirty()) revalidate?.();
+			}}
+		/>
+	{/if}
 	{#if description}<Field.Description>{description}</Field.Description>{/if}
 	<Field.Error errors={field.issues()} />
 </Field.Field>

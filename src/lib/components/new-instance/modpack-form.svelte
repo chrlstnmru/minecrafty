@@ -14,7 +14,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
+	import Combobox from '#lib/components/combobox.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -181,7 +181,7 @@
 				<input {...versionIdField.as('text')} type="hidden" value={versionId} />
 				<Field.Field data-invalid={!!versionIdField.issues()?.length}>
 					<Field.Label for="modpack-version">Version</Field.Label>
-					<SelectMenu
+					<Combobox
 						id="modpack-version"
 						bind:value={versionId}
 						disabled={!versions?.current}

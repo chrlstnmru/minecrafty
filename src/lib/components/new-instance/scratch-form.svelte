@@ -46,6 +46,7 @@
 				<Form.Select
 					label="Minecraft version"
 					field={mcVersion}
+					searchable
 					disabled={!versions.current}
 					options={(versions.current ?? []).map((v) => ({ value: v, label: v }))}
 				/>

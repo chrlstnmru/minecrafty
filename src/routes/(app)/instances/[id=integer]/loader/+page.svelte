@@ -8,7 +8,7 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
+	import Combobox from '#lib/components/combobox.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { updateKind } from '#lib/versions.js';
 
@@ -145,7 +145,7 @@
 				<Field.Group>
 					<Field.Field>
 						<Field.Label for="mc-version">Minecraft version</Field.Label>
-						<SelectMenu
+						<Combobox
 							id="mc-version"
 							{options}
 							value={target}

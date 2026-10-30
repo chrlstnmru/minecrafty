@@ -16,7 +16,7 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
+	import Combobox from '#lib/components/combobox.svelte';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { formatBytes } from '#lib/format.js';
@@ -183,7 +183,7 @@
 					<Field.Group>
 						<Field.Field>
 							<Field.Label for="pack-version">Version</Field.Label>
-							<SelectMenu
+							<Combobox
 								id="pack-version"
 								{options}
 								value={target ?? ''}
