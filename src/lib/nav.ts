@@ -1,3 +1,4 @@
+import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
 import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import DashboardIcon from '@tabler/icons-svelte/icons/dashboard';
@@ -28,6 +29,7 @@ export const navMain: NavItem[] = [
 export const navSecondary: NavItem[] = [
 	{ title: 'Users', url: '/users', icon: UsersIcon, rule: rules.users },
 	{ title: 'Roles', url: '/roles', icon: ShieldLockIcon, rule: rules.roles },
+	{ title: 'Audit log', url: '/audit', icon: HistoryIcon, rule: rules.audit },
 	{ title: 'Settings', url: '/settings', icon: SettingsIcon, rule: rules.settings }
 ];
 

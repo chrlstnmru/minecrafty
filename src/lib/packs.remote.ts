@@ -1,6 +1,7 @@
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
 import { requirePermission } from '#lib/server/auth.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import {
 	idSchema,
@@ -38,6 +39,11 @@ export const useResourcePack = command(
 	async ({ id: instanceId, projectId, versionId }) => {
 		requirePermission(instanceId, 'resource-packs');
 		const result = await userFacing(() => packs.useAsServerPack(instanceId, projectId, versionId));
+		record({
+			action: 'resourcepack.use',
+			summary: 'Set the server resource pack',
+			instanceId
+		});
 		await serverPack(instanceId).refresh();
 		return result;
 	}
@@ -48,6 +54,11 @@ export const removePack = command(
 	async ({ id: instanceId, rowId }) => {
 		requirePermission(instanceId, 'resource-packs');
 		await userFacing(async () => packs.removePack(instanceId, rowId));
+		record({
+			action: 'resourcepack.remove',
+			summary: 'Removed a resource pack',
+			instanceId
+		});
 		await serverPack(instanceId).refresh();
 	}
 );
@@ -57,6 +68,11 @@ export const setPackOptions = form(
 	async ({ id: instanceId, required, prompt }) => {
 		requirePermission(instanceId, 'resource-packs');
 		await userFacing(async () => packs.setServerPackOptions(instanceId, { required, prompt }));
+		record({
+			action: 'resourcepack.options',
+			summary: 'Changed the resource pack options',
+			instanceId
+		});
 		await serverPack(instanceId).refresh();
 	}
 );

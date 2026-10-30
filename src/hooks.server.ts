@@ -1,6 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
+import { getRequestEvent } from '$app/server';
+import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
@@ -52,6 +54,13 @@ export const handle: Handle = async ({ event, resolve }) => {
 export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
 	if (building) return;
+	// who an audit entry is by: the signed-in user of the request being handled
+	setActorProvider(() => {
+		const user = getRequestEvent().locals.user;
+		return user ? { id: user.id, name: user.username } : null;
+	});
+	pruneAudit();
+	setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
 	failInterruptedInstalls();
 	sweepUploads();
 	// scheduled tasks run from here on, once a minute

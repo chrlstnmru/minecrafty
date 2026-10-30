@@ -1,5 +1,6 @@
 import { error, json } from '@sveltejs/kit';
 import { can } from '#lib/server/access.js';
+import { record } from '#lib/server/audit.js';
 import { importMrpack } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
@@ -24,6 +25,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 			new Uint8Array(await file.arrayBuffer()),
 			typeof name === 'string' && name.trim() ? name : undefined
 		);
+		record({ action: 'pack.create', summary: `Imported the modpack ${pack.name}` });
 		return json({ id: pack.id });
 	} catch (e) {
 		error(400, e instanceof Error ? e.message : 'Could not import the pack');

@@ -1,3 +1,4 @@
+import { record } from './audit';
 import { and, eq } from 'drizzle-orm';
 import { matches, nextRun, parseCron } from '#lib/cron.js';
 import { formatBytes } from '#lib/format.js';
@@ -185,6 +186,11 @@ export async function runSchedule(instanceId: number, scheduleId: number, deps: 
 			})
 			.where(eq(schedules.id, task.id))
 			.run();
+		record({
+			action: 'schedule.run',
+			summary: `Ran the task "${task.name}": ${outcome.message}`,
+			instanceId
+		});
 		return outcome;
 	} finally {
 		busy.delete(task.id);

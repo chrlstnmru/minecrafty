@@ -141,6 +141,13 @@
       "when": 1793362076196,
       "tag": "0019_modpack_builder",
       "breakpoints": true
+    },
+    {
+      "idx": 20,
+      "version": "6",
+      "when": 1793365220647,
+      "tag": "0020_audit_log",
+      "breakpoints": true
     }
   ]
 }

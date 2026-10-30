@@ -239,3 +239,24 @@ export const localPackFiles = sqliteTable(
 	},
 	(t) => [uniqueIndex('local_pack_files_path').on(t.packId, t.path)]
 );
+
+// who did what, kept for a while. The actor and instance names are copied in, so a row still reads
+// after the account or the instance is gone.
+export const auditLog = sqliteTable(
+	'audit_log',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		at: integer('at', { mode: 'timestamp' })
+			.notNull()
+			.$defaultFn(() => new Date()),
+		// null for the panel itself (a scheduled task, a server starting with the panel)
+		actorId: integer('actor_id'),
+		actorName: text('actor_name').notNull(),
+		// a dotted name such as "instance.start" or "role.save"
+		action: text('action').notNull(),
+		instanceId: integer('instance_id'),
+		instanceName: text('instance_name'),
+		summary: text('summary').notNull()
+	},
+	(t) => [index('audit_instance_at').on(t.instanceId, t.at), index('audit_at').on(t.at)]
+);

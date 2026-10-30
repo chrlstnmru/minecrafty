@@ -2,6 +2,7 @@ import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
 import { requirePermission } from '#lib/server/auth.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import {
 	lastOutcome,
@@ -36,6 +37,11 @@ export const updateModpack = command(
 			startModpackUpdate(id, { versionId, backup, replaceConfigs })
 		);
 		void finished;
+		record({
+			action: 'modpack.update',
+			summary: `Updated the modpack to ${plan.versionNumber}`,
+			instanceId: id
+		});
 		return { versionNumber: plan.versionNumber };
 	}
 );

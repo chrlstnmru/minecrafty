@@ -11,12 +11,20 @@ import {
 import { listAssignments, setAssignments } from '#lib/server/access.js';
 import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { canActOnRecord, canAddUser, canAssignRole, type GrantCheck } from '#lib/server/grants.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
+import * as rolesStore from '#lib/server/roles.js';
 import * as admin from '#lib/server/user-admin.js';
 
 const refuse = (check: GrantCheck) => {
 	if (!check.ok) error(403, check.reason ?? 'Not allowed');
 };
+
+const nameOf = (id: number) => admin.listUsers().find((u) => u.id === id)?.username ?? 'a user';
+const roleNameOf = (id: number) =>
+	rolesStore.listRoles().find((r) => r.id === id)?.name ?? 'a role';
+const where = (instanceId: number | null) =>
+	instanceId === null ? 'on every server' : 'on the server';
 
 /** Every account, with what the caller may do to each (judged by rank). */
 export const allUsers = query(async () => {
@@ -37,6 +45,7 @@ export const addAccount = form(addUserSchema, async ({ username, _password }) =>
 	} catch (e) {
 		invalid(e instanceof Error ? e.message : 'Could not add the user');
 	}
+	record({ action: 'user.add', summary: `Added the user ${username}` });
 	await allUsers().refresh();
 });
 
@@ -47,7 +56,12 @@ export const setUserPassword = command(userPasswordSchema, async ({ id, password
 		const actor = requirePanel('users.write');
 		refuse(canActOnRecord(actor, 'users.write', { userId: id }));
 	}
+	const name = nameOf(id);
 	await userFacing(() => admin.changeUser(id, { password }, me.id));
+	record({
+		action: 'user.password',
+		summary: id === me.id ? 'Changed their own password' : `Changed the password of ${name}`
+	});
 });
 
 /** Deletes several accounts. Each one is checked on its own; the ones the caller may not delete are skipped and reported. */
@@ -61,8 +75,10 @@ export const deleteAccounts = command(userIdsSchema, async (ids) => {
 			skipped.push({ id, reason: check.reason ?? 'Not allowed' });
 			continue;
 		}
+		const name = nameOf(id);
 		try {
 			admin.removeUser(id, actor.id);
+			record({ action: 'user.delete', summary: `Deleted the user ${name}` });
 			done.push(id);
 		} catch (e) {
 			skipped.push({ id, reason: e instanceof Error ? e.message : 'Could not delete' });
@@ -89,6 +105,11 @@ export const grantRoleToUsers = command(
 				.filter((a) => a.instanceId === instanceId)
 				.map((a) => a.roleId);
 			setAssignments(id, instanceId, [...new Set([...have, roleId])]);
+			record({
+				action: 'role.assign',
+				summary: `Gave ${nameOf(id)} the role ${roleNameOf(roleId)} ${where(instanceId)}`,
+				instanceId
+			});
 			granted++;
 		}
 		await allUsers().refresh();
@@ -114,6 +135,18 @@ export const setUserAccess = command(userAccessSchema, async ({ userId, instance
 	for (const roleId of changed)
 		refuse(canAssignRole(actor, { subjectUserId: userId, roleId, instanceId }));
 	await userFacing(async () => setAssignments(userId, instanceId, roleIds));
+	for (const roleId of roleIds.filter((r) => !before.includes(r)))
+		record({
+			action: 'role.assign',
+			summary: `Gave ${nameOf(userId)} the role ${roleNameOf(roleId)} ${where(instanceId)}`,
+			instanceId
+		});
+	for (const roleId of before.filter((r) => !roleIds.includes(r)))
+		record({
+			action: 'role.unassign',
+			summary: `Took the role ${roleNameOf(roleId)} from ${nameOf(userId)} ${where(instanceId)}`,
+			instanceId
+		});
 	await userAccess(userId).refresh();
 	await allUsers().refresh();
 });

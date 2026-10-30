@@ -1,13 +1,21 @@
 import { invalid, redirect } from '@sveltejs/kit';
 import { form, getRequestEvent } from '$app/server';
 import { loginSchema, setupSchema } from '#lib/schemas/auth.js';
+import { record } from '#lib/server/audit.js';
 import { createUser, endSession, hasUsers, startSession, verifyLogin } from '#lib/server/auth.js';
 
 export const login = form(loginSchema, async ({ username, _password }) => {
 	const user = await verifyLogin(username, _password);
-	if (!user) invalid('Invalid username or password');
+	if (!user) {
+		record(
+			{ action: 'auth.failed', summary: `Failed sign-in as ${username}` },
+			{ id: null, name: 'Someone' }
+		);
+		invalid('Invalid username or password');
+	}
 
 	startSession(getRequestEvent().cookies, user.id);
+	record({ action: 'auth.login', summary: 'Signed in' }, { id: user.id, name: user.username });
 	redirect(303, '/');
 });
 
@@ -16,6 +24,10 @@ export const setup = form(setupSchema, async ({ username, _password }) => {
 	if (hasUsers()) redirect(303, '/login');
 
 	const user = await createUser(username, _password, 'owner');
+	record(
+		{ action: 'auth.setup', summary: 'Created the owner account' },
+		{ id: user.id, name: user.username }
+	);
 	startSession(getRequestEvent().cookies, user.id);
 	redirect(303, '/');
 });

@@ -17,6 +17,7 @@ export type NavContext = {
 export const rules = {
 	instances: { permission: ['instances.create', ...INSTANCE_PERMISSIONS] },
 	modpacks: { permission: ['modpacks.read'] },
+	audit: { permission: ['audit.read'] },
 	backups: { permission: ['backups'] },
 	schedules: { permission: ['schedules'] },
 	users: { permission: ['users.read'] },

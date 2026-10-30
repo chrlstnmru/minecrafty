@@ -67,6 +67,11 @@ const instance = definePermissions({
 		description: 'Create and change scheduled tasks',
 		scope: 'instance'
 	},
+	audit: {
+		label: 'Audit log',
+		description: 'See who did what on this server',
+		scope: 'instance'
+	},
 	loader: {
 		label: 'Loader',
 		description: 'Update the loader build or the Minecraft version',
@@ -94,6 +99,11 @@ const panel = definePermissions({
 	'instances.delete': {
 		label: 'Delete instances',
 		description: 'Delete a server and its files',
+		scope: 'panel'
+	},
+	'audit.read': {
+		label: 'Audit log',
+		description: 'See who did what across the whole panel, including accounts and roles',
 		scope: 'panel'
 	},
 	'modpacks.read': {
@@ -174,6 +184,7 @@ export const MODULE_PERMISSION: Record<string, InstancePermission> = {
 	backups: 'backups',
 	schedules: 'schedules',
 	loader: 'loader',
+	audit: 'audit',
 	settings: 'settings'
 };
 

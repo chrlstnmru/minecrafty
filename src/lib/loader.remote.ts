@@ -2,6 +2,7 @@ import * as v from 'valibot';
 import { command, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
 import { requirePermission } from '#lib/server/auth.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import { loaderInfo, startLoaderUpdate } from '#lib/server/loader-update.js';
 import { lastOutcome } from '#lib/server/update-outcome.js';
@@ -25,5 +26,10 @@ export const updateLoader = command(updateSchema, async ({ id, mcVersion, backup
 		startLoaderUpdate(id, { mcVersion, backup })
 	);
 	void finished;
+	record({
+		action: 'loader.update',
+		summary: `Updated the loader to Minecraft ${mcVersion}${backup ? ' (with a backup)' : ''}`,
+		instanceId: id
+	});
 	return started;
 });

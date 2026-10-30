@@ -1,4 +1,5 @@
 import { error } from '@sveltejs/kit';
+import { record } from '#lib/server/audit.js';
 import { check } from '#lib/server/access.js';
 import { describeDownload } from '#lib/server/files.js';
 import { zipStream } from '#lib/server/zip-writer.js';
@@ -18,6 +19,11 @@ export const GET: RequestHandler = ({ params, url, locals }) => {
 		error(404, e instanceof Error ? e.message : 'Not found');
 	}
 
+	record({
+		action: 'file.download',
+		summary: `Downloaded ${target.name}`,
+		instanceId: Number(params.id)
+	});
 	const disposition = `attachment; filename*=UTF-8''${encodeURIComponent(target.name)}`;
 	if (target.kind === 'file')
 		return new Response(Bun.file(target.path), {

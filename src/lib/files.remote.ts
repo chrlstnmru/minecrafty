@@ -5,6 +5,7 @@ import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/
 import { requirePermission } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
 import * as uploads from '#lib/server/uploads.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 
 const id = idSchema;
@@ -28,6 +29,7 @@ export const saveFile = command(
 	async ({ id: instanceId, path, content }) => {
 		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.writeTextFile(instanceId, path, content));
+		record({ action: 'file.save', summary: `Edited ${path}`, instanceId });
 		await readFile({ id: instanceId, path }).refresh();
 	}
 );
@@ -41,6 +43,11 @@ export const newFolder = command(
 	async ({ id: instanceId, path, name }) => {
 		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.makeDirectory(instanceId, path, name));
+		record({
+			action: 'file.folder',
+			summary: `Made the folder ${joinPath(path, name)}`,
+			instanceId
+		});
 		await listFiles({ id: instanceId, path }).refresh();
 	}
 );
@@ -50,6 +57,11 @@ export const newFile = command(
 	async ({ id: instanceId, path, name }) => {
 		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.createTextFile(instanceId, path, name));
+		record({
+			action: 'file.create',
+			summary: `Created ${joinPath(path, name)}`,
+			instanceId
+		});
 		await listFiles({ id: instanceId, path }).refresh();
 	}
 );
@@ -61,6 +73,11 @@ export const renameFile = command(
 		await userFacing(async () => {
 			await files.assertWorldStopped(instanceId, path, 'renaming');
 			files.renameEntry(instanceId, path, name);
+		});
+		record({
+			action: 'file.rename',
+			summary: `Renamed ${path} to ${name}`,
+			instanceId
 		});
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
 	}
@@ -74,6 +91,7 @@ export const removeFile = command(
 			await files.assertWorldStopped(instanceId, path, 'deleting from');
 			files.deleteEntry(instanceId, path);
 		});
+		record({ action: 'file.delete', summary: `Deleted ${path}`, instanceId });
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
 	}
 );
@@ -84,6 +102,11 @@ export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, p
 		for (const { file, path: relPath } of items) {
 			await files.assertWorldStopped(instanceId, joinPath(path, relPath), 'uploading into');
 			await files.saveUpload(instanceId, path, file, relPath);
+			record({
+				action: 'file.upload',
+				summary: `Uploaded ${joinPath(path, relPath)}`,
+				instanceId
+			});
 		}
 	});
 	await listFiles({ id: instanceId, path }).refresh();
@@ -144,6 +167,7 @@ export const finishUpload = command(
 	async ({ id: instanceId, uploadId, path }) => {
 		const user = requirePermission(instanceId, 'files');
 		const shown = await userFacing(async () => uploads.finishUpload(uploadId, instanceId, user.id));
+		record({ action: 'file.upload', summary: `Uploaded ${shown}`, instanceId });
 		await listFiles({ id: instanceId, path }).refresh();
 		return shown;
 	}

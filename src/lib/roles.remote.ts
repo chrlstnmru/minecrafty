@@ -10,6 +10,7 @@ import {
 	canGrantRolePermissions,
 	roleLock
 } from '#lib/server/grants.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as roles from '#lib/server/roles.js';
 
@@ -47,6 +48,7 @@ export const addRole = form(newRoleSchema, async ({ name }, issue) => {
 	const check = canGrantRolePermissions(user, [], plan.get(0) ?? 0);
 	if (!check.ok) error(403, check.reason ?? 'Not allowed');
 	const created = await userFacing(async () => roles.createRole(name, locked));
+	record({ action: 'role.create', summary: `Created the role ${name}` });
 	await listRoles().refresh();
 	return { id: created.id };
 });
@@ -73,6 +75,17 @@ export const saveRoles = command(saveRolesSchema, async ({ order, roles: edits }
 		if (!check.ok) error(403, `${existing.name}: ${check.reason}`);
 	}
 	roles.applySave(plan);
+	for (const edit of edits) {
+		const was = byId.get(edit.roleId)!;
+		const renamed = edit.name.trim() !== was.name;
+		const perms = [...edit.permissions].sort().join() !== [...was.permissions].sort().join();
+		record({
+			action: 'role.change',
+			summary: `Changed the role ${renamed ? `${was.name} (now ${edit.name.trim()})` : was.name}${perms ? ': permissions' : ''}`
+		});
+	}
+	if (plan.ranks.size && !edits.length)
+		record({ action: 'role.reorder', summary: 'Reordered the roles' });
 	await listRoles().refresh();
 });
 
@@ -80,6 +93,8 @@ export const removeRole = command(idSchema, async (id) => {
 	const user = requirePanel('roles.write');
 	const check = canDeleteRole(user, id);
 	if (!check.ok) error(403, check.reason ?? 'Not allowed');
+	const name = load(user).find((r) => r.id === id)?.name ?? 'a role';
 	await userFacing(async () => roles.deleteRole(id));
+	record({ action: 'role.delete', summary: `Deleted the role ${name}` });
 	await listRoles().refresh();
 });

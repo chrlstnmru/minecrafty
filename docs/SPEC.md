@@ -246,8 +246,21 @@ Modelled on sv-erp's authorization and its role management page: a permission ca
 - **Users page** (`/users`, needs `users.read`): a data table (TanStack Table, the kit copied from sv-erp into `components/data-table`, with search, sorting, pagination and row selection; state lives in the URL). Newest accounts first by default; columns User, Roles and Created sort. Per row, when allowed: give roles, set a password, delete. Bulk actions on the selected rows (the owner, yourself and anyone you may do nothing to cannot be selected): Give role (adds one role, panel-wide or on a server, keeping the roles they have there) and Delete. Each person is checked on its own on the server; those refused are skipped and named in a toast. Add a user (no roles) is the page's button. The access sheet has one row for "All servers and the panel" and one per server, each a multi-select of roles; roles ranked at or above yours are disabled.
 - Safeguards: the owner cannot be deleted, nobody can delete themselves, anyone may change their own password, and changing someone else's password signs them out everywhere.
 - Session auth with hashed passwords (`Bun.password`, argon2).
-- Audit log of actions per instance (not built yet).
 - Not taken from sv-erp: invitations and multi-tenancy, which are not part of authorization. Not planned: instance groups or tags, and Deny rules.
+
+### Audit log
+
+Who did what, and when. Done.
+
+- **What is recorded** (`server/audit.ts`, table `audit_log`): each entry has a time, who (the signed-in user, or "Panel" for what the panel does on its own, such as a scheduled task), a dotted action name, a one-line summary, and the server it concerns, if any. The actor's and the server's names are copied in, so an entry still reads after the account or the server is gone.
+  - Per server: start, stop, restart, kill, create, delete, retry install, settings changes (which fields), console commands run, files saved, created, renamed, deleted, uploaded and downloaded, properties edited (which keys), mods installed, removed, enabled, disabled and updated, resource packs, backups made, restored, deleted, downloaded and their settings, loader and modpack updates, whitelist, operator, ban and kick actions, and schedule tasks added, changed, deleted, turned on or off and run.
+  - Panel-wide: sign-ins and failed sign-ins, the owner account at setup, users added, deleted or given a new password, roles given and taken away, roles created, changed (renamed or permissions), reordered and deleted, and modpacks in the builder created, imported, copied, deleted and moved to another Minecraft version.
+  - Not recorded: reading (viewing pages, listing files), and anything that is only a draft until saved.
+- Writing an entry never fails the action: a failed write is logged and dropped. An entry is written after the action succeeds, except a server delete, which is written first so the name can still be looked up.
+- **Who sees it**: an instance permission `audit` opens the "Audit log" tab of that server (only that server's entries); a panel permission `audit.read` opens `/audit` (everything, with a Server column) and the sidebar's "Audit log". The owner sees both.
+- **Pages**: a data table (search, sort by time, who or what, pages), newest first, showing the latest 1,000 entries.
+- **Retention**: entries older than 180 days are deleted at start and once a day.
+- Not built: an export, filtering by person or action, and entries for what the runner process does on its own (a server crashing, the panel starting servers at boot).
 
 ## Release packaging
 
@@ -277,7 +290,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI and roles (done; audit log still open).
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI and roles (done), audit log (done).
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features

@@ -4,6 +4,7 @@ import * as v from 'valibot';
 import { projectIdSchema } from '#lib/schemas/common.js';
 import { importModpackSchema } from '#lib/schemas/modpack.js';
 import { requirePanel } from '#lib/server/auth.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as modpacks from '#lib/server/modpacks.js';
 
@@ -36,7 +37,12 @@ export const modpackPreview = query(
 export const importModpack = form(importModpackSchema, async (data, issue) => {
 	requirePanel('instances.create');
 	try {
-		await modpacks.startImport(data);
+		const row = await modpacks.startImport(data);
+		record({
+			action: 'instance.create',
+			summary: `Created the server from the modpack ${row.packName ?? data.name}`,
+			instanceId: row.id
+		});
 	} catch (e) {
 		if (String(e).includes('UNIQUE'))
 			invalid(issue.port('Port is already used by another instance'));

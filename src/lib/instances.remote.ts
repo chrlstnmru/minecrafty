@@ -5,6 +5,7 @@ import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
 import { requireInstance, requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
 import * as runner from '#lib/server/runner-client.js';
@@ -64,10 +65,15 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 		invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
 	try {
 		// returns at once; the install carries on in the background and shows in the list
-		instances.createInstance({
+		const made = instances.createInstance({
 			...data,
 			loaderVersion: loaderVersion ?? null,
 			ramMinMb: Math.min(1024, data.ramMaxMb)
+		});
+		record({
+			action: 'instance.create',
+			summary: `Created the server (${data.loader} ${data.mcVersion})`,
+			instanceId: made.row.id
 		});
 	} catch (e) {
 		if (String(e).includes('UNIQUE'))
@@ -80,9 +86,31 @@ export const updateInstance = form(
 	updateInstanceSchema,
 	async ({ id: instanceId, ...settings }, issue) => {
 		requirePermission(instanceId, 'settings');
-		if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
+		const before = instances.getInstance(instanceId);
+		if (!before) error(404, 'Instance not found');
 		try {
 			instances.updateSettings(instanceId, { ...settings, jvmArgs: settings.jvmArgs.trim() });
+			const changed = (
+				[
+					['name', settings.name !== before.name],
+					['port', settings.port !== before.port],
+					[
+						'memory',
+						settings.ramMinMb !== before.ramMinMb || settings.ramMaxMb !== before.ramMaxMb
+					],
+					['Java version', settings.javaMajor !== before.javaMajor],
+					['JVM arguments', settings.jvmArgs.trim() !== before.jvmArgs],
+					['auto-start', settings.autoStart !== before.autoStart]
+				] as const
+			)
+				.filter(([, differs]) => differs)
+				.map(([label]) => label);
+			if (changed.length)
+				record({
+					action: 'instance.settings',
+					summary: `Changed ${changed.join(', ')}`,
+					instanceId
+				});
 		} catch (e) {
 			if (String(e).includes('UNIQUE'))
 				invalid(issue.port('Port is already used by another instance'));
@@ -95,20 +123,25 @@ export const updateInstance = form(
 export const startInstance = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.startInstance(instanceId));
+	record({ action: 'instance.start', summary: 'Started the server', instanceId });
 });
 
 export const stopInstance = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.stopInstance(instanceId));
+	record({ action: 'instance.stop', summary: 'Stopped the server', instanceId });
 });
 
 export const killInstance = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.killInstance(instanceId));
+	record({ action: 'instance.kill', summary: 'Killed the server', instanceId });
 });
 
 export const deleteInstance = command(id, async (instanceId) => {
 	requirePanel('instances.delete');
+	// the entry is written first, while the instance's name can still be looked up
+	record({ action: 'instance.delete', summary: 'Deleted the server', instanceId });
 	await userFacing(() => instances.deleteInstance(instanceId));
 });
 
@@ -117,6 +150,7 @@ export const restartInstance = command(id, async (instanceId) => {
 	await userFacing(() => instances.stopInstance(instanceId));
 	await Bun.sleep(3000);
 	await userFacing(() => instances.startInstance(instanceId));
+	record({ action: 'instance.restart', summary: 'Restarted the server', instanceId });
 });
 
 export type ConsoleLine = { seq: number; line: string };
@@ -193,6 +227,11 @@ export const sendCommand = command(
 			line
 		});
 		if (!sent) error(400, 'Instance is not running');
+		record({
+			action: 'console.command',
+			summary: `Ran: ${line.trim().slice(0, 200)}`,
+			instanceId
+		});
 	}
 );
 
@@ -206,4 +245,5 @@ export const refreshPackIcons = command(async () => {
 export const retryInstall = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'settings');
 	await userFacing(async () => void instances.retryInstall(instanceId));
+	record({ action: 'instance.retry', summary: 'Retried the install', instanceId });
 });

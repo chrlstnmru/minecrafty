@@ -2,6 +2,7 @@ import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
 import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
 import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
+import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import FolderIcon from '@tabler/icons-svelte/icons/folder';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
 import PackageImportIcon from '@tabler/icons-svelte/icons/package-import';
@@ -89,6 +90,12 @@ export const instanceModules: InstanceModule[] = [
 		title: 'Loader',
 		icon: RefreshIcon,
 		description: 'Update the loader build or Minecraft version, with a backup first.'
+	},
+	{
+		slug: 'audit',
+		title: 'Audit log',
+		icon: HistoryIcon,
+		description: 'Who did what on this server, and when.'
 	},
 	{
 		slug: 'settings',

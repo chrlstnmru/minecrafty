@@ -15,6 +15,7 @@ import {
 } from '#lib/schemas/builder.js';
 import { PACK_LOADERS } from '#lib/pack-loaders.js';
 import { requirePanel } from '#lib/server/auth.js';
+import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as packs from '#lib/server/local-packs.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
@@ -38,6 +39,7 @@ export const packMinecraftVersions = query(v.picklist(PACK_LOADERS), async (load
 export const createLocalPack = command(newPackSchema, async (input) => {
 	requirePanel('modpacks.write');
 	const pack = await userFacing(() => packs.createPack(input));
+	record({ action: 'pack.create', summary: `Created the modpack ${input.name}` });
 	await listLocalPacks().refresh();
 	return { id: pack.id };
 });
@@ -50,13 +52,16 @@ export const updateLocalPack = command(updatePackSchema, async ({ id, ...change 
 
 export const deleteLocalPack = command(packArgs, async ({ id }) => {
 	requirePanel('modpacks.write');
+	const name = packs.getPack(id).name;
 	await userFacing(async () => packs.deletePack(id));
+	record({ action: 'pack.delete', summary: `Deleted the modpack ${name}` });
 	await listLocalPacks().refresh();
 });
 
 export const duplicateLocalPack = command(packArgs, async ({ id }) => {
 	requirePanel('modpacks.write');
 	const copy = await userFacing(async () => packs.duplicatePack(id));
+	record({ action: 'pack.create', summary: `Copied the modpack ${copy.name}` });
 	await listLocalPacks().refresh();
 	return { id: copy.id };
 });
@@ -111,6 +116,10 @@ export const applyPackVersionChange = command(
 		const result = await userFacing(() =>
 			packs.applyVersionChange(id, mcVersion, dropIncompatible)
 		);
+		record({
+			action: 'pack.version',
+			summary: `Moved the modpack ${packs.getPack(id).name} to Minecraft ${mcVersion}`
+		});
 		await refreshed(id);
 		return result;
 	}
@@ -135,6 +144,11 @@ export const installPack = command(installFromPackSchema, async ({ id, ...opts }
 	return userFacing(async () => {
 		try {
 			const row = await packs.startInstall(id, opts);
+			record({
+				action: 'instance.create',
+				summary: `Created the server from the modpack ${packs.getPack(id).name}`,
+				instanceId: row.id
+			});
 			return { id: row.id };
 		} catch (e) {
 			if (String(e).includes('UNIQUE')) throw new Error('Port is already used by another instance');
