@@ -8,6 +8,7 @@ import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import { clearProgress, getProgress, setProgress } from './install-progress';
+import { busyWith } from './operations';
 import * as runner from './runner-client';
 import { setProperties } from './server-properties';
 
@@ -217,6 +218,8 @@ export async function startInstance(id: number) {
 	if (inst.installState === 'installing') throw new Error('Still installing');
 	if (inst.installState === 'failed')
 		throw new Error(`The install failed: ${inst.installMessage ?? 'unknown error'}`);
+	// the restore swaps the server folder out from under it
+	if (busyWith(id) === 'restore') throw new Error('Wait for the restore to finish');
 
 	const dir = instanceDir(id);
 	let live = await runner.status(dir, id);

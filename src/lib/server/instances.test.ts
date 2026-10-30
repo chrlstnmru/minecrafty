@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { makeInstance } from '#test/instance.js';
 import { setProgress, clearProgress } from './install-progress';
 import * as I from './instances';
+import { claim } from './operations';
 
 describe('ports', () => {
 	it('suggests the first free port from 25565 upward', () => {
@@ -105,6 +106,17 @@ describe('start refusals', () => {
 
 		const noJar = makeInstance();
 		await expect(I.startInstance(noJar.id)).rejects.toThrow(/server\.jar is missing/);
+	});
+
+	it('waits for a restore, which swaps the server folder', async () => {
+		const row = makeInstance();
+		writeFileSync(`${I.serverDir(row.id)}/server.jar`, '');
+		const release = claim(row.id, 'restore');
+		try {
+			await expect(I.startInstance(row.id)).rejects.toThrow(/restore/);
+		} finally {
+			release();
+		}
 	});
 
 	it('says an instance is not found', async () => {

@@ -143,6 +143,14 @@ Bun.listen<{ buf: string; subscribed: boolean }>({
 
 writeFileSync(pidFile, String(process.pid));
 
+for (const sig of ['SIGTERM', 'SIGINT'] as const) {
+	// the runner outlives the panel on purpose; only an explicit signal ends it, and then the server
+	// is stopped properly (killed only if it hangs) so the world is saved. On a host shutdown Java
+	// gets the signal too and saves on its own, which a kill here would cut short. Set up before
+	// the wait below, which lasts as long as the server runs
+	process.on(sig, stop);
+}
+
 await Promise.all([pump(child.stdout), pump(child.stderr)]);
 status.exitCode = await child.exited;
 status.state = 'exited';
@@ -154,10 +162,3 @@ setTimeout(() => {
 	cleanup();
 	process.exit(0);
 }, 1000);
-
-for (const sig of ['SIGTERM', 'SIGINT'] as const) {
-	// the runner outlives the panel on purpose; only an explicit signal ends it
-	process.on(sig, () => {
-		child.kill('SIGKILL');
-	});
-}
