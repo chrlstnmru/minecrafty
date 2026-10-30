@@ -141,6 +141,18 @@ function parseIndex(zip: Zip): PackIndex {
 
 export const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
 
+/**
+ * The pack's name on Modrinth. The index's own `name` is whatever the author typed into their
+ * build tool, and for some packs it is just the version number.
+ */
+export async function projectTitle(projectId: string, fallback: string) {
+	try {
+		return (await modrinth.getProjects([projectId]))[0]?.title || fallback;
+	} catch {
+		return fallback;
+	}
+}
+
 const FLAG_CACHE_MS = 10 * 60_000;
 const flagCache = new Map<string, { at: number; flagged: Map<string, string> }>();
 
@@ -171,7 +183,7 @@ export async function loadModpack(versionId: string): Promise<LoadedPack> {
 		summary: {
 			projectId: version.project_id,
 			versionId: version.id,
-			name: index.name,
+			name: await projectTitle(version.project_id, index.name),
 			summary: index.summary ?? '',
 			versionNumber: index.versionId,
 			mcVersion: index.dependencies.minecraft,

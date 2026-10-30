@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import {
 		importModpack,
@@ -58,13 +59,15 @@
 		versionId = (list.find((v) => v.versionType === 'release') ?? list[0]).id;
 	});
 
-	// the form follows the selection: the hidden version, and the pack's own name as a default
+	// the form follows the selection: the hidden version, and the pack's title as a default name
 	$effect(() => {
 		versionIdField.set(versionId);
 	});
+	// only when a pack is picked: choosing another version must not overwrite a name typed since
 	$effect(() => {
-		const summary = preview?.current;
-		if (summary) name.set(summary.name);
+		const title = picked?.title;
+		// untracked: setting the field reads its value, which would re-run this on every keystroke
+		if (title) untrack(() => name.set(title));
 	});
 
 	function change() {
