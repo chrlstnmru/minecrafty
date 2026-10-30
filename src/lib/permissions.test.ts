@@ -4,6 +4,10 @@ import {
 	MODULE_PERMISSION,
 	PERMISSIONS,
 	PERMISSION_INFO,
+	emptyRules,
+	grantedBy,
+	parseRules,
+	type Permission,
 	firstAllowedModule,
 	hasPermission,
 	normalizePermissions
@@ -76,9 +80,43 @@ describe('hasPermission and firstAllowedModule', () => {
 
 	it('picks the first tab a user may open', () => {
 		const order = slugs;
-		expect(firstAllowedModule(['view'], order)).toBe('logs');
+		expect(firstAllowedModule(['view'], order)).toBeUndefined();
+		expect(firstAllowedModule(['view', 'logs'], order)).toBe('logs');
 		expect(firstAllowedModule(['view', 'console'], order)).toBe('console');
-		expect(firstAllowedModule(['view', 'backups'], order)).toBe('logs');
+		expect(firstAllowedModule(['view', 'logs', 'backups'], order)).toBe('logs');
 		expect(firstAllowedModule([], order)).toBeUndefined();
+	});
+});
+
+describe('role rules', () => {
+	it('reads stored rules, dropping what it does not know', () => {
+		expect(parseRules('{oops')).toEqual(emptyRules());
+		expect(parseRules('"files"')).toEqual(emptyRules());
+		expect(
+			parseRules(
+				JSON.stringify({
+					allow: ['files', 'root'],
+					deny: ['mods', 7],
+					lockedProperties: ['difficulty', 'bad key!', 'difficulty'],
+					lockedSettings: ['jvmArgs', 'nope']
+				})
+			)
+		).toEqual({
+			allow: ['files'],
+			deny: ['mods'],
+			lockedProperties: ['difficulty'],
+			lockedSettings: ['jvmArgs']
+		});
+	});
+
+	it('grants the allowed permissions minus the denied ones, with view', () => {
+		const rules = {
+			...emptyRules(),
+			allow: ['files', 'backups'] as Permission[],
+			deny: ['backups'] as Permission[]
+		};
+		expect(grantedBy(rules)).toEqual(['view', 'files']);
+		expect(grantedBy({ ...rules, deny: ['view'] })).toEqual([]);
+		expect(grantedBy(emptyRules())).toEqual([]);
 	});
 });

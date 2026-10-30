@@ -62,6 +62,7 @@
 		instanceModules.filter(
 			(m) =>
 				(m.slug !== 'modpack' || !!instance?.packProjectId) &&
+				(m.slug !== 'loader' || !instance?.locked.settings.includes('loader')) &&
 				granted.includes(MODULE_PERMISSION[m.slug])
 		)
 	);

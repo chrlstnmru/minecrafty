@@ -154,7 +154,16 @@ export const schedules = sqliteTable(
 	(t) => [index('schedules_instance').on(t.instanceId)]
 );
 
-// what a user (not an admin) may do on one instance: a JSON list of permissions, view included
+// a named set of rules (see RoleRules in permissions.ts); the built-in ones cannot be edited
+export const roles = sqliteTable('roles', {
+	id: integer('id').primaryKey({ autoIncrement: true }),
+	name: text('name').notNull().unique(),
+	description: text('description').notNull().default(''),
+	rules: text('rules').notNull(),
+	builtIn: integer('built_in', { mode: 'boolean' }).notNull().default(false)
+});
+
+// the role a user (not an admin) has on one instance; no row means no access
 export const instancePermissions = sqliteTable(
 	'instance_permissions',
 	{
@@ -164,7 +173,9 @@ export const instancePermissions = sqliteTable(
 		instanceId: integer('instance_id')
 			.notNull()
 			.references(() => instances.id, { onDelete: 'cascade' }),
-		permissions: text('permissions').notNull()
+		roleId: integer('role_id')
+			.notNull()
+			.references(() => roles.id, { onDelete: 'restrict' })
 	},
 	(t) => [primaryKey({ columns: [t.userId, t.instanceId] })]
 );

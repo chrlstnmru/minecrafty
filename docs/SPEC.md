@@ -142,7 +142,9 @@ Build your own modpack on the panel and create instances from it.
 - Pages follow the instance page pattern: `/modpacks` lists packs (create, duplicate, delete); `/modpacks/[id]` is the editor with Mods, Configs and Settings tabs. Changing the Minecraft version first re-checks every mod and lists those with no compatible version, and only applies once that is resolved.
 - Revisions: each saved change gets a revision number, and an instance remembers the revision it was created from.
 - "From local" is a third tab in the New Instance sheet, after "From scratch" and "From modpack". It lists the packs from the builder; picking one shows the same summary and the same name, port, RAM and EULA form, and creates the instance with the same background install as a Modrinth modpack: the loader's server, each mod checksum-verified (from a shared download cache), then the pack's config files.
-- For now "From local" only offers packs made with the builder. Importing someone else's pack file is a later step (see Custom modpack upload).
+- Format: Modrinth's `.mrpack` (`modrinth.index.json` plus `overrides/` and `server-overrides/`). A pack can be exported as one, and an `.mrpack` can be imported into the builder as a new pack. Mods keep their Modrinth project and version ids and hashes, so the export is a normal pack other launchers can open. Other formats (CurseForge) come later.
+- Built after the permissions and roles work; until then the sidebar keeps its placeholder.
+- For now "From local" only offers packs made with the builder or imported as `.mrpack`.
 
 ### File manager
 
@@ -228,15 +230,18 @@ The home page (`/`) shows how the host and the servers are doing and lets you ac
 ### Users and permissions
 
 - First-run setup creates the admin account.
-- Roles: admin (everything everywhere), user (only what was granted per instance).
-- Per-instance permissions: view, console, start/stop, files, mods, backups, schedules, settings. Anything granted includes view. Presets (Viewer, Operator, Manager, Full) are starting points; any mix can be ticked.
-- What each permission opens: console (Console, Players, sending commands), start/stop (start, stop, restart, kill), files (Files, Properties, file downloads), mods (Mods or Plugins, Modpack, Resource packs), backups (Backups and their downloads), schedules (Schedules), settings (Settings and Loader), view (the instance, Logs, the dashboard row).
+- Accounts are admin (everything everywhere) or user (only what a role grants on each server).
+- Permissions: view, logs, console, start/stop, files, mods, backups, schedules, settings. Anything granted includes view.
+- What each permission opens: view (the server, its status and the dashboard row), logs (Logs and their downloads), console (Console, Players, sending commands), start/stop (start, stop, restart, kill), files (Files, Properties, file downloads), mods (Mods or Plugins, Modpack, Resource packs), backups (Backups and their downloads), schedules (Schedules), settings (Settings and Loader).
+- Roles: a named set of rules, made on the Users page's Roles tab. Each permission is Allow, Not set (not granted) or Deny, and Deny beats Allow. A role may also lock settings (name, port, memory, Java version, JVM arguments, auto-start, and the Loader tab) and `server.properties` keys (difficulty, game mode, seed, ... or any key by name). A locked value shows read-only; the server keeps the stored value whatever is sent. A user has one role per server, set in the access sheet, so rules from several roles never combine.
+- Built-in roles (Viewer, Operator, Manager, Full) cannot be edited or deleted; duplicate one to change it. A custom role cannot be deleted while a grant uses it, and must allow at least one permission. Access given before roles existed was converted to roles, with Logs added since viewing used to include it.
 - Admin only: creating and deleting instances, importing a modpack, the Users page, host CPU, memory and storage.
-- A server a user has no access to answers 404, as if it did not exist; a server they can see but a feature they lack answers 403. Every remote function and download route checks this on the server (`requireUser`, `requirePermission`, `requireAdmin`), and a test fails if an export has none. The page also hides what a user cannot use and sends a link to a forbidden tab to the first tab they may open.
-- Users page (`/users`, admin only): add a user, make an account admin or user, set a password, delete, and an access sheet with the presets and one checkbox per permission for each server, saved as ticked.
+- A server a user has no access to answers 404, as if it did not exist; a server they can see but a feature they lack answers 403. Every remote function and download route checks this on the server (`requireUser`, `requirePermission`, `requireAdmin`; `requireUnlocked` for a locked setting), and a test fails if an export has none. The page also hides what a user cannot use and sends a link to a forbidden tab to the first tab they may open.
+- Users page (`/users`, admin only): Users tab (add a user, make an account admin or user, set a password, delete, and an access sheet with one role per server) and Roles tab (create, edit, duplicate, delete).
 - Safeguards: the last admin cannot be demoted or deleted, nobody can demote or delete themselves, and changing someone else's role or password signs them out everywhere.
 - Session auth with hashed passwords (`Bun.password`, argon2).
 - Audit log of actions per instance (not built yet).
+- Not planned: instance groups or tags, and a general attribute policy engine. A role plus field locks covers what was needed.
 
 ## Release packaging
 
@@ -266,7 +271,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI (done; audit log still open).
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI and roles (done; audit log still open).
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features

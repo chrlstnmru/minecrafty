@@ -27,7 +27,11 @@ export function getServerProperties(instanceId: number) {
  * Writes the keys whose value differs from what the server would use now: the file's value, or
  * the default for a key it does not have. Keys outside the form can only be edited, not added.
  */
-export function saveServerProperties(instanceId: number, changes: Record<string, string>) {
+export function saveServerProperties(
+	instanceId: number,
+	changes: Record<string, string>,
+	locked: readonly string[] = []
+) {
 	const file = fileFor(instanceId);
 	const current = readProperties(file);
 	const toWrite: Record<string, string> = {};
@@ -39,7 +43,9 @@ export function saveServerProperties(instanceId: number, changes: Record<string,
 		if (!field && !(key in current)) throw new Error(`${key} is not a known property`);
 		const problem = validateProperty(key, value);
 		if (problem) throw new Error(`${key}: ${problem}`);
-		if (value !== (current[key] ?? field?.default)) toWrite[key] = value;
+		if (value === (current[key] ?? field?.default)) continue;
+		if (locked.includes(key)) throw new Error(`${key} is locked for your role`);
+		toWrite[key] = value;
 	}
 
 	if (!Object.keys(toWrite).length) return;

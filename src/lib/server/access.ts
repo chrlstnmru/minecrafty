@@ -1,42 +1,53 @@
 import { and, eq } from 'drizzle-orm';
-import { PERMISSIONS, normalizePermissions, type Permission } from '#lib/permissions.js';
+import {
+	PERMISSIONS,
+	grantedBy,
+	parseRules,
+	type Permission,
+	type Restrictions
+} from '#lib/permissions.js';
 import { db } from './db';
-import { instancePermissions } from './db/schema';
+import { instancePermissions, roles } from './db/schema';
 
 export type Actor = { id: number; role: 'admin' | 'user' };
 
-function stored(userId: number, instanceId: number): Permission[] {
+function ruleFor(userId: number, instanceId: number) {
 	const row = db
-		.select()
+		.select({ rules: roles.rules })
 		.from(instancePermissions)
+		.innerJoin(roles, eq(roles.id, instancePermissions.roleId))
 		.where(
 			and(eq(instancePermissions.userId, userId), eq(instancePermissions.instanceId, instanceId))
 		)
 		.get();
-	if (!row) return [];
-	try {
-		const list = JSON.parse(row.permissions) as unknown;
-		return Array.isArray(list) ? normalizePermissions(list.map(String)) : [];
-	} catch {
-		// a damaged row grants nothing
-		return [];
-	}
+	return row ? parseRules(row.rules) : null;
 }
 
-/** What this user may do on this instance: everything for an admin, what was granted for anyone else. */
+/** What this user may do on this instance: everything for an admin, what their role grants for anyone else. */
 export function permissionsFor(user: Actor, instanceId: number): Permission[] {
-	return user.role === 'admin' ? [...PERMISSIONS] : stored(user.id, instanceId);
+	if (user.role === 'admin') return [...PERMISSIONS];
+	const rules = ruleFor(user.id, instanceId);
+	return rules ? grantedBy(rules) : [];
+}
+
+/** What the user's role locks on this instance: values they may read but not change. Admins have none. */
+export function restrictionsFor(user: Actor, instanceId: number): Restrictions {
+	if (user.role === 'admin') return { properties: [], settings: [] };
+	const rules = ruleFor(user.id, instanceId);
+	if (!rules || !grantedBy(rules).length) return { properties: [], settings: [] };
+	return { properties: rules.lockedProperties, settings: rules.lockedSettings };
 }
 
 /** The instances the user may see, or null for all of them (an admin). */
 export function visibleInstanceIds(user: Actor): number[] | null {
 	if (user.role === 'admin') return null;
 	return db
-		.select({ id: instancePermissions.instanceId, permissions: instancePermissions.permissions })
+		.select({ id: instancePermissions.instanceId, rules: roles.rules })
 		.from(instancePermissions)
+		.innerJoin(roles, eq(roles.id, instancePermissions.roleId))
 		.where(eq(instancePermissions.userId, user.id))
 		.all()
-		.filter((row) => stored(user.id, row.id).length > 0)
+		.filter((row) => grantedBy(parseRules(row.rules)).length > 0)
 		.map((row) => row.id);
 }
 
@@ -52,34 +63,31 @@ export function check(user: Actor, instanceId: number, needed: Permission): Chec
 	return granted.includes(needed) ? 'ok' : 'denied';
 }
 
-/** What a user has been granted on every instance, for the page that edits it. */
+/** The role a user has on every instance, for the page that edits it. */
 export function listAccess(userId: number) {
 	return db
-		.select()
+		.select({ instanceId: instancePermissions.instanceId, roleId: instancePermissions.roleId })
 		.from(instancePermissions)
 		.where(eq(instancePermissions.userId, userId))
-		.all()
-		.map((row) => ({ instanceId: row.instanceId, permissions: stored(userId, row.instanceId) }))
-		.filter((row) => row.permissions.length > 0);
+		.all();
 }
 
-/** Replaces what a user may do on an instance. An empty list removes the access. */
-export function setAccess(userId: number, instanceId: number, permissions: readonly string[]) {
-	const clean = normalizePermissions(permissions);
-	if (!clean.length) {
+/** Gives a user a role on an instance, or takes their access away with null. */
+export function setAccess(userId: number, instanceId: number, roleId: number | null) {
+	if (roleId === null) {
 		db.delete(instancePermissions)
 			.where(
 				and(eq(instancePermissions.userId, userId), eq(instancePermissions.instanceId, instanceId))
 			)
 			.run();
-		return [];
+		return;
 	}
+	if (!db.select().from(roles).where(eq(roles.id, roleId)).get()) throw new Error('Role not found');
 	db.insert(instancePermissions)
-		.values({ userId, instanceId, permissions: JSON.stringify(clean) })
+		.values({ userId, instanceId, roleId })
 		.onConflictDoUpdate({
 			target: [instancePermissions.userId, instancePermissions.instanceId],
-			set: { permissions: JSON.stringify(clean) }
+			set: { roleId }
 		})
 		.run();
-	return clean;
 }

@@ -49,13 +49,9 @@ export const userAccess = query(idSchema, async (userId) => {
 	return listAccess(userId);
 });
 
-export const setUserAccess = command(
-	userAccessSchema,
-	async ({ userId, instanceId, permissions }) => {
-		requireAdmin();
-		const saved = setAccess(userId, instanceId, permissions);
-		await userAccess(userId).refresh();
-		await allUsers().refresh();
-		return saved;
-	}
-);
+export const setUserAccess = command(userAccessSchema, async ({ userId, instanceId, roleId }) => {
+	requireAdmin();
+	await userFacing(async () => setAccess(userId, instanceId, roleId));
+	await userAccess(userId).refresh();
+	await allUsers().refresh();
+});

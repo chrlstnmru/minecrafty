@@ -1,5 +1,4 @@
 import * as v from 'valibot';
-import { PERMISSIONS } from '#lib/permissions.js';
 import { idSchema } from './common.js';
 
 export const usernameSchema = v.pipe(
@@ -19,8 +18,9 @@ export const addUserSchema = v.object({
 export const userRoleSchema = v.object({ id: idSchema, role: roleSchema });
 export const userPasswordSchema = v.object({ id: idSchema, password: passwordSchema });
 
+/** roleId null takes the access away */
 export const userAccessSchema = v.object({
 	userId: idSchema,
 	instanceId: idSchema,
-	permissions: v.array(v.picklist(PERMISSIONS))
+	roleId: v.nullable(idSchema)
 });
