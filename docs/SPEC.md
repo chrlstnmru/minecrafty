@@ -66,7 +66,7 @@ Servers must keep running when the panel restarts or updates.
 ### Instances
 
 - Create from: Vanilla, Paper, Purpur, Fabric, Quilt, Forge, NeoForge, or modpack import.
-- The instance list shows an icon beside each name: the modpack's own icon (from Modrinth, kept at import and filled in for older pack instances) for a modpack instance, else the loader's, stored in the repo (`src/lib/assets/loaders/`) and served by `@sveltejs/enhanced-img`. A pack icon that fails to load falls back to the loader's.
+- The instance list shows an icon beside each name: the modpack's own icon (from Modrinth, kept at import and filled in for older pack instances) for a modpack instance, else the loader's: a generic Tabler (MIT) symbol tinted per loader, stored in the repo (`src/lib/assets/loaders/`) and served by `@sveltejs/enhanced-img`. They are not the loaders' own logos, whose licenses differ per project. A pack icon that fails to load falls back to the loader's.
 - Version picker fed by each loader's official API/metadata. The loader build is not chosen: the newest build (stable channel for Paper) is used and recorded.
 - Server jar is downloaded and checksum-verified when the instance is created.
 - Settings: name, RAM min/max, JVM args, Java version (auto-picked from Mojang's `javaVersion` metadata for the Minecraft version, overridable), port, auto-start on boot. Ports are auto-assigned from 25565 upward and editable.
