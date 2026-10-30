@@ -23,6 +23,7 @@
 	import EulaCheckbox from './eula-checkbox.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import { LOADERS, type Loader } from '#lib/loader-list.js';
+	import { loaderColors } from '#lib/loader-colors.js';
 
 	let { onDone }: { onDone: () => void } = $props();
 
@@ -77,13 +78,13 @@
 		versionId = '';
 	}
 
+	// the loader is shown as an icon beside the label, not in it
 	const versionLabel = (v: {
 		versionNumber: string;
 		gameVersions: string[];
-		loaders: string[];
 		versionType: string;
 	}) =>
-		`${v.versionNumber} · ${v.gameVersions.at(-1) ?? '?'} · ${v.loaders.join(', ')}${v.versionType === 'release' ? '' : ` (${v.versionType})`}`;
+		`${v.versionNumber} · ${v.gameVersions.at(-1) ?? '?'}${v.versionType === 'release' ? '' : ` (${v.versionType})`}`;
 
 	// the loaders of a version that the panel has an icon for (Modrinth also lists bukkit, spigot, ...)
 	const knownLoaders = (loaders: string[]) =>
@@ -194,6 +195,8 @@
 						options={(versions?.current ?? []).map((v) => ({
 							value: v.id,
 							label: versionLabel(v),
+							// not shown, but typing "fabric" still finds the versions for it
+							search: v.loaders.join(' '),
 							loaders: knownLoaders(v.loaders)
 						}))}
 					>
@@ -225,7 +228,15 @@
 							<dd>{s.mcVersion}</dd>
 							<dt class="text-muted-foreground">Loader</dt>
 							<dd>
-								<Badge variant="pink">{s.loader}</Badge>
+								<!-- the loader's own tint; text is mixed with the theme's so it reads on light and dark -->
+								<Badge
+									variant="muted"
+									class="gap-1 bg-[color-mix(in_oklab,var(--loader)_16%,transparent)] pl-1 text-[color-mix(in_oklab,var(--loader)_55%,var(--foreground))] capitalize"
+									style="--loader: {loaderColors[s.loader]}"
+								>
+									<InstanceIcon loader={s.loader} class="size-3.5 bg-transparent p-0" />
+									{s.loader}
+								</Badge>
 								{#if s.loaderVersion}<span class="text-muted-foreground">{s.loaderVersion}</span
 									>{/if}
 							</dd>
