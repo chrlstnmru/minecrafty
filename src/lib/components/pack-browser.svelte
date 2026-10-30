@@ -1,6 +1,7 @@
 <script lang="ts">
 	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import { searchPackMods } from '#lib/builder.remote.js';
 	import { searchPacks } from '#lib/packs.remote.js';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -13,13 +14,17 @@
 
 	let {
 		instanceId,
+		kind = 'resourcepack',
 		noun,
 		description,
 		actionLabel,
 		installedIds,
 		onInstall
 	}: {
+		/** the instance's id, or the pack's when `kind` is `pack` */
 		instanceId: number;
+		/** `pack`: mods for a modpack made in the builder; otherwise resource packs for an instance */
+		kind?: 'resourcepack' | 'pack';
 		noun: string;
 		description: string;
 		actionLabel: string;
@@ -44,7 +49,11 @@
 		return () => clearTimeout(timer);
 	});
 
-	const results = $derived(searchPacks({ id: instanceId, query: debounced, limit }));
+	const results = $derived(
+		kind === 'pack'
+			? searchPackMods({ id: instanceId, query: debounced, limit })
+			: searchPacks({ id: instanceId, query: debounced, limit })
+	);
 
 	let picker = $state<{ projectId: string; title: string } | null>(null);
 	let pickerOpen = $state(false);
@@ -139,7 +148,7 @@
 	<ModVersionsSheet
 		bind:open={pickerOpen}
 		{instanceId}
-		kind="resourcepack"
+		{kind}
 		projectId={picker.projectId}
 		title={picker.title}
 		{noun}

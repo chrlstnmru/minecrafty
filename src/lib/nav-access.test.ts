@@ -4,7 +4,7 @@ import { rules, visibleItems } from './nav-access';
 const items = [
 	{ title: 'Dashboard' },
 	{ title: 'Instances', rule: rules.instances },
-	{ title: 'Mods', rule: rules.mods },
+	{ title: 'Modpack builder', rule: rules.modpacks },
 	{ title: 'Backups', rule: rules.backups },
 	{ title: 'Users', rule: rules.users },
 	{ title: 'Settings', rule: rules.settings }
@@ -23,14 +23,18 @@ describe('visibleItems', () => {
 	});
 
 	it('shows an item when the user holds a permission it is tied to', () => {
-		expect(titles(['mods', 'logs'])).toEqual(['Dashboard', 'Instances', 'Mods']);
-		expect(titles(['resource-packs'])).toContain('Mods');
+		expect(titles(['modpacks.read', 'logs'])).toEqual([
+			'Dashboard',
+			'Instances',
+			'Modpack builder'
+		]);
+		expect(titles(['mods'])).not.toContain('Modpack builder');
 		expect(titles(['backups'])).toContain('Backups');
 		expect(titles(['users.read'])).toContain('Users');
 	});
 
 	it('keeps owner-only items from everyone but the owner', () => {
-		expect(titles(['mods', 'users.read'])).not.toContain('Settings');
+		expect(titles(['modpacks.read', 'users.read'])).not.toContain('Settings');
 		expect(titles([], true)).toEqual(items.map((i) => i.title));
 	});
 });

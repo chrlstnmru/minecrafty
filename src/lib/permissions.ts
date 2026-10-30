@@ -96,6 +96,17 @@ const panel = definePermissions({
 		description: 'Delete a server and its files',
 		scope: 'panel'
 	},
+	'modpacks.read': {
+		label: 'See modpacks',
+		description: 'Open the Modpack builder, see the packs in it and download them',
+		scope: 'panel'
+	},
+	'modpacks.write': {
+		label: 'Build modpacks',
+		description: 'Create, change, import and delete packs in the Modpack builder',
+		scope: 'panel',
+		implies: ['modpacks.read']
+	},
 	'roles.read': {
 		label: 'See roles',
 		description: 'Open the Roles page and see what each role grants',

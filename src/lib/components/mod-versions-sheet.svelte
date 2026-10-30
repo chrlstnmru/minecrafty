@@ -1,6 +1,7 @@
 <script lang="ts">
 	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
 	import { modVersions } from '#lib/mods.remote.js';
+	import { packModVersions } from '#lib/builder.remote.js';
 	import { packVersions } from '#lib/packs.remote.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -23,7 +24,8 @@
 		projectId: string;
 		title: string;
 		noun: string;
-		kind?: 'mod' | 'resourcepack';
+		/** `pack`: a mod of a modpack made in the builder, where `instanceId` is the pack's id */
+		kind?: 'mod' | 'resourcepack' | 'pack';
 		/** set when changing an installed mod; that version is marked and not selectable */
 		currentVersionId?: string;
 		onSelect: (versionId: string) => Promise<void>;
@@ -39,7 +41,9 @@
 			? null
 			: kind === 'mod'
 				? modVersions({ id: instanceId, projectId })
-				: packVersions({ id: instanceId, projectId })
+				: kind === 'pack'
+					? packModVersions({ id: instanceId, projectId })
+					: packVersions({ id: instanceId, projectId })
 	);
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });

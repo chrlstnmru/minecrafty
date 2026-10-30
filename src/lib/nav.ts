@@ -15,7 +15,7 @@ export type NavItem = { title: string; url: string; icon: Icon; rule?: NavRule }
 export const navMain: NavItem[] = [
 	{ title: 'Dashboard', url: '/', icon: DashboardIcon },
 	{ title: 'Instances', url: '/instances', icon: ServerIcon, rule: rules.instances },
-	{ title: 'Mods', url: '/mods', icon: PackageIcon, rule: rules.mods },
+	{ title: 'Modpack builder', url: '/modpacks', icon: PackageIcon, rule: rules.modpacks },
 	{ title: 'Backups', url: '/backups', icon: ArchiveIcon, rule: rules.backups },
 	{
 		title: 'Schedules',

@@ -1,6 +1,7 @@
 import { basename, dirname, join } from 'node:path';
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { and, count, desc, eq } from 'drizzle-orm';
+import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 import { dataDir } from './config';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
@@ -22,8 +23,7 @@ import { zipChunks, type ZipEntry } from './zip-writer';
 // downloads, each pinned to one version and its hashes) plus a folder of config files on disk.
 // It leaves the panel as a Modrinth .mrpack, and installs on a server through that same format.
 
-export const PACK_LOADERS = ['fabric', 'quilt', 'forge', 'neoforge'] as const;
-export type PackLoader = (typeof PACK_LOADERS)[number];
+export { PACK_LOADERS, type PackLoader };
 
 export type LocalPack = typeof localPacks.$inferSelect;
 export type LocalPackFile = typeof localPackFiles.$inferSelect;
@@ -171,6 +171,19 @@ export function duplicatePack(id: number) {
 }
 
 // ---- the mods of a pack ----
+
+/** Searches Modrinth for mods that run in this pack. */
+export async function searchMods(packId: number, query: string, limit: number) {
+	const pack = requirePack(packId);
+	const res = await modrinth.searchProjects({
+		query,
+		loaders: [pack.loader],
+		plugins: false,
+		mc: pack.mcVersion,
+		limit
+	});
+	return { hits: res.hits, total: res.total_hits };
+}
 
 const sideOf = (value: string | null | undefined) =>
 	value === 'required' || value === 'optional' || value === 'unsupported' ? value : null;
