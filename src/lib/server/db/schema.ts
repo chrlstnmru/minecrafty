@@ -47,6 +47,11 @@ export const instances = sqliteTable('instances', {
 		.notNull()
 		.default('ready'),
 	installMessage: text('install_message'),
+	// set for an instance created from a Modrinth modpack, so it can be updated from that pack
+	packProjectId: text('pack_project_id'),
+	packVersionId: text('pack_version_id'),
+	packVersionNumber: text('pack_version_number'),
+	packName: text('pack_name'),
 	// how many backups to keep, oldest removed first; null keeps them all
 	backupKeep: integer('backup_keep').default(5),
 	// paths left out of a backup, one per line, relative to the server folder

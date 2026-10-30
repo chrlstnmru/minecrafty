@@ -9,7 +9,9 @@ import { clearProgress, setProgress } from './install-progress';
 import { installBase, insertInstance, serverDir } from './instances';
 import type { Loader } from './loaders';
 import * as modrinth from './modrinth';
-import { Zip } from './zip';
+import { safeEntryName } from '#lib/safe-entry-name.js';
+import { Zip, type ZipEntry } from './zip';
+import { writeManifest } from './modpack-manifest';
 
 // Modrinth modpacks (.mrpack): a zip with modrinth.index.json (what to download), plus
 // overrides/ and server-overrides/ folders that are copied into the server as they are.
@@ -28,7 +30,7 @@ const ALLOWED_HOSTS = new Set([
 	'gitlab.com'
 ]);
 
-type IndexFile = {
+export type IndexFile = {
 	path: string;
 	hashes: { sha1?: string; sha512?: string };
 	env?: { client?: string; server?: string };
@@ -63,7 +65,7 @@ export type ModpackSummary = {
 	overrides: number;
 };
 
-type LoadedPack = { summary: ModpackSummary; index: PackIndex; zip: Zip };
+export type LoadedPack = { summary: ModpackSummary; index: PackIndex; zip: Zip };
 
 const LOADER_KEYS: [string, Loader][] = [
 	['fabric-loader', 'fabric'],
@@ -134,7 +136,7 @@ function parseIndex(zip: Zip): PackIndex {
 	return index;
 }
 
-const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
+export const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
 
 export async function loadModpack(versionId: string): Promise<LoadedPack> {
 	const { version, path } = await fetchPack(versionId);
@@ -194,7 +196,11 @@ export async function startImport(opts: ImportOptions) {
 		jvmArgs: '',
 		autoStart: false,
 		eulaAccepted: true,
-		installState: 'installing'
+		installState: 'installing',
+		packProjectId: summary.projectId,
+		packVersionId: summary.versionId,
+		packVersionNumber: summary.versionNumber,
+		packName: summary.name
 	});
 	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
 	void finishImport(row, pack);
@@ -210,10 +216,11 @@ async function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack
 		await downloadFiles(row.id, server, pack.index.files.filter(wantsOnServer));
 
 		setProgress(row.id, { label: 'Copying configuration', done: 0, total: 1 });
-		await extractOverrides(pack.zip, server);
+		const overrides = await extractOverrides(pack.zip, server);
 
 		setProgress(row.id, { label: 'Recording mods', done: 0, total: 1 });
 		await trackMods(row.id, pack.index.files.filter(wantsOnServer));
+		writeManifest(row.id, { files: await packFileHashes(server, pack.index.files), overrides });
 
 		db.update(instances)
 			.set({ installState: 'ready', installMessage: null })
@@ -248,7 +255,7 @@ async function downloadFiles(instanceId: number, server: string, files: IndexFil
 	await Promise.all(Array.from({ length: Math.min(DOWNLOAD_CONCURRENCY, total) }, worker));
 }
 
-async function downloadWithFallback(dest: string, file: IndexFile) {
+export async function downloadWithFallback(dest: string, file: IndexFile) {
 	const hash = file.hashes.sha512
 		? ({ algo: 'sha512', value: file.hashes.sha512 } as const)
 		: file.hashes.sha1
@@ -274,8 +281,9 @@ async function downloadWithFallback(dest: string, file: IndexFile) {
 	);
 }
 
-/** Copies overrides/ then server-overrides/ (which wins) into the server folder. */
-async function extractOverrides(zip: Zip, server: string) {
+/** The pack's config files by their path in the server, `server-overrides/` winning over `overrides/`. */
+export function overrideEntries(zip: Zip) {
+	const found = new Map<string, ZipEntry>();
 	let total = 0;
 	for (const prefix of ['overrides/', 'server-overrides/']) {
 		for (const entry of zip.entries) {
@@ -283,18 +291,43 @@ async function extractOverrides(zip: Zip, server: string) {
 			if (entry.size > MAX_FILE_BYTES) throw new Error(`${entry.name} is too large`);
 			total += entry.size;
 			if (total > MAX_EXTRACT_BYTES) throw new Error('The modpack unpacks to too much data');
-
 			const rel = entry.name.slice(prefix.length);
-			if (isAbsolute(rel)) throw new Error(`Refusing unsafe path "${rel}"`);
-			const dest = safeJoin(server, rel);
-			mkdirSync(dirname(dest), { recursive: true });
-			await Bun.write(dest, zip.read(entry));
+			const safe = safeEntryName(rel.replaceAll('\\', '/'));
+			if (isAbsolute(rel) || !safe) throw new Error(`Refusing unsafe path "${rel}"`);
+			found.set(safe, entry);
 		}
 	}
+	return found;
+}
+
+export const sha1Of = (bytes: Uint8Array) =>
+	new Bun.CryptoHasher('sha1').update(bytes).digest('hex');
+
+/** Copies the pack's config files into the server folder; returns the SHA-1 of each. */
+async function extractOverrides(zip: Zip, server: string) {
+	const hashes: Record<string, string> = {};
+	for (const [rel, entry] of overrideEntries(zip)) {
+		const bytes = zip.read(entry);
+		const dest = safeJoin(server, rel);
+		mkdirSync(dirname(dest), { recursive: true });
+		await Bun.write(dest, bytes);
+		hashes[rel] = sha1Of(bytes);
+	}
+	return hashes;
 }
 
 /** Records the pack's mods that Modrinth knows, so they show up (and can update) like any other. */
-async function trackMods(instanceId: number, files: IndexFile[]) {
+/** SHA-1 of each file the pack installs, from the index or, when it lists none, from the file itself. */
+export async function packFileHashes(server: string, files: IndexFile[]) {
+	const hashes: Record<string, string> = {};
+	for (const file of files.filter(wantsOnServer))
+		hashes[file.path] =
+			file.hashes.sha1 ??
+			sha1Of(new Uint8Array(await Bun.file(safeJoin(server, file.path)).arrayBuffer()));
+	return hashes;
+}
+
+export async function trackMods(instanceId: number, files: IndexFile[]) {
 	const jars = files.filter(
 		(f) => /^(mods|plugins)\//.test(f.path) && f.path.endsWith('.jar') && f.hashes.sha512
 	);
@@ -327,7 +360,7 @@ async function trackMods(instanceId: number, files: IndexFile[]) {
 			dependencyOf: null
 		});
 	}
-	if (rows.length) db.insert(installedMods).values(rows).run();
+	if (rows.length) db.insert(installedMods).values(rows).onConflictDoNothing().run();
 }
 
 export async function searchModpacks(query: string, limit: number) {
