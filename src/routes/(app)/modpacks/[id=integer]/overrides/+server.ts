@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { can } from '#lib/server/access.js';
-import { saveOverride } from '#lib/server/local-packs.js';
+import { record } from '#lib/server/audit.js';
+import { getPack, saveOverride } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
 const MAX_BYTES = 20 * 1024 * 1024;
@@ -21,6 +22,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 
 	try {
 		await saveOverride(Number(params.id), rel, new Uint8Array(await file.arrayBuffer()));
+		record({
+			action: 'pack.config',
+			summary: `Added the config file ${rel} to the modpack ${getPack(Number(params.id)).name}`
+		});
 		return json({ path: rel });
 	} catch (e) {
 		error(400, e instanceof Error ? e.message : 'Could not save the file');

@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { can } from '#lib/server/access.js';
-import { iconFile, saveIcon } from '#lib/server/local-packs.js';
+import { record } from '#lib/server/audit.js';
+import { getPack, iconFile, saveIcon } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
 // An icon is a picture, so anyone signed in may load it: it is also the icon of the servers made
@@ -25,6 +26,10 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	if (file.size > MAX_BYTES) error(400, 'The image is too large (limit 2 MB)');
 	try {
 		await saveIcon(Number(params.id), new Uint8Array(await file.arrayBuffer()));
+		record({
+			action: 'pack.icon',
+			summary: `Changed the icon of the modpack ${getPack(Number(params.id)).name}`
+		});
 		return json({ ok: true });
 	} catch (e) {
 		error(400, e instanceof Error ? e.message : 'Could not save the image');

@@ -20,6 +20,8 @@ import { userFacing } from '#lib/server/http.js';
 import * as packs from '#lib/server/local-packs.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
 
+const packName = (id: number) => packs.getPack(id).name;
+
 export const listLocalPacks = query(async () => {
 	requirePanel('modpacks.read');
 	return packs.listPacks();
@@ -46,7 +48,18 @@ export const createLocalPack = command(newPackSchema, async (input) => {
 
 export const updateLocalPack = command(updatePackSchema, async ({ id, ...change }) => {
 	requirePanel('modpacks.write');
+	const before = packs.getPack(id);
 	await userFacing(async () => packs.updatePack(id, change));
+	const renamed = change.name !== undefined && change.name.trim() !== before.name;
+	const described =
+		change.description !== undefined && change.description.trim() !== before.description;
+	if (renamed || described)
+		record({
+			action: 'pack.change',
+			summary: renamed
+				? `Renamed the modpack ${before.name} to ${change.name!.trim()}${described ? ' and changed its description' : ''}`
+				: `Changed the description of the modpack ${before.name}`
+		});
 	await Promise.all([getLocalPack({ id }).refresh(), listLocalPacks().refresh()]);
 });
 
@@ -82,13 +95,19 @@ const refreshed = async (id: number) =>
 export const addPackMod = command(addPackModSchema, async ({ id, projectId, versionId }) => {
 	requirePanel('modpacks.write');
 	const result = await userFacing(() => packs.addMod(id, projectId, versionId));
+	record({
+		action: 'pack.mod',
+		summary: `Added ${result.added.map((m) => m.title).join(', ')} to the modpack ${packName(id)}`
+	});
 	await refreshed(id);
 	return result;
 });
 
 export const removePackFile = command(packFileArgs, async ({ id, fileId }) => {
 	requirePanel('modpacks.write');
+	const title = packs.listFiles(id).find((f) => f.id === fileId)?.title ?? 'a file';
 	await userFacing(async () => packs.removeFile(id, fileId));
+	record({ action: 'pack.mod', summary: `Removed ${title} from the modpack ${packName(id)}` });
 	await refreshed(id);
 });
 
@@ -97,6 +116,11 @@ export const setPackFileVersion = command(
 	async ({ id, fileId, versionId }) => {
 		requirePanel('modpacks.write');
 		await userFacing(() => packs.setModVersion(id, fileId, versionId));
+		const file = packs.listFiles(id).find((f) => f.id === fileId);
+		record({
+			action: 'pack.mod',
+			summary: `Moved ${file?.title ?? 'a mod'} to ${file?.versionNumber ?? 'another version'} in the modpack ${packName(id)}`
+		});
 		await refreshed(id);
 	}
 );
@@ -128,12 +152,17 @@ export const applyPackVersionChange = command(
 export const removePackIcon = command(packArgs, async ({ id }) => {
 	requirePanel('modpacks.write');
 	await userFacing(async () => packs.removeIcon(id));
+	record({ action: 'pack.icon', summary: `Removed the icon of the modpack ${packName(id)}` });
 	await refreshed(id);
 });
 
 export const removePackOverride = command(overridePathSchema, async ({ id, path }) => {
 	requirePanel('modpacks.write');
 	await userFacing(async () => packs.removeOverride(id, path));
+	record({
+		action: 'pack.config',
+		summary: `Removed the config file ${path} from the modpack ${packName(id)}`
+	});
 	await refreshed(id);
 });
 
