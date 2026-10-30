@@ -15,7 +15,7 @@ import { backupsDir } from './config';
 import { db } from './db';
 import { backups, instances } from './db/schema';
 import { isRunning } from './files';
-import { getInstance, instanceDir, serverDir } from './instances';
+import { getInstance, instanceDir, serverDir, wasInstalled } from './instances';
 import * as runner from './runner-client';
 import type { Subscription } from './runner-client';
 import type { ServerMessage } from '#runner/protocol.js';
@@ -258,7 +258,10 @@ export async function restoreBackup(instanceId: number, backupId: number) {
 	const archive = backupPath(instanceId, row.file);
 	if (!existsSync(archive)) throw new Error('The backup file is missing');
 	if (await isRunning(instanceId)) throw new Error('Stop the server before restoring a backup');
-	if (inst.installState !== 'ready') throw new Error('Wait for the install to finish');
+	if (inst.installState === 'installing') throw new Error('Wait for the install to finish');
+	// a failed update leaves a server that may not start; restoring a backup is how it recovers
+	if (inst.installState === 'failed' && !wasInstalled(instanceId))
+		throw new Error('The install failed, so there is nothing to restore into');
 
 	const release = claim(instanceId, 'restore');
 	const live = serverDir(instanceId);
@@ -287,6 +290,11 @@ export async function restoreBackup(instanceId: number, backupId: number) {
 			throw e;
 		}
 		rmSync(replaced, { recursive: true, force: true });
+		if (inst.installState === 'failed')
+			db.update(instances)
+				.set({ installState: 'ready', installMessage: null })
+				.where(eq(instances.id, instanceId))
+				.run();
 	} catch (e) {
 		rmSync(incoming, { recursive: true, force: true });
 		throw e;

@@ -53,7 +53,7 @@ vi.mock('./runner-client', () => ({
 }));
 
 const B = await import('./backups');
-const { deleteInstance, serverDir } = await import('./instances');
+const { deleteInstance, getInstance, instanceDir, serverDir } = await import('./instances');
 
 let id: number;
 let root: string;
@@ -208,6 +208,25 @@ describe('restoreBackup', () => {
 		await expect(B.restoreBackup(id, row.id)).rejects.toThrow();
 		expect(readFileSync(join(root, 'world/level.dat'), 'utf8')).toBe('level-v2');
 		expect(existsSync(`${root}.restoring`)).toBe(false);
+	});
+
+	it('recovers a server whose update failed, making it ready again', async () => {
+		const row = await B.createBackup(id);
+		writeFileSync(join(instanceDir(id), 'instance.json'), '{}');
+		db.update(instances)
+			.set({ installState: 'failed', installMessage: 'The update stopped part way' })
+			.where(eq(instances.id, id))
+			.run();
+		put('world/level.dat', 'level-v2');
+		await B.restoreBackup(id, row.id);
+		expect(readFileSync(join(root, 'world/level.dat'), 'utf8')).toBe('level-v1');
+		expect(getInstance(id)).toMatchObject({ installState: 'ready', installMessage: null });
+	});
+
+	it('refuses an install that never finished, which has nothing to restore into', async () => {
+		const row = await B.createBackup(id);
+		db.update(instances).set({ installState: 'failed' }).where(eq(instances.id, id)).run();
+		await expect(B.restoreBackup(id, row.id)).rejects.toThrow(/install failed/);
 	});
 
 	it('reports a backup whose file is gone', async () => {

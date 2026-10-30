@@ -13,6 +13,17 @@ const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 export type SessionUser = Pick<typeof users.$inferSelect, 'id' | 'username' | 'role'>;
 
+/**
+ * Kit marks cookies Secure everywhere but http://localhost, and a browser drops a Secure cookie sent
+ * over plain http, so signing in at http://<lan-ip>:3000 would never stick. Secure only over https.
+ */
+const cookieOptions = () => ({
+	path: '/',
+	httpOnly: true,
+	sameSite: 'lax' as const,
+	secure: getRequestEvent().url.protocol === 'https:'
+});
+
 const hashToken = (token: string) => new Bun.CryptoHasher('sha256').update(token).digest('hex');
 
 export function hasUsers() {
@@ -37,7 +48,7 @@ export function startSession(cookies: Cookies, userId: number) {
 	db.insert(sessions)
 		.values({ id: hashToken(token), userId, expiresAt })
 		.run();
-	cookies.set(COOKIE, token, { path: '/', httpOnly: true, sameSite: 'lax', expires: expiresAt });
+	cookies.set(COOKIE, token, { ...cookieOptions(), expires: expiresAt });
 }
 
 export function endSession(cookies: Cookies) {
@@ -46,7 +57,7 @@ export function endSession(cookies: Cookies) {
 		db.delete(sessions)
 			.where(eq(sessions.id, hashToken(token)))
 			.run();
-	cookies.delete(COOKIE, { path: '/' });
+	cookies.delete(COOKIE, cookieOptions());
 }
 
 export function userFromCookies(cookies: Cookies): SessionUser | null {

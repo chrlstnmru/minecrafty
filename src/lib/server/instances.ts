@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
@@ -84,6 +84,13 @@ export function writeInstanceMeta(row: Instance) {
 }
 
 /**
+ * Whether the server was installed successfully at least once: instance.json is only written when
+ * an install or update finishes. A failure after that is a failed update, and the folder holds a
+ * world that must not be thrown away.
+ */
+export const wasInstalled = (id: number) => existsSync(join(instanceDir(id), 'instance.json'));
+
+/**
  * Installs the loader's server files and writes instance.json, reporting what it is doing through
  * the install progress, which the caller clears when it is done.
  */
@@ -161,6 +168,10 @@ export function retryInstall(id: number) {
 	if (row.installState !== 'failed') throw new Error('Nothing failed here');
 	if (row.packProjectId)
 		throw new Error('A modpack server cannot be retried; create it again from the pack');
+	if (wasInstalled(id))
+		throw new Error(
+			'This server was set up before, so a retry would erase its world. Restore a backup instead'
+		);
 	// whatever a half-finished install left would only get in the way
 	rmSync(serverDir(id), { recursive: true, force: true });
 	mkdirSync(serverDir(id), { recursive: true });
