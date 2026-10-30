@@ -21,3 +21,11 @@ export const userAccessSchema = v.object({
 	instanceId: v.nullable(idSchema),
 	roleIds: v.array(idSchema)
 });
+
+export const userIdsSchema = v.pipe(v.array(idSchema), v.minLength(1), v.maxLength(500));
+
+export const grantRoleSchema = v.object({
+	userIds: userIdsSchema,
+	roleId: idSchema,
+	instanceId: v.nullable(idSchema)
+});

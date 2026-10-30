@@ -64,6 +64,11 @@ export default defineConfig(
 		}
 	},
 	{
+		// a column's own classes come from its definition (`meta.class`), so they cannot be static
+		files: ['src/lib/components/data-table/**'],
+		rules: { 'shadcn/require-static-classes': 'off' }
+	},
+	{
 		// Override or add rule settings here, such as:
 		// 'svelte/button-has-type': 'error'
 		rules: {

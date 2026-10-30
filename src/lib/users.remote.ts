@@ -1,7 +1,13 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
-import { addUserSchema, userAccessSchema, userPasswordSchema } from '#lib/schemas/users.js';
+import {
+	addUserSchema,
+	grantRoleSchema,
+	userAccessSchema,
+	userIdsSchema,
+	userPasswordSchema
+} from '#lib/schemas/users.js';
 import { listAssignments, setAssignments } from '#lib/server/access.js';
 import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { canActOnRecord, canAddUser, canAssignRole, type GrantCheck } from '#lib/server/grants.js';
@@ -44,12 +50,51 @@ export const setUserPassword = command(userPasswordSchema, async ({ id, password
 	await userFacing(() => admin.changeUser(id, { password }, me.id));
 });
 
-export const deleteAccount = command(idSchema, async (id) => {
+/** Deletes several accounts. Each one is checked on its own; the ones the caller may not delete are skipped and reported. */
+export const deleteAccounts = command(userIdsSchema, async (ids) => {
 	const actor = requirePanel('users.write');
-	refuse(canActOnRecord(actor, 'users.write', { userId: id }));
-	await userFacing(async () => admin.removeUser(id, actor.id));
+	const done: number[] = [];
+	const skipped: { id: number; reason: string }[] = [];
+	for (const id of ids) {
+		const check = canActOnRecord(actor, 'users.write', { userId: id });
+		if (!check.ok) {
+			skipped.push({ id, reason: check.reason ?? 'Not allowed' });
+			continue;
+		}
+		try {
+			admin.removeUser(id, actor.id);
+			done.push(id);
+		} catch (e) {
+			skipped.push({ id, reason: e instanceof Error ? e.message : 'Could not delete' });
+		}
+	}
 	await allUsers().refresh();
+	return { deleted: done.length, skipped };
 });
+
+/** Gives one role to several people, on a server or panel-wide (null), keeping the roles they already have there. */
+export const grantRoleToUsers = command(
+	grantRoleSchema,
+	async ({ userIds, roleId, instanceId }) => {
+		const actor = requirePanel('roles.assign');
+		let granted = 0;
+		const skipped: { id: number; reason: string }[] = [];
+		for (const id of userIds) {
+			const check = canAssignRole(actor, { subjectUserId: id, roleId, instanceId });
+			if (!check.ok) {
+				skipped.push({ id, reason: check.reason ?? 'Not allowed' });
+				continue;
+			}
+			const have = listAssignments(id)
+				.filter((a) => a.instanceId === instanceId)
+				.map((a) => a.roleId);
+			setAssignments(id, instanceId, [...new Set([...have, roleId])]);
+			granted++;
+		}
+		await allUsers().refresh();
+		return { granted, skipped };
+	}
+);
 
 export const userAccess = query(idSchema, async (userId) => {
 	requirePanel('users.read');

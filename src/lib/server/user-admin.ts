@@ -1,4 +1,4 @@
-import { and, count, eq, ne } from 'drizzle-orm';
+import { and, count, desc, eq, ne } from 'drizzle-orm';
 import { db } from './db';
 import { roleAssignments, sessions, users } from './db/schema';
 
@@ -17,7 +17,7 @@ export function listUsers() {
 		.from(users)
 		.leftJoin(roleAssignments, eq(roleAssignments.userId, users.id))
 		.groupBy(users.id)
-		.orderBy(users.username)
+		.orderBy(desc(users.createdAt), desc(users.id))
 		.all();
 }
 
