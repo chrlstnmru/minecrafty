@@ -246,9 +246,10 @@
 			</Tabs.List>
 		</Tabs.Root>
 
-		<!-- the header and tabs stay put; the active tab scrolls inside this. The padding and matching
+		<!-- the header and tabs stay put; the active tab scrolls inside this. Rows are max-content: cards clip their own overflow, so with auto
+		     rows they would shrink to fit this box instead of letting it scroll. The padding and matching
 		     negative margin leave room for a card's ring, which a scroll container would clip. -->
-		<div class="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1">
+		<div class="-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1">
 			{#if tab === 'mods'}
 				<Card.Root>
 					<Card.Content class="px-0">
