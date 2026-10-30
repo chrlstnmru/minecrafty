@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { claim, writeBackup } from './backups';
@@ -8,6 +8,7 @@ import { installedMods, instances } from './db/schema';
 import { isRunning } from './files';
 import { clearProgress, setProgress } from './install-progress';
 import { updateKind } from '../versions';
+import { mergeStaged, removeStale } from './staged-install';
 import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';
 import {
@@ -19,21 +20,6 @@ import {
 	needsJavaToInstall,
 	type Loader
 } from './loaders';
-
-// Top-level names a loader's installer produces that a newer install must not leave behind: an
-// old forge-*.jar or libraries/ folder would be picked up by launchArgs ahead of the new one.
-const STALE: Record<Loader, RegExp[]> = {
-	vanilla: [],
-	paper: [],
-	purpur: [],
-	fabric: [],
-	quilt: [/^libraries$/, /^quilt-server-launch\.jar$/],
-	forge: [/^libraries$/, /^forge-.*\.jar$/, /^minecraft_server.*\.jar$/, /^run\.(sh|bat)$/],
-	neoforge: [/^libraries$/, /^minecraft_server.*\.jar$/, /^run\.(sh|bat)$/]
-};
-
-// files a loader writes once and the user then edits; an update must not overwrite them
-const USER_FILES = new Set(['user_jvm_args.txt']);
 
 export type UpdateOutcome = { ok: boolean; message: string; at: number };
 
@@ -83,19 +69,6 @@ export async function loaderInfo(instanceId: number): Promise<LoaderInfo> {
 		error,
 		mods
 	};
-}
-
-/** Replaces what the loader installed in `server` with what is in `staging`, then deletes `staging`. */
-function swapIn(server: string, staging: string, loader: Loader) {
-	for (const name of readdirSync(server))
-		if (STALE[loader].some((pattern) => pattern.test(name)))
-			rmSync(join(server, name), { recursive: true, force: true });
-	for (const name of readdirSync(staging)) {
-		if (USER_FILES.has(name) && existsSync(join(server, name))) continue;
-		rmSync(join(server, name), { recursive: true, force: true });
-		renameSync(join(staging, name), join(server, name));
-	}
-	rmSync(staging, { recursive: true, force: true });
 }
 
 /**
@@ -161,7 +134,8 @@ export async function startLoaderUpdate(
 
 			setProgress(instanceId, { label: 'Replacing the old server', done: 0, total: 1 });
 			swapped = true;
-			swapIn(serverDir(instanceId), staging, loader);
+			removeStale(serverDir(instanceId), loader);
+			mergeStaged(serverDir(instanceId), staging);
 			launchArgs(serverDir(instanceId), loader);
 
 			// a Java version chosen by hand may be too old for the new Minecraft version
