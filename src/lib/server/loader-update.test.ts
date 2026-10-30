@@ -43,6 +43,7 @@ vi.mock('./loaders', async (original) => ({
 }));
 
 const U = await import('./loader-update');
+const { lastOutcome } = await import('./update-outcome');
 const { listBackups } = await import('./backups');
 const { getInstance, instanceDir, serverDir } = await import('./instances');
 
@@ -87,7 +88,7 @@ describe('startLoaderUpdate', () => {
 			loaderVersion: '130',
 			installState: 'ready'
 		});
-		expect(U.lastOutcome(id)).toMatchObject({ ok: true });
+		expect(lastOutcome(id)).toMatchObject({ ok: true });
 		expect(existsSync(`${root}.updating`)).toBe(false);
 	});
 
@@ -176,7 +177,7 @@ describe('a failing install', () => {
 			loaderVersion: '120',
 			installState: 'ready'
 		});
-		expect(U.lastOutcome(id)).toMatchObject({ ok: false, message: 'installer exploded' });
+		expect(lastOutcome(id)).toMatchObject({ ok: false, message: 'installer exploded' });
 		expect(existsSync(`${root}.updating`)).toBe(false);
 	});
 
@@ -228,7 +229,7 @@ describe('Java choice', () => {
 		db.update(instances).set({ javaMajor: 17 }).where(eq(instances.id, id)).run();
 		await run('1.21.5');
 		expect(state().javaMajor).toBeNull();
-		expect(U.lastOutcome(id)?.message).toContain('Java is now chosen automatically');
+		expect(lastOutcome(id)?.message).toContain('Java is now chosen automatically');
 	});
 
 	it('keeps a chosen Java that is new enough', async () => {

@@ -9,6 +9,7 @@ import { isRunning } from './files';
 import { clearProgress, setProgress } from './install-progress';
 import { updateKind } from '../versions';
 import { mergeStaged, removeStale } from './staged-install';
+import { clearOutcome, setOutcome } from './update-outcome';
 import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';
 import {
@@ -20,12 +21,6 @@ import {
 	needsJavaToInstall,
 	type Loader
 } from './loaders';
-
-export type UpdateOutcome = { ok: boolean; message: string; at: number };
-
-// the result of the last update per instance; lost on restart, like install progress
-const outcomes = new Map<number, UpdateOutcome>();
-export const lastOutcome = (instanceId: number) => outcomes.get(instanceId) ?? null;
 
 export type LoaderInfo = {
 	loader: Loader;
@@ -106,7 +101,7 @@ export async function startLoaderUpdate(
 		.set({ installState: 'installing', installMessage: null })
 		.where(eq(instances.id, instanceId))
 		.run();
-	outcomes.delete(instanceId);
+	clearOutcome(instanceId);
 	setProgress(instanceId, { label: 'Starting', done: 0, total: 1 });
 
 	const finished = (async () => {
@@ -154,12 +149,11 @@ export async function startLoaderUpdate(
 				.returning()
 				.get();
 			writeInstanceMeta(row);
-			outcomes.set(instanceId, {
+			setOutcome(instanceId, {
 				ok: true,
 				message:
 					`Updated from ${describe(from)} to ${describe(to)}.` +
-					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : ''),
-				at: Date.now()
+					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : '')
 			});
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
@@ -173,10 +167,9 @@ export async function startLoaderUpdate(
 				)
 				.where(eq(instances.id, instanceId))
 				.run();
-			outcomes.set(instanceId, {
+			setOutcome(instanceId, {
 				ok: false,
-				message: swapped ? `The update stopped part way: ${message}` : message,
-				at: Date.now()
+				message: swapped ? `The update stopped part way: ${message}` : message
 			});
 		} finally {
 			rmSync(staging, { recursive: true, force: true });

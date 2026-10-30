@@ -238,7 +238,7 @@ async function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack
 	}
 }
 
-async function downloadFiles(instanceId: number, server: string, files: IndexFile[]) {
+export async function downloadFiles(instanceId: number, server: string, files: IndexFile[]) {
 	let done = 0;
 	const total = files.length;
 	setProgress(instanceId, { label: 'Downloading mods', done, total });
