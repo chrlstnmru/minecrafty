@@ -2,6 +2,7 @@
 	import CubeIcon from '@tabler/icons-svelte/icons/cube';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { navMain, navSecondary } from '#lib/nav.js';
+	import { visibleItems } from '#lib/nav-access.js';
 	import NavMain from './nav-main.svelte';
 	import NavSecondary from './nav-secondary.svelte';
 	import NavUser from './nav-user.svelte';
@@ -10,11 +11,18 @@
 	let {
 		user,
 		panel,
+		anywhere,
 		...restProps
 	}: ComponentProps<typeof Sidebar.Root> & {
 		user: { name: string; role: string };
 		panel: readonly string[];
+		anywhere: readonly string[];
 	} = $props();
+
+	const ctx = $derived({
+		admin: user.role === 'admin',
+		held: new Set([...panel, ...anywhere])
+	});
 </script>
 
 <Sidebar.Root collapsible="icon" {...restProps}>
@@ -40,11 +48,8 @@
 		</Sidebar.Menu>
 	</Sidebar.Header>
 	<Sidebar.Content>
-		<NavMain items={navMain} />
-		<NavSecondary
-			items={navSecondary.filter((i) => !i.permission || panel.includes(i.permission))}
-			class="mt-auto"
-		/>
+		<NavMain items={visibleItems(navMain, ctx)} />
+		<NavSecondary items={visibleItems(navSecondary, ctx)} class="mt-auto" />
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<NavUser {user} />

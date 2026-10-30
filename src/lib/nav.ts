@@ -7,22 +7,28 @@ import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
 import UsersIcon from '@tabler/icons-svelte/icons/users';
 import type { Icon } from '@tabler/icons-svelte';
+import { rules, type NavRule } from './nav-access.js';
 
-/** `permission` is a panel permission needed to see the item. */
-export type NavItem = { title: string; url: string; icon: Icon; permission?: string };
+/** `rule` says who sees the item; without one, everyone does. */
+export type NavItem = { title: string; url: string; icon: Icon; rule?: NavRule };
 
 export const navMain: NavItem[] = [
 	{ title: 'Dashboard', url: '/', icon: DashboardIcon },
-	{ title: 'Instances', url: '/instances', icon: ServerIcon },
-	{ title: 'Mods', url: '/mods', icon: PackageIcon },
-	{ title: 'Backups', url: '/backups', icon: ArchiveIcon },
-	{ title: 'Schedules', url: '/schedules', icon: CalendarTimeIcon }
+	{ title: 'Instances', url: '/instances', icon: ServerIcon, rule: rules.instances },
+	{ title: 'Mods', url: '/mods', icon: PackageIcon, rule: rules.mods },
+	{ title: 'Backups', url: '/backups', icon: ArchiveIcon, rule: rules.backups },
+	{
+		title: 'Schedules',
+		url: '/schedules',
+		icon: CalendarTimeIcon,
+		rule: rules.schedules
+	}
 ];
 
 export const navSecondary: NavItem[] = [
-	{ title: 'Users', url: '/users', icon: UsersIcon, permission: 'users.read' },
-	{ title: 'Roles', url: '/roles', icon: ShieldLockIcon, permission: 'roles.read' },
-	{ title: 'Settings', url: '/settings', icon: SettingsIcon }
+	{ title: 'Users', url: '/users', icon: UsersIcon, rule: rules.users },
+	{ title: 'Roles', url: '/roles', icon: ShieldLockIcon, rule: rules.roles },
+	{ title: 'Settings', url: '/settings', icon: SettingsIcon, rule: rules.settings }
 ];
 
 export function isActive(url: string, pathname: string) {

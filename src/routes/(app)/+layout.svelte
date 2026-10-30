@@ -11,7 +11,11 @@
 	class="h-svh"
 	style="--sidebar-width: calc(var(--spacing) * 72); --header-height: calc(var(--spacing) * 12);"
 >
-	<AppSidebar user={{ name: data.user.username, role: data.user.role }} panel={data.panel} />
+	<AppSidebar
+		user={{ name: data.user.username, role: data.user.role }}
+		panel={data.panel}
+		anywhere={data.anywhere}
+	/>
 	<Sidebar.Inset class="min-h-0 overflow-hidden">
 		<SiteHeader />
 		<!-- the app is exactly viewport-tall; this region scrolls, or a page bounds itself (console) -->

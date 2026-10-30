@@ -188,3 +188,14 @@ export function setAssignments(userId: number, instanceId: number | null, roleId
 			tx.insert(roleAssignments).values({ userId, roleId, instanceId }).run();
 	});
 }
+
+/** The per-server permissions the user holds on at least one server, for deciding what to show in the sidebar. */
+export function permissionsAnywhere(user: Actor): InstancePermission[] {
+	if (user.role === 'admin') return [...INSTANCE_PERMISSIONS];
+	const entries = entriesFor(user.id);
+	if (!entries.length) return [];
+	const held = new Set<Permission>();
+	for (const { id } of db.select({ id: instances.id }).from(instances).all())
+		for (const key of resolve(entries, id)) held.add(key);
+	return INSTANCE_PERMISSIONS.filter((p) => held.has(p));
+}
