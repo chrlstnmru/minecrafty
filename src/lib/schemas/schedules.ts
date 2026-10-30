@@ -1,9 +1,22 @@
 import * as v from 'valibot';
 import { parseCron } from '../cron.js';
+import type { InstancePermission } from '../permissions.js';
 import { idSchema } from './common.js';
 
 export const SCHEDULE_ACTIONS = ['start', 'stop', 'restart', 'backup', 'command'] as const;
 export type ScheduleAction = (typeof SCHEDULE_ACTIONS)[number];
+
+/**
+ * What a task does to the server needs the same permission as doing it by hand: holding `schedules`
+ * alone must not be a way to run console commands or stop the server.
+ */
+export const SCHEDULE_ACTION_PERMISSION = {
+	start: 'control',
+	stop: 'control',
+	restart: 'control',
+	backup: 'backups',
+	command: 'console'
+} as const satisfies Record<ScheduleAction, InstancePermission>;
 
 /** A cron expression, checked with the same parser the scheduler uses. */
 export const cronSchema = v.pipe(

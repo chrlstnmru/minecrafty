@@ -2,7 +2,13 @@ import { record } from './audit';
 import { and, eq } from 'drizzle-orm';
 import { matches, nextRun, parseCron } from '#lib/cron.js';
 import { formatBytes } from '#lib/format.js';
-import type { ScheduleAction } from '#lib/schemas/schedules.js';
+import { registry } from '#lib/permissions.js';
+import {
+	SCHEDULE_ACTIONS,
+	SCHEDULE_ACTION_PERMISSION,
+	type ScheduleAction
+} from '#lib/schemas/schedules.js';
+import { can, type Actor } from './access';
 import { createBackup } from './backups';
 import { db } from './db';
 import { schedules } from './db/schema';
@@ -29,7 +35,7 @@ export const listSchedules = (instanceId: number) =>
 		.orderBy(schedules.id)
 		.all();
 
-function getSchedule(instanceId: number, scheduleId: number) {
+export function getSchedule(instanceId: number, scheduleId: number) {
 	const row = db
 		.select()
 		.from(schedules)
@@ -68,6 +74,34 @@ export function saveSchedule(instanceId: number, input: ScheduleInput, scheduleI
 		.values({ ...values, instanceId })
 		.returning()
 		.get();
+}
+
+/** The actions the user may give a task on this instance: each needs the permission it acts with. */
+export const allowedActions = (user: Actor, instanceId: number) =>
+	SCHEDULE_ACTIONS.filter((action) =>
+		can(user, SCHEDULE_ACTION_PERMISSION[action], { instanceId })
+	);
+
+/**
+ * Why the user may not add, change, run or remove a task, or null when they may. An existing task
+ * (`scheduleId`) needs the permission for what it does, and a new or changed `action` the
+ * permission for that. Holding `schedules` is checked by the caller.
+ */
+export function taskRefusal(
+	user: Actor,
+	instanceId: number,
+	change: { scheduleId?: number; action?: ScheduleAction }
+) {
+	const actions = [
+		...(change.scheduleId ? [getSchedule(instanceId, change.scheduleId).action] : []),
+		...(change.action ? [change.action] : [])
+	];
+	for (const action of actions) {
+		const needed = SCHEDULE_ACTION_PERMISSION[action];
+		if (!can(user, needed, { instanceId }))
+			return `A task that does this needs the "${registry[needed].label}" permission`;
+	}
+	return null;
 }
 
 export function deleteSchedule(instanceId: number, scheduleId: number) {
