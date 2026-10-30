@@ -1,4 +1,4 @@
-import { mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { basename, join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
@@ -8,6 +8,9 @@ import { getInstance, serverDir, type Instance } from './instances';
 import * as modrinth from './modrinth';
 
 export type InstalledMod = typeof installedMods.$inferSelect;
+
+/** A disabled mod keeps its file, renamed so the loader no longer sees a jar. */
+export const DISABLED_SUFFIX = '.disabled';
 
 // Modrinth loader tags an instance's loader can run; Quilt runs Fabric mods, Purpur runs Paper plugins
 const COMPATIBLE_LOADERS: Record<string, string[]> = {
@@ -46,7 +49,8 @@ export function listInstalled(instanceId: number) {
 		.from(installedMods)
 		.where(and(eq(installedMods.instanceId, instanceId), eq(installedMods.kind, 'mod')))
 		.orderBy(installedMods.title)
-		.all();
+		.all()
+		.map((row) => ({ ...row, enabled: !row.file.endsWith(DISABLED_SUFFIX) }));
 }
 
 export async function search(instanceId: number, query: string, limit: number) {
@@ -141,7 +145,10 @@ async function apply(
 			const file = pickFile(version);
 			const rel = `${folder}/${file.filename}`;
 			const dest = join(serverDir(inst.id), rel);
-			if (rel !== replacing?.file && (await Bun.file(dest).exists()))
+			if (
+				rel !== replacing?.file &&
+				((await Bun.file(dest).exists()) || (await Bun.file(dest + DISABLED_SUFFIX).exists()))
+			)
 				throw new Error(`${rel} already exists`);
 			await downloadFile(dest, {
 				url: file.url,
@@ -268,7 +275,27 @@ export async function update(instanceId: number, modId: number, versionId?: stri
 			];
 	if (!target || target.id === row.versionId)
 		throw new Error(versionId ? 'Already on that version' : 'Already up to date');
-	return apply(inst, await plan(inst, row.projectId, target), row);
+	const result = await apply(inst, await plan(inst, row.projectId, target), row);
+	// an update must not quietly switch a disabled mod back on
+	if (!row.enabled) setEnabled(instanceId, row.id, false);
+	return result;
+}
+
+/** Turns a mod on or off by renaming its file; the server picks the change up on its next start. */
+export function setEnabled(instanceId: number, modId: number, enabled: boolean) {
+	const row = db
+		.select()
+		.from(installedMods)
+		.where(and(eq(installedMods.id, modId), eq(installedMods.instanceId, instanceId)))
+		.get();
+	if (!row) throw new Error('Not installed');
+	if (row.file.endsWith(DISABLED_SUFFIX) === !enabled) return;
+	const file = enabled ? row.file.slice(0, -DISABLED_SUFFIX.length) : row.file + DISABLED_SUFFIX;
+	const root = serverDir(instanceId);
+	if (!existsSync(join(root, row.file))) throw new Error(`${row.file} is missing`);
+	if (existsSync(join(root, file))) throw new Error(`${file} already exists`);
+	renameSync(join(root, row.file), join(root, file));
+	db.update(installedMods).set({ file }).where(eq(installedMods.id, row.id)).run();
 }
 
 export function remove(instanceId: number, modId: number) {

@@ -10,11 +10,13 @@
 		modUpdates,
 		modsInfo,
 		removeMod,
+		setModEnabled,
 		searchMods,
 		updateMod
 	} from '#lib/mods.remote.js';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
@@ -27,11 +29,14 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const info = $derived(await modsInfo(id));
-	const installed = $derived(installedMods(id));
-	const installedIds = $derived(new Set(installed.current?.map((m) => m.projectId)));
+	// awaited, so the server renders the list and the browser hydrates the same markup
+	const installed = $derived(await installedMods(id));
+	const installedIds = $derived(new Set(installed.map((m) => m.projectId)));
 
 	const updates = $derived(modUpdates(id));
 	const updateByMod = $derived(new Map(updates.current?.map((u) => [u.modId, u])));
+	// computed here: a `{@const}` reading async state inside the each block breaks hydration
+	const rows = $derived(installed.map((mod) => ({ mod, update: updateByMod.get(mod.id) })));
 
 	// the version picker serves both installing a chosen version and changing an installed one
 	let picker = $state<{
@@ -104,8 +109,19 @@
 
 	async function updateAll() {
 		for (const u of updates.current ?? []) {
-			const title = installed.current?.find((m) => m.id === u.modId)?.title ?? 'mod';
+			const title = installed.find((m) => m.id === u.modId)?.title ?? 'mod';
 			await change(u.modId, title);
+		}
+	}
+
+	async function toggle(modId: number, title: string, enabled: boolean) {
+		try {
+			await setModEnabled({ id, modId, enabled });
+			toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${title}`, {
+				description: 'Restart the server to apply.'
+			});
+		} catch (e) {
+			toast.error(message(e, 'Could not change it'));
 		}
 	}
 
@@ -149,18 +165,28 @@
 				{/if}
 			</Card.Header>
 			<Card.Content>
-				{#if !installed.current}<SkeletonRows count={3} icon="size-9" />{/if}
-				{#each installed.current ?? [] as mod (mod.id)}
-					{@const update = updateByMod.get(mod.id)}
+				{#each rows as { mod, update } (mod.id)}
 					<div class="flex items-center gap-3 border-b py-2 first:pt-0 last:border-b-0 last:pb-0">
+						<Switch
+							checked={mod.enabled}
+							aria-label="{mod.enabled ? 'Disable' : 'Enable'} {mod.title}"
+							onCheckedChange={(on) => toggle(mod.id, mod.title, on)}
+						/>
 						{#if mod.iconUrl}
-							<img src={mod.iconUrl} alt="" class="size-9 shrink-0 rounded-md bg-muted" />
+							<img
+								src={mod.iconUrl}
+								alt=""
+								class="size-9 shrink-0 rounded-md bg-muted {mod.enabled ? '' : 'opacity-50'}"
+							/>
 						{:else}
-							<div class="size-9 shrink-0 rounded-md bg-muted"></div>
+							<div
+								class="size-9 shrink-0 rounded-md bg-muted {mod.enabled ? '' : 'opacity-50'}"
+							></div>
 						{/if}
-						<div class="min-w-0 flex-1">
+						<div class="min-w-0 flex-1 {mod.enabled ? '' : 'text-muted-foreground'}">
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{mod.title}</span>
+								{#if !mod.enabled}<Badge variant="muted">Disabled</Badge>{/if}
 								{#if mod.dependencyOf}<Badge variant="pink">Dependency</Badge>{/if}
 							</div>
 							<p class="truncate text-xs text-muted-foreground">
@@ -190,15 +216,13 @@
 						</Button>
 					</div>
 				{:else}
-					{#if installed.current}
-						<Empty.Root class="border">
-							<Empty.Header>
-								<Empty.Media variant="icon"><PackageOffIcon /></Empty.Media>
-								<Empty.Title>Nothing installed yet</Empty.Title>
-								<Empty.Description>Search below to add {info.noun}s.</Empty.Description>
-							</Empty.Header>
-						</Empty.Root>
-					{/if}
+					<Empty.Root class="border">
+						<Empty.Header>
+							<Empty.Media variant="icon"><PackageOffIcon /></Empty.Media>
+							<Empty.Title>Nothing installed yet</Empty.Title>
+							<Empty.Description>Search below to add {info.noun}s.</Empty.Description>
+						</Empty.Header>
+					</Empty.Root>
 				{/each}
 			</Card.Content>
 		</Card.Root>

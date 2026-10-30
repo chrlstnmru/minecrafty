@@ -66,6 +66,15 @@ export const removeMod = command(
 	}
 );
 
+export const setModEnabled = command(
+	v.object({ id, modId: idSchema, enabled: v.boolean() }),
+	async ({ id: instanceId, modId, enabled }) => {
+		requireAdmin();
+		await userFacing(async () => mods.setEnabled(instanceId, modId, enabled));
+		await installedMods(instanceId).refresh();
+	}
+);
+
 export const updateMod = command(
 	v.object({ id, modId: idSchema, versionId: versionIdSchema }),
 	async ({ id: instanceId, modId, versionId }) => {
