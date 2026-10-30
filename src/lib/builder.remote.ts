@@ -116,6 +116,12 @@ export const applyPackVersionChange = command(
 	}
 );
 
+export const removePackIcon = command(packArgs, async ({ id }) => {
+	requirePanel('modpacks.write');
+	await userFacing(async () => packs.removeIcon(id));
+	await refreshed(id);
+});
+
 export const removePackOverride = command(overridePathSchema, async ({ id, path }) => {
 	requirePanel('modpacks.write');
 	await userFacing(async () => packs.removeOverride(id, path));

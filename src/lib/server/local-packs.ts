@@ -32,6 +32,14 @@ export const packDir = (id: number) => join(dataDir, 'packs', String(id));
 export const overridesDir = (id: number) => join(packDir(id), 'overrides');
 
 const MAX_NAME = 60;
+const MAX_ICON_BYTES = 2 * 1024 * 1024;
+
+const ICON_TYPES = {
+	png: 'image/png',
+	jpg: 'image/jpeg',
+	webp: 'image/webp'
+} as const;
+type IconExt = keyof typeof ICON_TYPES;
 
 const getRow = (id: number) => db.select().from(localPacks).where(eq(localPacks.id, id)).get();
 
@@ -50,6 +58,62 @@ function bump(id: number) {
 		.run();
 }
 
+// ---- the pack's icon ----
+
+/** The image's kind from its first bytes, not from a name or type the uploader chose. */
+function sniffIcon(bytes: Uint8Array): IconExt | null {
+	const starts = (...sig: number[]) => sig.every((b, i) => bytes[i] === b);
+	if (starts(0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a)) return 'png';
+	if (starts(0xff, 0xd8, 0xff)) return 'jpg';
+	if (
+		starts(0x52, 0x49, 0x46, 0x46) &&
+		bytes[8] === 0x57 &&
+		bytes[9] === 0x45 &&
+		bytes[10] === 0x42 &&
+		bytes[11] === 0x50
+	)
+		return 'webp';
+	return null;
+}
+
+/** The icon file on disk, if the pack has one. */
+export function iconFile(packId: number) {
+	for (const ext of Object.keys(ICON_TYPES) as IconExt[]) {
+		const path = join(packDir(packId), `icon.${ext}`);
+		if (existsSync(path)) return { path, type: ICON_TYPES[ext], mtime: statSync(path).mtimeMs };
+	}
+	return null;
+}
+
+/** Where the browser loads the icon from; it changes when the icon does, so a new one shows at once. */
+function iconUrlOf(packId: number) {
+	const icon = iconFile(packId);
+	return icon ? `/modpacks/${packId}/icon?v=${Math.round(icon.mtime)}` : null;
+}
+
+/** Stores a PNG, JPEG or WebP as the pack's icon (at most 2 MB), replacing the old one. */
+export async function saveIcon(packId: number, bytes: Uint8Array) {
+	requirePack(packId);
+	if (bytes.length > MAX_ICON_BYTES) throw new Error('The image is too large (limit 2 MB)');
+	const ext = sniffIcon(bytes);
+	if (!ext) throw new Error('Use a PNG, JPEG or WebP image');
+	mkdirSync(packDir(packId), { recursive: true });
+	removeIconFiles(packId);
+	await Bun.write(join(packDir(packId), `icon.${ext}`), bytes);
+	bump(packId);
+}
+
+function removeIconFiles(packId: number) {
+	for (const ext of Object.keys(ICON_TYPES))
+		rmSync(join(packDir(packId), `icon.${ext}`), { force: true });
+}
+
+export function removeIcon(packId: number) {
+	requirePack(packId);
+	removeIconFiles(packId);
+	bump(packId);
+}
+
 export function listPacks() {
 	const counts = new Map(
 		db
@@ -64,7 +128,7 @@ export function listPacks() {
 		.from(localPacks)
 		.orderBy(desc(localPacks.updatedAt), desc(localPacks.id))
 		.all()
-		.map((p) => ({ ...p, files: counts.get(p.id) ?? 0 }));
+		.map((p) => ({ ...p, files: counts.get(p.id) ?? 0, iconUrl: iconUrlOf(p.id) }));
 }
 
 export function listFiles(packId: number) {
@@ -96,7 +160,7 @@ export function listOverrides(packId: number): OverrideFile[] {
 
 export function getPack(id: number) {
 	const pack = requirePack(id);
-	return { ...pack, files: listFiles(id), overrides: listOverrides(id) };
+	return { ...pack, files: listFiles(id), overrides: listOverrides(id), iconUrl: iconUrlOf(id) };
 }
 
 const cleanName = (name: string) => {
@@ -166,6 +230,11 @@ export function duplicatePack(id: number) {
 				.run();
 		if (existsSync(overridesDir(id)))
 			cpSync(overridesDir(id), overridesDir(copy.id), { recursive: true });
+		const icon = iconFile(id);
+		if (icon) {
+			mkdirSync(packDir(copy.id), { recursive: true });
+			cpSync(icon.path, join(packDir(copy.id), basename(icon.path)));
+		}
 		return copy;
 	});
 }
@@ -609,6 +678,7 @@ export async function startInstall(
 	};
 	return startImportLoaded(loaded, opts, {
 		packName: pack.name,
+		packIconUrl: iconUrlOf(pack.id),
 		fromPackId: pack.id,
 		fromPackRevision: pack.revision
 	});

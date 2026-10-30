@@ -15,11 +15,13 @@
 		packMinecraftVersions,
 		previewPackVersionChange,
 		removePackFile,
+		removePackIcon,
 		removePackOverride,
 		setPackFileVersion,
 		updateLocalPack
 	} from '#lib/builder.remote.js';
 	import Combobox from '#lib/components/combobox.svelte';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
@@ -140,6 +142,39 @@
 				? `${(bytes / 1024).toFixed(1)} KB`
 				: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
+	// ---- icon ----
+	let iconInput = $state<HTMLInputElement>();
+	let iconBusy = $state(false);
+
+	async function uploadIcon(file: File | undefined) {
+		if (!file) return;
+		iconBusy = true;
+		try {
+			const body = new FormData();
+			body.set('file', file);
+			const res = await fetch(`/modpacks/${id}/icon`, { method: 'POST', body });
+			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
+			await pack.refresh();
+			toast.success('Icon changed');
+		} catch (e) {
+			toast.error(e instanceof Error && e.message ? e.message : 'Could not save the image');
+		} finally {
+			iconBusy = false;
+			if (iconInput) iconInput.value = '';
+		}
+	}
+
+	async function dropIcon() {
+		iconBusy = true;
+		try {
+			await removePackIcon({ id });
+		} catch (e) {
+			toast.error(message(e, 'Could not remove the icon'));
+		} finally {
+			iconBusy = false;
+		}
+	}
+
 	// ---- settings ----
 	let name = $state('');
 	let description = $state('');
@@ -213,6 +248,13 @@
 		>
 			<ArrowLeftIcon />
 		</Button>
+		{#if pack.current}
+			<InstanceIcon
+				loader={pack.current.loader}
+				packIconUrl={pack.current.iconUrl}
+				class="mt-0.5 size-10"
+			/>
+		{/if}
 		<div class="min-w-0 flex-1">
 			<PageHeader
 				title={pack.current?.name ?? ''}
@@ -432,6 +474,38 @@
 						</Field.Field>
 						<div>
 							<Button disabled={!dirty || !name.trim()} onclick={saveSettings}>Save</Button>
+						</div>
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Icon</Card.Title>
+						<Card.Description>
+							Shown for this pack and for the servers made from it. A PNG, JPEG or WebP of at most 2
+							MB, ideally square. It is not part of the downloaded .mrpack.
+						</Card.Description>
+					</Card.Header>
+					<Card.Content class="flex flex-wrap items-center gap-4">
+						<InstanceIcon
+							loader={pack.current.loader}
+							packIconUrl={pack.current.iconUrl}
+							class="size-16"
+						/>
+						<input
+							bind:this={iconInput}
+							type="file"
+							accept="image/png,image/jpeg,image/webp"
+							class="hidden"
+							onchange={(e) => uploadIcon(e.currentTarget.files?.[0])}
+						/>
+						<div class="flex gap-2">
+							<Button variant="outline" loading={iconBusy} onclick={() => iconInput?.click()}>
+								<UploadIcon />{pack.current.iconUrl ? 'Change image' : 'Upload image'}
+							</Button>
+							{#if pack.current.iconUrl}
+								<Button variant="ghost" disabled={iconBusy} onclick={dropIcon}>Remove</Button>
+							{/if}
 						</div>
 					</Card.Content>
 				</Card.Root>

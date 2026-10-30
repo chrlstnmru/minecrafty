@@ -14,6 +14,7 @@
 		dateCell,
 		renderSnippet
 	} from '#lib/components/data-table/index.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import NewPackDialog from '#lib/components/new-pack-dialog.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
@@ -124,8 +125,13 @@
 {/snippet}
 
 {#snippet nameCell(p: Row)}
-	<a href="/modpacks/{p.id}" class="font-medium hover:underline">{p.name}</a>
-	<span class="ms-2 text-xs text-muted-foreground">revision {p.revision}</span>
+	<div class="flex min-w-0 items-center gap-3">
+		<InstanceIcon loader={p.loader} packIconUrl={p.iconUrl} />
+		<div class="grid min-w-0">
+			<a href="/modpacks/{p.id}" class="truncate font-medium hover:underline">{p.name}</a>
+			<span class="text-xs text-muted-foreground">revision {p.revision}</span>
+		</div>
+	</div>
 {/snippet}
 
 {#snippet loaderCell(p: Row)}

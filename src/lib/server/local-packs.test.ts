@@ -1,4 +1,4 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 
@@ -312,5 +312,56 @@ describe('duplicating and deleting', () => {
 		).toEqual([]);
 		expect(existsSync(P.packDir(copy.id))).toBe(false);
 		expect(P.listPacks().map((p) => p.id)).toEqual([pack.id]);
+	});
+});
+
+describe('the icon', () => {
+	const png = new Uint8Array([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 1, 2, 3]);
+	const jpg = new Uint8Array([0xff, 0xd8, 0xff, 0xe0, 1, 2, 3]);
+	const webp = new Uint8Array([0x52, 0x49, 0x46, 0x46, 0, 0, 0, 0, 0x57, 0x45, 0x42, 0x50]);
+
+	it('has none to begin with, and stores a PNG, JPEG or WebP, judged by its bytes', async () => {
+		const pack = await make();
+		expect(P.getPack(pack.id).iconUrl).toBeNull();
+		for (const [bytes, type] of [
+			[png, 'image/png'],
+			[jpg, 'image/jpeg'],
+			[webp, 'image/webp']
+		] as const) {
+			await P.saveIcon(pack.id, bytes);
+			expect(P.iconFile(pack.id)).toMatchObject({ type });
+		}
+		expect(P.getPack(pack.id).iconUrl).toMatch(new RegExp(`^/modpacks/${pack.id}/icon\\?v=\\d+$`));
+	});
+
+	it('keeps one icon: a new one replaces the old, whatever its type', async () => {
+		const pack = await make();
+		await P.saveIcon(pack.id, jpg);
+		await P.saveIcon(pack.id, png);
+		expect(readdirSync(P.packDir(pack.id)).filter((f) => f.startsWith('icon.'))).toEqual([
+			'icon.png'
+		]);
+	});
+
+	it('refuses something that is not an image, however it was named, and one that is too large', async () => {
+		const pack = await make();
+		await expect(
+			P.saveIcon(pack.id, new TextEncoder().encode('<svg onload=alert(1)>'))
+		).rejects.toThrow('PNG, JPEG or WebP');
+		await expect(
+			P.saveIcon(pack.id, new Uint8Array(2 * 1024 * 1024 + 1).fill(0xff))
+		).rejects.toThrow('too large');
+		expect(P.iconFile(pack.id)).toBeNull();
+	});
+
+	it('counts as a change, and is copied with a duplicate and removed on request', async () => {
+		const pack = await make();
+		await P.saveIcon(pack.id, png);
+		expect(P.getPack(pack.id).revision).toBe(2);
+		const copy = P.duplicatePack(pack.id);
+		expect(P.iconFile(copy.id)).toMatchObject({ type: 'image/png' });
+		P.removeIcon(pack.id);
+		expect(P.iconFile(pack.id)).toBeNull();
+		expect(P.iconFile(copy.id)).not.toBeNull();
 	});
 });

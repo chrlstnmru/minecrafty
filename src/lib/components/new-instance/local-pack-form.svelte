@@ -1,6 +1,7 @@
 <script lang="ts">
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import { listLocalPacks } from '#lib/builder.remote.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerForm from '#lib/components/make-server-form.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
@@ -56,6 +57,7 @@
 					class="flex items-center gap-3 rounded-lg p-3 text-start hover:bg-muted/50 focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
 					onclick={() => (chosen = p.id)}
 				>
+					<InstanceIcon loader={p.loader} packIconUrl={p.iconUrl} />
 					<div class="grid min-w-0 flex-1 gap-1">
 						<span class="truncate text-sm font-medium">{p.name}</span>
 						<span class="text-xs text-muted-foreground">
