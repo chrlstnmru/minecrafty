@@ -21,6 +21,8 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { importModpackSchema } from '#lib/schemas/modpack.js';
 	import EulaCheckbox from './eula-checkbox.svelte';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
+	import { LOADERS, type Loader } from '#lib/loader-list.js';
 
 	let { onDone }: { onDone: () => void } = $props();
 
@@ -82,6 +84,10 @@
 		versionType: string;
 	}) =>
 		`${v.versionNumber} · ${v.gameVersions.at(-1) ?? '?'} · ${v.loaders.join(', ')}${v.versionType === 'release' ? '' : ` (${v.versionType})`}`;
+
+	// the loaders of a version that the panel has an icon for (Modrinth also lists bukkit, spigot, ...)
+	const knownLoaders = (loaders: string[]) =>
+		loaders.filter((l): l is Loader => (LOADERS as readonly string[]).includes(l));
 </script>
 
 {#if !picked}
@@ -187,9 +193,19 @@
 						disabled={!versions?.current}
 						options={(versions?.current ?? []).map((v) => ({
 							value: v.id,
-							label: versionLabel(v)
+							label: versionLabel(v),
+							loaders: knownLoaders(v.loaders)
 						}))}
-					/>
+					>
+						{#snippet option(version)}
+							<span class="flex shrink-0 items-center gap-0.5">
+								{#each version.loaders as loader (loader)}
+									<InstanceIcon {loader} class="size-5 p-0.5" />
+								{/each}
+							</span>
+							<span class="truncate">{version.label}</span>
+						{/snippet}
+					</Combobox>
 					<Field.Error errors={versionIdField.issues()} />
 				</Field.Field>
 
