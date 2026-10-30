@@ -100,7 +100,7 @@ export const backups = sqliteTable(
 		file: text('file').notNull(),
 		size: integer('size').notNull(),
 		// manual and scheduled backups are pruned by the retention setting; the others are kept
-		kind: text('kind', { enum: ['manual', 'scheduled', 'before-restore'] })
+		kind: text('kind', { enum: ['manual', 'scheduled', 'before-restore', 'before-update'] })
 			.notNull()
 			.default('manual'),
 		note: text('note'),

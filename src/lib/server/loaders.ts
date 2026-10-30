@@ -37,8 +37,8 @@ async function getJson<T>(url: string): Promise<T> {
 
 const RELEASE = /^\d+(\.\d+)*$/;
 
-// newest first; works for both 1.21.4 and the newer 26.3 style
-function compareVersions(a: string, b: string) {
+/** Sorts newest first (negative when `a` is newer); works for 1.21.4 and the newer 26.3 style. */
+export function compareVersions(a: string, b: string) {
 	const pa = a.split('.').map(Number);
 	const pb = b.split('.').map(Number);
 	for (let i = 0; i < Math.max(pa.length, pb.length); i++) {

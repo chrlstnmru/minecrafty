@@ -41,19 +41,8 @@ export function insertInstance(input: NewInstance) {
 	return row;
 }
 
-/** Installs the loader's server files and writes instance.json. */
-export async function installBase(row: Instance) {
-	const mc = row.mcVersion;
-	const java = needsJavaToInstall(row.loader as Loader)
-		? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
-		: undefined;
-	await installServer({
-		serverDir: serverDir(row.id),
-		loader: row.loader as Loader,
-		mc,
-		build: row.loaderVersion ?? undefined,
-		java
-	});
+/** Records what the instance runs in instance.json, for anything that reads the folder without the database. */
+export function writeInstanceMeta(row: Instance) {
 	writeFileSync(
 		join(instanceDir(row.id), 'instance.json'),
 		JSON.stringify(
@@ -67,6 +56,22 @@ export async function installBase(row: Instance) {
 			2
 		)
 	);
+}
+
+/** Installs the loader's server files and writes instance.json. */
+export async function installBase(row: Instance) {
+	const mc = row.mcVersion;
+	const java = needsJavaToInstall(row.loader as Loader)
+		? (javaOverride ?? (await ensureJava(await requiredJavaMajor(mc))))
+		: undefined;
+	await installServer({
+		serverDir: serverDir(row.id),
+		loader: row.loader as Loader,
+		mc,
+		build: row.loaderVersion ?? undefined,
+		java
+	});
+	writeInstanceMeta(row);
 }
 
 function removeInstanceFiles(id: number) {

@@ -44,7 +44,8 @@
 	const kinds = {
 		manual: { label: 'Manual', variant: 'muted' },
 		scheduled: { label: 'Scheduled', variant: 'info' },
-		'before-restore': { label: 'Before restore', variant: 'warning' }
+		'before-restore': { label: 'Before restore', variant: 'warning' },
+		'before-update': { label: 'Before update', variant: 'warning' }
 	} as const;
 	const total = $derived(data.backups.reduce((sum, b) => sum + b.size, 0));
 
@@ -166,8 +167,8 @@
 		<Card.Header>
 			<Card.Title>Retention and exclusions</Card.Title>
 			<Card.Description>
-				Older backups are removed once the limit is reached. Backups made just before a restore are
-				always kept.
+				Older backups are removed once the limit is reached. Backups made just before a restore or
+				an update are always kept.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>

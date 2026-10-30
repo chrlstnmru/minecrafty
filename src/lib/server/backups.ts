@@ -50,11 +50,13 @@ const isExcluded = (rel: string, excludes: string[]) =>
 	excludes.some((path) => rel === path || rel.startsWith(`${path}/`));
 
 // one backup or restore per instance at a time
-const busy = new Map<number, 'backup' | 'restore'>();
+const busy = new Map<number, 'backup' | 'restore' | 'update'>();
 
-function claim(instanceId: number, what: 'backup' | 'restore') {
+/** Takes the instance for one operation; the returned function gives it back. */
+export function claim(instanceId: number, what: 'backup' | 'restore' | 'update') {
 	const current = busy.get(instanceId);
 	if (current === 'restore') throw new Error('A restore is in progress');
+	if (current === 'update') throw new Error('A loader update is in progress');
 	if (current === 'backup') throw new Error('A backup is already running');
 	busy.set(instanceId, what);
 	return () => busy.delete(instanceId);
@@ -159,7 +161,7 @@ function stamp(date = new Date()) {
 }
 
 /** Writes the zip and records it. The caller holds the instance's claim. */
-async function writeBackup(instanceId: number, kind: BackupKind, note: string | null) {
+export async function writeBackup(instanceId: number, kind: BackupKind, note: string | null) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
 	const root = serverDir(instanceId);
@@ -222,7 +224,7 @@ function removeBackup(row: Backup) {
 
 export async function createBackup(
 	instanceId: number,
-	options: { kind?: Exclude<BackupKind, 'before-restore'>; note?: string } = {}
+	options: { kind?: Exclude<BackupKind, 'before-restore' | 'before-update'>; note?: string } = {}
 ) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
