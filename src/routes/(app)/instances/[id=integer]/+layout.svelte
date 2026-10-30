@@ -39,7 +39,6 @@
 	const modules = $derived(
 		instanceModules.filter((m) => m.slug !== 'modpack' || !!instance?.packProjectId)
 	);
-	const current = $derived(instanceModules.find((m) => m.slug === slug));
 	const labelOf = (m: InstanceModule) =>
 		m.slug === 'mods' && instance?.loader && ['paper', 'purpur'].includes(instance.loader)
 			? 'Plugins'
@@ -138,10 +137,6 @@
 			</Button>
 		{/each}
 	</nav>
-
-	{#if current && !current.planned}
-		<PageHeader level={2} title={labelOf(current)} description={current.description} />
-	{/if}
 
 	<!-- header and tabs stay put; the active module fills the rest and scrolls inside it. The
 	     padding and matching negative margin leave room for a card's 1px ring, which a scroll

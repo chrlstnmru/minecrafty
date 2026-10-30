@@ -47,7 +47,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'players',
 		title: 'Players',
 		icon: UsersGroupIcon,
-		planned: 4,
 		description: 'Online players, whitelist, operators and bans.'
 	},
 	{

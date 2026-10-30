@@ -15,11 +15,15 @@ function packet(id: number, type: number, body: string) {
 
 const servers: { stop(close?: boolean): void }[] = [];
 
-export function fakeRcon(password: string, handler: Handler, options: { silent?: boolean } = {}) {
+export function fakeRcon(
+	password: string,
+	handler: Handler,
+	options: { silent?: boolean; port?: number } = {}
+) {
 	const received: string[] = [];
 	const server = Bun.listen<{ buffer: Uint8Array }>({
 		hostname: '127.0.0.1',
-		port: 0,
+		port: options.port ?? 0,
 		socket: {
 			open(socket) {
 				socket.data = { buffer: new Uint8Array(0) };

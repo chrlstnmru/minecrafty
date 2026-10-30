@@ -191,6 +191,13 @@ Build your own modpack on the panel and create instances from it.
 - Upgrading warns that the world is converted when the server next starts, downgrading warns that it can be damaged, and changing version warns about the installed mods (check the Mods tab for compatible versions afterwards). A Java version chosen by hand that is too old for the new Minecraft version goes back to automatic.
 - A panel restart during the swap marks the install failed, like any interrupted install.
 
+### Players
+
+- RCON is how the panel runs commands and asks who is online. It is switched on at every start: the panel gives each instance an RCON port (from 25575 up, never a game port) and a random password, kept in its database and written to `server.properties` (`enable-rcon`, `rcon.port`, `rcon.password`, hidden in the properties editor), and never sent to the browser. A server started before this existed has RCON after its next restart, and the tab says so. Note that Minecraft listens for RCON on every interface, so do not forward the RCON port; the password is the only protection.
+- Tabs: Online (who is on, as refreshed every five seconds; kick with a reason, ban, make or remove operator, add or remove from the whitelist), Whitelist (with an on/off switch), Operators, and Banned (players and IP addresses). The lists are read from the server's own files (`whitelist.json`, `ops.json`, `banned-players.json`, `banned-ips.json`), so they show with the server stopped too.
+- Running server: each change is a command over RCON (`whitelist add`, `op`, `ban`, `kick`, `ban-ip`, ...), so it takes effect at once and the server does its own checks; its answer is shown as it came, since a server replies in plain text whether or not it did what was asked. Stopped server: the panel edits the files itself, looking a name up with Mojang on an online-mode server (offline mode computes the offline UUID), and cannot kick, as nobody is online.
+- Names are checked against `^\.?[A-Za-z0-9_]{1,16}$` (the "." is Floodgate's prefix for Bedrock players), a reason must be a single line of at most 200 characters, and an address must be a real IPv4 or IPv6 address, before anything becomes a command.
+
 ### Scheduled tasks
 
 - Cron expressions per instance.
@@ -257,7 +264,7 @@ Estimates assume one developer working part-time (evenings).
 2. **Loaders** (~1–1.5 weeks): Fabric, Quilt, Forge, NeoForge, Java auto-download.
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
-4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), loader update (done), player management, scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
+4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done, scheduling pending), loader update (done), player management (done), scheduled tasks, live stats, the dashboard (system KPI cards and the instances table), permissions UI.
 5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
 
 ## Future features
