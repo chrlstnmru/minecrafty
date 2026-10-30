@@ -9,7 +9,7 @@ users and roles, and a modpack builder. See [docs/SPEC.md](docs/SPEC.md) for wha
 **Debian or Ubuntu** (a Proxmox container works too), as root:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.sh | bash
+curl -fsSL https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/install.sh | bash
 ```
 
 It installs one program to `/opt/minecrafty`, keeps data in `/var/lib/minecrafty`, and runs it as a
@@ -19,17 +19,17 @@ Run it again to upgrade; game servers keep running through the upgrade.
 **Proxmox VE**, on the host, to make a container and install in it:
 
 ```sh
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/proxmox-lxc.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/proxmox-lxc.sh)"
 ```
 
 **Windows 10/11 or Server**, from an elevated PowerShell:
 
 ```powershell
-irm https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.ps1 | iex
+irm https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/install.ps1 | iex
 ```
 
-Java is not needed up front: the panel downloads the Temurin JRE each server needs. Replace `OWNER`
-with the account the project is published under.
+Java is not needed up front: the panel downloads the Temurin JRE each server needs. The scripts
+download from `chrlstnmru/minecrafty`; to use a fork, set `MINECRAFTY_REPO` (or `-Repo` on Windows).
 
 Settings (port, data folder) are in `/etc/minecrafty/minecrafty.env`. Behind a reverse proxy that sets
 `X-Forwarded-Proto`, nothing else is needed. To remove it: `install.sh --uninstall` (add `--purge` to

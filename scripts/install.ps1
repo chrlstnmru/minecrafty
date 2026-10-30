@@ -1,6 +1,6 @@
 # Installs or upgrades the Minecrafty panel on Windows 10/11 or Windows Server, as a service.
 #
-#   irm https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/install.ps1 | iex
 #
 # Run it from an elevated PowerShell. Run it again to upgrade in place: it fetches the newest
 # release and restarts the service only when the program changed.
@@ -22,7 +22,7 @@ param(
   [switch]$Purge,
   [int]$Port = 3000,
   [string]$Version = 'latest',
-  [string]$Repo = 'OWNER/sv-minecrafty'
+  [string]$Repo = 'chrlstnmru/minecrafty'
 )
 
 $ErrorActionPreference = 'Stop'

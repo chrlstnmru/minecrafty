@@ -275,7 +275,7 @@ Done, except that the Windows and arm64 builds are not run here.
 
 ## Install scripts
 
-Done; `install.sh` is tested with a local binary in a scratch root, `proxmox-lxc.sh` is only syntax-checked, and `install.ps1` has not been run. The repository name in the download URLs is a placeholder (`OWNER/sv-minecrafty`), set by `MINECRAFTY_REPO` / `-Repo` or by editing the scripts.
+Done; `install.sh` is tested with a local binary in a scratch root, `proxmox-lxc.sh` is only syntax-checked, and `install.ps1` has not been run. The download URLs point at `chrlstnmru/minecrafty`; a fork sets `MINECRAFTY_REPO` / `-Repo`.
 
 | Script           | Target                     | Does                                                                          |
 | ---------------- | -------------------------- | ----------------------------------------------------------------------------- |

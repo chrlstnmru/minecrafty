@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Installs or upgrades the Minecrafty panel on Debian or Ubuntu (a Proxmox LXC container included).
 #
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.sh | sudo bash
+#   curl -fsSL https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/install.sh | sudo bash
 #
 # Run it again to upgrade in place: it fetches the newest release, and only restarts the panel when
 # the binary changed. Game servers keep running through an upgrade (see KillMode in the unit).
@@ -17,7 +17,7 @@
 # Java is not installed here: the panel downloads the Temurin JRE each server needs.
 set -euo pipefail
 
-REPO="${MINECRAFTY_REPO:-OWNER/sv-minecrafty}"
+REPO="${MINECRAFTY_REPO:-chrlstnmru/minecrafty}"
 VERSION="${MINECRAFTY_VERSION:-latest}"
 PORT="${MINECRAFTY_PORT:-3000}"
 LOCAL_BINARY="${MINECRAFTY_BINARY:-}"

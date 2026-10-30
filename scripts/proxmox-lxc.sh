@@ -2,15 +2,15 @@
 # Creates a Debian container on a Proxmox VE host and installs Minecrafty in it.
 # Run it as root on the Proxmox host (not inside a container):
 #
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/proxmox-lxc.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/chrlstnmru/minecrafty/main/scripts/proxmox-lxc.sh)"
 #
 # It asks for the container's CPU, memory, disk and storage (press Enter to accept the default in
 # brackets), then runs install.sh inside it. Set the variables below to skip the questions.
-# Variables: MINECRAFTY_REPO  GitHub "owner/name" to download from (default OWNER/sv-minecrafty)
+# Variables: MINECRAFTY_REPO  GitHub "owner/name" to download from (default chrlstnmru/minecrafty)
 #            CTID  HOSTNAME  CORES  MEMORY_MB  DISK_GB  STORAGE  BRIDGE
 set -euo pipefail
 
-REPO="${MINECRAFTY_REPO:-OWNER/sv-minecrafty}"
+REPO="${MINECRAFTY_REPO:-chrlstnmru/minecrafty}"
 TEMPLATE_STORAGE="${TEMPLATE_STORAGE:-local}"
 
 say() { printf '\033[1m==>\033[0m %s\n' "$*"; }
