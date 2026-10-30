@@ -1,5 +1,12 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
+import {
+	index,
+	integer,
+	primaryKey,
+	sqliteTable,
+	text,
+	uniqueIndex
+} from 'drizzle-orm/sqlite-core';
 
 const createdAt = () =>
 	integer('created_at', { mode: 'timestamp' })
@@ -145,6 +152,21 @@ export const schedules = sqliteTable(
 		createdAt: createdAt()
 	},
 	(t) => [index('schedules_instance').on(t.instanceId)]
+);
+
+// what a user (not an admin) may do on one instance: a JSON list of permissions, view included
+export const instancePermissions = sqliteTable(
+	'instance_permissions',
+	{
+		userId: integer('user_id')
+			.notNull()
+			.references(() => users.id, { onDelete: 'cascade' }),
+		instanceId: integer('instance_id')
+			.notNull()
+			.references(() => instances.id, { onDelete: 'cascade' }),
+		permissions: text('permissions').notNull()
+	},
+	(t) => [primaryKey({ columns: [t.userId, t.instanceId] })]
 );
 
 // panel-wide key/value settings (public URL, later the CurseForge API key)

@@ -4,6 +4,7 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
 import { sessions, users } from './db/schema';
+import { createAccount } from './user-admin';
 
 const COOKIE = 'session';
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
@@ -16,10 +17,7 @@ export function hasUsers() {
 	return db.select({ id: users.id }).from(users).limit(1).get() !== undefined;
 }
 
-export async function createUser(username: string, password: string, role: SessionUser['role']) {
-	const passwordHash = await Bun.password.hash(password, 'argon2id');
-	return db.insert(users).values({ username, passwordHash, role }).returning().get();
-}
+export const createUser = createAccount;
 
 export async function verifyLogin(username: string, password: string) {
 	const user = db.select().from(users).where(eq(users.username, username)).get();
