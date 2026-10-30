@@ -28,6 +28,13 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
+	// Awaited deriveds below run one after another, so each request would wait for the previous
+	// one. Reading all three here sends them together; the awaits then join the requests in flight.
+	$effect.pre(() => {
+		void modsInfo(id).current;
+		void installedMods(id).current;
+		void modUpdates(id).current;
+	});
 	const info = $derived(await modsInfo(id));
 	// awaited, so the server renders the list and the browser hydrates the same markup
 	const installed = $derived(await installedMods(id));
