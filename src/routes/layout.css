@@ -1,83 +1,106 @@
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn-svelte/tailwind.css';
-@import '@fontsource-variable/figtree';
-@import '@fontsource-variable/public-sans';
+@import '@fontsource-variable/urbanist';
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+ * Charcoal. Surfaces are neutral greys in a few clear steps (page, sidebar, card, raised),
+ * and colour is reserved for meaning: each tint is one status or category and keeps that
+ * meaning everywhere (cyan in progress, violet pending, mint done or active, pink
+ * highlight, amber warning). The main action is plain white, so tints never compete
+ * with it.
+ */
 :root {
-	--background: oklch(1 0 0);
-	--foreground: oklch(0.153 0.006 107.1);
-	--card: oklch(1 0 0);
-	--card-foreground: oklch(0.153 0.006 107.1);
-	--popover: oklch(1 0 0);
-	--popover-foreground: oklch(0.153 0.006 107.1);
-	--primary: oklch(0.228 0.013 107.4);
-	--primary-foreground: oklch(0.988 0.003 106.5);
-	--secondary: oklch(0.966 0.005 106.5);
-	--secondary-foreground: oklch(0.228 0.013 107.4);
-	--muted: oklch(0.966 0.005 106.5);
-	--muted-foreground: oklch(0.58 0.031 107.3);
-	--accent: oklch(0.966 0.005 106.5);
-	--accent-foreground: oklch(0.228 0.013 107.4);
-	--destructive: oklch(0.577 0.245 27.325);
-	--border: oklch(0.93 0.007 106.5);
-	--input: oklch(0.93 0.007 106.5);
-	--ring: oklch(0.737 0.021 106.9);
-	--chart-1: oklch(0.88 0.011 106.6);
-	--chart-2: oklch(0.58 0.031 107.3);
-	--chart-3: oklch(0.466 0.025 107.3);
-	--chart-4: oklch(0.394 0.023 107.4);
-	--chart-5: oklch(0.286 0.016 107.4);
-	--radius: 0.45rem;
-	--sidebar: oklch(0.988 0.003 106.5);
-	--sidebar-foreground: oklch(0.153 0.006 107.1);
-	--sidebar-primary: oklch(0.228 0.013 107.4);
-	--sidebar-primary-foreground: oklch(0.988 0.003 106.5);
-	--sidebar-accent: oklch(0.966 0.005 106.5);
-	--sidebar-accent-foreground: oklch(0.228 0.013 107.4);
-	--sidebar-border: oklch(0.93 0.007 106.5);
-	--sidebar-ring: oklch(0.737 0.021 106.9);
+	color-scheme: light;
+	--background: #f5f5f7;
+	--foreground: #18181b;
+	--card: #ffffff;
+	--card-foreground: #18181b;
+	--popover: #ffffff;
+	--popover-foreground: #18181b;
+	--primary: #18181b;
+	--primary-foreground: #fafafa;
+	--secondary: #ececf0;
+	--secondary-foreground: #18181b;
+	--muted: #ededf1;
+	--muted-foreground: #6b6b76;
+	--accent: #ececf0;
+	--accent-foreground: #18181b;
+	--destructive: #dc3545;
+	--border: #e4e4e9;
+	--input: #dcdce2;
+	--ring: #0e8fb8;
+	--tint-cyan: #0e8fb8;
+	--tint-violet: #6d5ce8;
+	--tint-mint: #0f9f6e;
+	--tint-pink: #c2409f;
+	--tint-amber: #b7791f;
+	--chart-1: #0e8fb8;
+	--chart-2: #6d5ce8;
+	--chart-3: #0f9f6e;
+	--chart-4: #c2409f;
+	--chart-5: #b7791f;
+	--radius: 0.75rem;
+	--sidebar: #fbfbfc;
+	--sidebar-foreground: #18181b;
+	--sidebar-primary: #18181b;
+	--sidebar-primary-foreground: #fafafa;
+	--sidebar-accent: #ececf0;
+	--sidebar-accent-foreground: #18181b;
+	--sidebar-border: #e4e4e9;
+	--sidebar-ring: #0e8fb8;
 }
 
 .dark {
-	--background: oklch(0.153 0.006 107.1);
-	--foreground: oklch(0.988 0.003 106.5);
-	--card: oklch(0.228 0.013 107.4);
-	--card-foreground: oklch(0.988 0.003 106.5);
-	--popover: oklch(0.228 0.013 107.4);
-	--popover-foreground: oklch(0.988 0.003 106.5);
-	--primary: oklch(0.93 0.007 106.5);
-	--primary-foreground: oklch(0.228 0.013 107.4);
-	--secondary: oklch(0.286 0.016 107.4);
-	--secondary-foreground: oklch(0.988 0.003 106.5);
-	--muted: oklch(0.286 0.016 107.4);
-	--muted-foreground: oklch(0.737 0.021 106.9);
-	--accent: oklch(0.286 0.016 107.4);
-	--accent-foreground: oklch(0.988 0.003 106.5);
-	--destructive: oklch(0.704 0.191 22.216);
-	--border: oklch(1 0 0 / 10%);
-	--input: oklch(1 0 0 / 15%);
-	--ring: oklch(0.58 0.031 107.3);
-	--chart-1: oklch(0.88 0.011 106.6);
-	--chart-2: oklch(0.58 0.031 107.3);
-	--chart-3: oklch(0.466 0.025 107.3);
-	--chart-4: oklch(0.394 0.023 107.4);
-	--chart-5: oklch(0.286 0.016 107.4);
-	--sidebar: oklch(0.228 0.013 107.4);
-	--sidebar-foreground: oklch(0.988 0.003 106.5);
-	--sidebar-primary: oklch(0.488 0.243 264.376);
-	--sidebar-primary-foreground: oklch(0.988 0.003 106.5);
-	--sidebar-accent: oklch(0.286 0.016 107.4);
-	--sidebar-accent-foreground: oklch(0.988 0.003 106.5);
-	--sidebar-border: oklch(1 0 0 / 10%);
-	--sidebar-ring: oklch(0.58 0.031 107.3);
+	color-scheme: dark;
+	--background: #0f0f11;
+	--foreground: #ededf0;
+	--card: #1a1a1e;
+	--card-foreground: #ededf0;
+	--popover: #202025;
+	--popover-foreground: #ededf0;
+	--primary: #f4f4f5;
+	--primary-foreground: #0f0f11;
+	--secondary: #24242a;
+	--secondary-foreground: #ededf0;
+	--muted: #1d1d22;
+	--muted-foreground: #8d8d97;
+	--accent: #26262c;
+	--accent-foreground: #f4f4f5;
+	--destructive: #f87171;
+	--border: #26262c;
+	--input: #2e2e35;
+	--ring: #4fc3e8;
+	--tint-cyan: #4fc3e8;
+	--tint-violet: #8b7cf6;
+	--tint-mint: #6ee7b7;
+	--tint-pink: #f0a8e0;
+	--tint-amber: #fbbf24;
+	--chart-1: #4fc3e8;
+	--chart-2: #8b7cf6;
+	--chart-3: #6ee7b7;
+	--chart-4: #f0a8e0;
+	--chart-5: #fbbf24;
+	--sidebar: #151518;
+	--sidebar-foreground: #ededf0;
+	--sidebar-primary: #f4f4f5;
+	--sidebar-primary-foreground: #0f0f11;
+	--sidebar-accent: #24242a;
+	--sidebar-accent-foreground: #f4f4f5;
+	--sidebar-border: #222227;
+	--sidebar-ring: #4fc3e8;
 }
 
 @theme inline {
-	--font-sans: 'Figtree Variable', sans-serif;
-	--font-heading: 'Public Sans Variable', sans-serif;
+	--font-sans: 'Urbanist Variable', sans-serif;
+	--font-heading: 'Urbanist Variable', sans-serif;
+	--color-tint-cyan: var(--tint-cyan);
+	--color-tint-violet: var(--tint-violet);
+	--color-tint-mint: var(--tint-mint);
+	--color-tint-pink: var(--tint-pink);
+	--color-tint-amber: var(--tint-amber);
 	--color-sidebar-ring: var(--sidebar-ring);
 	--color-sidebar-border: var(--sidebar-border);
 	--color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -124,8 +147,20 @@
 	}
 	body {
 		@apply bg-background text-foreground;
+		font-variant-numeric: tabular-nums;
+		/* Urbanist's regular weight reads thin at the small UI sizes used throughout. */
+		font-weight: 450;
+	}
+	input[type='checkbox'],
+	input[type='radio'] {
+		accent-color: var(--primary);
 	}
 	html {
+		font-size: 1.15rem;
 		@apply font-sans;
+	}
+	[data-closed],
+	[data-state='closed'] {
+		@apply fill-mode-forwards;
 	}
 }

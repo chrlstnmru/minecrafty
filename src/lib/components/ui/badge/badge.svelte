@@ -1,17 +1,26 @@
 <script lang="ts" module>
-	import { type VariantProps, tv } from 'tailwind-variants';
+	import type { VariantProps } from 'tailwind-variants';
+	import { tv } from 'tailwind-variants';
 
 	export const badgeVariants = tv({
-		base: 'h-5 gap-1 rounded-4xl border border-transparent px-2 py-0.5 text-xs font-medium transition-all has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&>svg]:size-3! group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none',
+		base: 'h-5 gap-1 rounded-full border border-transparent px-2 py-0.5 text-[0.625rem] font-medium transition-all has-data-[icon=inline-end]:pr-1.5 has-data-[icon=inline-start]:pl-1.5 [&>svg]:size-2.5! group/badge inline-flex w-fit shrink-0 items-center justify-center overflow-hidden whitespace-nowrap focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50 aria-invalid:border-destructive aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 [&>svg]:pointer-events-none',
 		variants: {
 			variant: {
 				default: 'bg-primary text-primary-foreground [a]:hover:bg-primary/80',
 				secondary: 'bg-secondary text-secondary-foreground [a]:hover:bg-secondary/80',
 				destructive:
 					'bg-destructive/10 [a]:hover:bg-destructive/20 focus-visible:ring-destructive/20 dark:focus-visible:ring-destructive/40 text-destructive dark:bg-destructive/20',
-				outline: 'border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground',
+				outline:
+					'border-border text-foreground [a]:hover:bg-muted [a]:hover:text-muted-foreground bg-input/20 dark:bg-input/30',
 				ghost: 'hover:bg-muted hover:text-muted-foreground dark:hover:bg-muted/50',
-				link: 'text-primary underline-offset-4 hover:underline'
+				link: 'text-primary underline-offset-4 hover:underline',
+				// Charcoal tints: each carries one fixed status meaning (see .claude/docs/design-system.md).
+				cyan: 'bg-tint-cyan/12 text-tint-cyan',
+				violet: 'bg-tint-violet/12 text-tint-violet',
+				mint: 'bg-tint-mint/12 text-tint-mint',
+				pink: 'bg-tint-pink/12 text-tint-pink',
+				amber: 'bg-tint-amber/12 text-tint-amber',
+				muted: 'bg-muted text-muted-foreground'
 			}
 		},
 		defaultVariants: {
@@ -23,8 +32,9 @@
 </script>
 
 <script lang="ts">
-	import { cn, type WithElementRef } from '#lib/utils.js';
 	import type { HTMLAnchorAttributes } from 'svelte/elements';
+	import type { WithElementRef } from '#lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),

@@ -43,7 +43,7 @@
 	);
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
-	const typeVariant = { release: 'secondary', beta: 'outline', alpha: 'outline' } as const;
+	const typeVariant = { release: 'mint', beta: 'amber', alpha: 'amber' } as const;
 
 	async function choose(versionId: string) {
 		await onSelect(versionId);
@@ -88,7 +88,7 @@
 						<p class="text-xs text-muted-foreground">{date.format(new Date(v.publishedAt))}</p>
 					</div>
 					{#if v.id === currentVersionId}
-						<Badge>Installed</Badge>
+						<Badge variant="mint">Installed</Badge>
 					{:else}
 						<Button size="sm" variant="outline" onClickPromise={() => choose(v.id)}>
 							{currentVersionId ? 'Use this' : 'Install'}

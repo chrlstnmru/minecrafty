@@ -101,6 +101,12 @@ export const deleteInstance = command(id, async (instanceId) => {
 	await userFacing(() => instances.deleteInstance(instanceId));
 });
 
+export const restartInstance = command(id, async (instanceId) => {
+	requireAdmin();
+	await userFacing(() => instances.stopInstance(instanceId));
+	await userFacing(() => instances.startInstance(instanceId));
+});
+
 export type ConsoleLine = { seq: number; line: string };
 
 export type ConsoleFrame = {

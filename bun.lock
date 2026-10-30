@@ -10,8 +10,7 @@
         "@dnd-kit/geometry": "^0.2.4",
         "@dnd-kit/helpers": "^0.2.4",
         "@eslint/js": "^10.0.1",
-        "@fontsource-variable/figtree": "^5.3.0",
-        "@fontsource-variable/public-sans": "^5.3.0",
+        "@fontsource-variable/urbanist": "^5.3.0",
         "@internationalized/date": "^3.12.0",
         "@lucide/svelte": "^1.64.0",
         "@sveltejs/adapter-bun": "^1.0.0",
@@ -162,9 +161,7 @@
 
     "@floating-ui/utils": ["@floating-ui/utils@0.2.12", "", {}, "sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww=="],
 
-    "@fontsource-variable/figtree": ["@fontsource-variable/figtree@5.3.0", "", {}, "sha512-VRVodD7OiG7apQwE8/2fMjaqpY/a0qRJqL5HtYj8CKIVps+9amaFcdfKmDIf7iqYQx6iPLlArVXAfKeIZmVcNQ=="],
-
-    "@fontsource-variable/public-sans": ["@fontsource-variable/public-sans@5.3.0", "", {}, "sha512-AVfkmAt50BMXWpOO21FAntiJFKGX6xTc2dSL8dxtDteONe9IuRXJWGbs0EbG955vAMCq23ENeuopuW87cGWDSQ=="],
+    "@fontsource-variable/urbanist": ["@fontsource-variable/urbanist@5.3.0", "", {}, "sha512-riHbcRgoOhEdCwVw3n3R1JLEwvRD1N9GlXtBcwl/UJ2KabfyDBuryE2Yq10308QJgbXw3F/IFF+VoMuuqwVfIA=="],
 
     "@humanfs/core": ["@humanfs/core@0.19.2", "", { "dependencies": { "@humanfs/types": "^0.15.0" } }, "sha512-UhXNm+CFMWcbChXywFwkmhqjs3PRCmcSa/hfBgLIb7oQ5HNb1wS0icWsGtSAUNgefHeI+eBrA8I1fxmbHsGdvA=="],
 

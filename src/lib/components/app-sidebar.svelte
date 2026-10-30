@@ -13,7 +13,7 @@
 	}: ComponentProps<typeof Sidebar.Root> & { user: { name: string; role: string } } = $props();
 </script>
 
-<Sidebar.Root collapsible="offcanvas" {...restProps}>
+<Sidebar.Root collapsible="offcanvas" class="group-data-[side=left]:border-e-0" {...restProps}>
 	<Sidebar.Header>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>

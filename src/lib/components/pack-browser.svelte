@@ -55,7 +55,9 @@
 <Card.Root>
 	<Card.Header>
 		<Card.Title>Add {noun}s</Card.Title>
-		<Card.Description>{description}</Card.Description>
+		<Card.Description>
+			{description}
+		</Card.Description>
 	</Card.Header>
 	<Card.Content class="grid gap-4">
 		<InputGroup.Root>
@@ -93,7 +95,7 @@
 						<p class="line-clamp-1 text-xs text-muted-foreground">{hit.description}</p>
 					</div>
 					{#if installedIds.has(hit.project_id)}
-						<Badge variant="secondary">In use</Badge>
+						<Badge variant="mint">In use</Badge>
 					{:else}
 						<Button
 							variant="ghost"

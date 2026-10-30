@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { fly } from 'svelte/transition';
 	import { saveServerProperties, serverProperties } from '#lib/properties.remote.js';
 	import {
 		MANAGED_KEYS,
@@ -10,12 +9,18 @@
 		validateProperty,
 		type PropertyField
 	} from '#lib/server-properties-catalog.js';
+	import SaveBar from '#lib/components/save-bar.svelte';
+	import SettingsIcon from '@tabler/icons-svelte/icons/settings';
+	import GaugeIcon from '@tabler/icons-svelte/icons/gauge';
+	import WorldIcon from '@tabler/icons-svelte/icons/world';
+	import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
+	import GamepadIcon from '@tabler/icons-svelte/icons/device-gamepad-2';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import SelectMenu from '#lib/components/select-menu.svelte';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 
 	const id = $derived(Number(page.params.id));
@@ -99,7 +104,9 @@
 			<Card.Root class="mb-4 break-inside-avoid">
 				<Card.Header>
 					<Card.Title>{group.title}</Card.Title>
-					<Card.Description>{group.description}</Card.Description>
+					<Card.Description>
+						{group.description}
+					</Card.Description>
 				</Card.Header>
 				<Card.Content>
 					<Field.Group class="grid gap-4">
@@ -160,16 +167,12 @@
 		<Field.Field data-invalid={!!errors[field.key]}>
 			<Field.Label for={id}>{field.label}</Field.Label>
 			{#if field.type === 'select'}
-				<NativeSelect
+				<SelectMenu
 					{id}
-					class="w-full"
 					value={draft[field.key]}
-					onchange={(e) => set(field.key, e.currentTarget.value)}
-				>
-					{#each optionsOf(field) as option (option.value)}
-						<NativeSelectOption value={option.value}>{option.label}</NativeSelectOption>
-					{/each}
-				</NativeSelect>
+					options={optionsOf(field)}
+					onValueChange={(next) => set(field.key, next)}
+				/>
 			{:else}
 				<Input
 					{id}
@@ -189,22 +192,15 @@
 {/snippet}
 
 {#if changed.length}
-	<div
-		class="sticky bottom-4 z-20 mx-auto flex w-fit max-w-full items-center gap-3 rounded-xl border bg-popover px-4 py-2.5 text-popover-foreground shadow-lg"
-		role="status"
-		transition:fly={{ y: 24, duration: 150 }}
-	>
-		<span class="text-sm">
-			{#if invalid}
-				Fix {Object.keys(errors).length}
-				{Object.keys(errors).length === 1 ? 'value' : 'values'} to save
-			{:else}
-				{changed.length} unsaved {changed.length === 1 ? 'change' : 'changes'}
-			{/if}
-		</span>
-		<Button variant="ghost" size="sm" onclick={() => (draft = { ...saved })} disabled={saving}>
-			Reset
-		</Button>
-		<Button size="sm" onclick={save} loading={saving} disabled={invalid}>Save changes</Button>
-	</div>
+	<SaveBar
+		subject="server.properties"
+		changeCount={changed.length}
+		error={invalid
+			? `Fix ${Object.keys(errors).length} ${Object.keys(errors).length === 1 ? 'value' : 'values'} to save`
+			: undefined}
+		{saving}
+		canSave={!invalid}
+		onsave={save}
+		ondiscard={() => (draft = { ...saved })}
+	/>
 {/if}

@@ -136,6 +136,10 @@
 		<Card.Root>
 			<Card.Header>
 				<Card.Title>Installed {info.noun}s</Card.Title>
+				<Card.Description>
+					Files in <code class="font-mono">{info.folder}/</code>. Changes apply the next time the
+					server starts.
+				</Card.Description>
 				{#if updates.current?.length}
 					<Card.Action>
 						<Button size="sm" onClickPromise={updateAll}>
@@ -143,10 +147,6 @@
 						</Button>
 					</Card.Action>
 				{/if}
-				<Card.Description>
-					Files in <code class="font-mono">{info.folder}/</code>. Changes apply the next time the
-					server starts.
-				</Card.Description>
 			</Card.Header>
 			<Card.Content>
 				{#if !installed.current}<SkeletonRows count={3} icon="size-9" />{/if}
@@ -161,7 +161,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{mod.title}</span>
-								{#if mod.dependencyOf}<Badge variant="outline">dependency</Badge>{/if}
+								{#if mod.dependencyOf}<Badge variant="pink">Dependency</Badge>{/if}
 							</div>
 							<p class="truncate text-xs text-muted-foreground">
 								{mod.versionNumber} · {mod.file}
@@ -249,7 +249,7 @@
 								<p class="line-clamp-1 text-xs text-muted-foreground">{hit.description}</p>
 							</div>
 							{#if installedIds.has(hit.project_id)}
-								<Badge variant="secondary">Installed</Badge>
+								<Badge variant="mint">Installed</Badge>
 							{:else}
 								<Button
 									variant="ghost"

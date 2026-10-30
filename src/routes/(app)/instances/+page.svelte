@@ -11,7 +11,7 @@
 	} from '#lib/instances.remote.js';
 	import NewInstanceSheet from '#lib/components/new-instance/new-instance-sheet.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
+	import StatusPill from '#lib/components/status-pill.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
@@ -34,13 +34,6 @@
 			toast.error((e as { body?: { message?: string } }).body?.message ?? 'Action failed');
 		}
 	}
-
-	const badge = {
-		running: 'default',
-		stopping: 'secondary',
-		exited: 'outline',
-		stopped: 'outline'
-	} as const;
 </script>
 
 <svelte:head><title>Instances · Minecrafty</title></svelte:head>
@@ -78,9 +71,7 @@
 						{inst.mcVersion} · port {inst.port} · {inst.ramMaxMb} MB
 					</Card.Description>
 					<Card.Action>
-						<Badge variant={installing ? 'secondary' : failed ? 'destructive' : badge[inst.state]}>
-							{installing ? 'installing' : failed ? 'failed' : inst.state}
-						</Badge>
+						<StatusPill state={installing ? 'installing' : failed ? 'failed' : inst.state} />
 					</Card.Action>
 				</Card.Header>
 				{#if installing}

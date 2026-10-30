@@ -16,7 +16,11 @@
 				<module.icon class="size-5" />{module.title}
 			</Card.Title>
 			<Card.Description>{module.description}</Card.Description>
-			<Card.Action><Badge variant="outline">Planned · M{module.planned}</Badge></Card.Action>
+			<Card.Action
+				><Badge variant="violet" class="h-6 px-2.5 text-xs"
+					>Planned for milestone {module.planned}</Badge
+				></Card.Action
+			>
 		</Card.Header>
 	</Card.Root>
 {/if}

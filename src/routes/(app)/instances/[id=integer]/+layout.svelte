@@ -1,20 +1,31 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
+	import PlayerStopIcon from '@tabler/icons-svelte/icons/player-stop';
+	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
 	import { instanceModules } from '#lib/instance-modules.js';
 	import {
 		getInstance,
 		killInstance,
 		listInstances,
+		restartInstance,
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
+	import StatusPill from '#lib/components/status-pill.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import type { LayoutProps } from './$types';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import PlayerStopFilledIcon from '@tabler/icons-svelte/icons/player-stop-filled';
+	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
+	import XIcon from '@tabler/icons-svelte/icons/x';
+	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 
 	let { children }: LayoutProps = $props();
+
+	let isRestarting = $state(false);
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -43,7 +54,10 @@
 			<ArrowLeftIcon />
 		</Button>
 		<div class="min-w-0 flex-1">
-			<h2 class="truncate text-lg font-medium">{instance?.name ?? ''}</h2>
+			<div class="flex min-w-0 items-center gap-2">
+				<h2 class="truncate text-lg font-semibold">{instance?.name ?? ''}</h2>
+				<StatusPill state={status} />
+			</div>
 			{#if instance}
 				<p class="text-sm text-muted-foreground">
 					{instance.loader}
@@ -51,23 +65,88 @@
 				</p>
 			{/if}
 		</div>
-		<Badge
-			variant={status === 'running' ? 'default' : status === 'stopping' ? 'secondary' : 'outline'}
-		>
-			{status}
-		</Badge>
-		{#if active}
-			<Button
-				variant="outline"
-				size="sm"
-				disabled={status === 'stopping'}
-				onClickPromise={() => run(stopInstance)}
-			>
-				Stop
-			</Button>
-			<Button variant="destructive" size="sm" onClickPromise={() => run(killInstance)}>Kill</Button>
-		{:else}
-			<Button
+		<ButtonGroup.Root>
+			{#if !active}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								class="text-emerald-500"
+								variant="outline"
+								size="icon"
+								aria-label="Restart"
+								disabled={status === 'stopping'}
+								onClickPromise={async () => {
+									isRestarting = true;
+									return run(restartInstance);
+								}}
+							>
+								<PlayerPlayFilledIcon />
+							</Button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content></Tooltip.Content>
+				</Tooltip.Root>
+			{:else}
+				<Tooltip.Root>
+					<Tooltip.Trigger>
+						{#snippet child({ props })}
+							<Button
+								{...props}
+								class="text-blue-500"
+								variant="outline"
+								size="icon"
+								aria-label="Restart"
+								disabled={status === 'stopping'}
+								onClickPromise={async () => {
+									isRestarting = true;
+									return run(restartInstance);
+								}}
+							>
+								<RefreshIcon />
+							</Button>
+						{/snippet}
+					</Tooltip.Trigger>
+					<Tooltip.Content></Tooltip.Content>
+				</Tooltip.Root>
+			{/if}
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							class="text-amber-500"
+							variant="outline"
+							size="icon"
+							aria-label="Stop"
+							disabled={status === 'stopping'}
+							onClickPromise={() => run(stopInstance)}
+						>
+							<PlayerStopFilledIcon />
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>Stop the server and save the world</Tooltip.Content>
+			</Tooltip.Root>
+			<Tooltip.Root>
+				<Tooltip.Trigger>
+					{#snippet child({ props })}
+						<Button
+							{...props}
+							variant="destructive"
+							size="icon"
+							aria-label="Kill"
+							onClickPromise={() => run(killInstance)}
+						>
+							<XIcon />
+						</Button>
+					{/snippet}
+				</Tooltip.Trigger>
+				<Tooltip.Content>Kill the process now. Unsaved progress is lost</Tooltip.Content>
+			</Tooltip.Root>
+		</ButtonGroup.Root>
+		<!-- <Button
 				size="sm"
 				disabled={installState !== 'ready'}
 				onClickPromise={() => run(startInstance)}
@@ -77,8 +156,7 @@
 					: installState === 'failed'
 						? 'Install failed'
 						: 'Start'}
-			</Button>
-		{/if}
+			</Button> -->
 	</div>
 
 	<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Instance modules">
@@ -99,8 +177,10 @@
 		{/each}
 	</nav>
 
-	<!-- header and tabs stay put; the active module fills the rest and scrolls inside it -->
-	<div class="flex min-h-0 flex-1 flex-col overflow-y-auto">
+	<!-- header and tabs stay put; the active module fills the rest and scrolls inside it. The
+	     padding and matching negative margin leave room for a card's 1px ring, which a scroll
+	     container would otherwise clip along its edges. -->
+	<div class="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1">
 		{@render children()}
 	</div>
 </div>

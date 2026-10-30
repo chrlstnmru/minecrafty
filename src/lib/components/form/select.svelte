@@ -1,8 +1,7 @@
 <script lang="ts">
 	import type { RemoteFormField } from '$app/server';
-	import type { Snippet } from 'svelte';
+	import SelectMenu from '#lib/components/select-menu.svelte';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
 	import { tryGetFieldRevalidateContext } from './context.js';
 
 	type Props = {
@@ -11,34 +10,32 @@
 		description?: string;
 		disabled?: boolean;
 		options?: { value: string; label: string }[];
-		/** options as markup instead, e.g. grouped or generated */
-		children?: Snippet;
+		placeholder?: string;
 	};
 
-	let { field, label, description, disabled = false, options = [], children }: Props = $props();
+	let { field, label, description, disabled = false, options = [], placeholder }: Props = $props();
 
 	const id = $props.id();
 	const revalidate = tryGetFieldRevalidateContext();
+	const name = $derived(field.as('select').name);
 </script>
 
 <Field.Field data-invalid={!!field.issues()?.length}>
 	{#if label}<Field.Label for={id}>{label}</Field.Label>{/if}
-	<NativeSelect
+	<!-- the submitted value is this input's; the select only edits the field -->
+	<input type="hidden" {name} value={field.value() ?? ''} />
+	<SelectMenu
 		{id}
 		{disabled}
-		{...field.as('select')}
-		onchange={() => {
+		{options}
+		{placeholder}
+		value={field.value() ?? ''}
+		aria-invalid={!!field.issues()?.length}
+		onValueChange={(next) => {
+			field.set(next);
 			if (field.dirty()) revalidate?.();
 		}}
-	>
-		{#if children}
-			{@render children()}
-		{:else}
-			{#each options as option (option.value)}
-				<NativeSelectOption value={option.value}>{option.label}</NativeSelectOption>
-			{/each}
-		{/if}
-	</NativeSelect>
+	/>
 	{#if description}<Field.Description>{description}</Field.Description>{/if}
 	<Field.Error errors={field.issues()} />
 </Field.Field>

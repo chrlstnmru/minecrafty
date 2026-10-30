@@ -13,7 +13,7 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { NativeSelect, NativeSelectOption } from '#lib/components/ui/native-select/index.js';
+	import SelectMenu from '#lib/components/select-menu.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
@@ -176,16 +176,15 @@
 				<input {...versionIdField.as('text')} type="hidden" value={versionId} />
 				<Field.Field data-invalid={!!versionIdField.issues()?.length}>
 					<Field.Label for="modpack-version">Version</Field.Label>
-					<NativeSelect
+					<SelectMenu
 						id="modpack-version"
-						class="w-full"
 						bind:value={versionId}
 						disabled={!versions?.current}
-					>
-						{#each versions?.current ?? [] as v (v.id)}
-							<NativeSelectOption value={v.id}>{versionLabel(v)}</NativeSelectOption>
-						{/each}
-					</NativeSelect>
+						options={(versions?.current ?? []).map((v) => ({
+							value: v.id,
+							label: versionLabel(v)
+						}))}
+					/>
 					<Field.Error errors={versionIdField.issues()} />
 				</Field.Field>
 
@@ -205,7 +204,7 @@
 							<dd>{s.mcVersion}</dd>
 							<dt class="text-muted-foreground">Loader</dt>
 							<dd>
-								<Badge variant="secondary">{s.loader}</Badge>
+								<Badge variant="pink">{s.loader}</Badge>
 								{#if s.loaderVersion}<span class="text-muted-foreground">{s.loaderVersion}</span
 									>{/if}
 							</dd>

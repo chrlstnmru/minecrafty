@@ -1,6 +1,7 @@
 <script lang="ts">
-	import { cn, type WithElementRef } from '#lib/utils.js';
 	import type { HTMLTdAttributes } from 'svelte/elements';
+	import type { WithElementRef } from '#lib/utils.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		ref = $bindable(null),
@@ -13,7 +14,10 @@
 <td
 	bind:this={ref}
 	data-slot="table-cell"
-	class={cn('p-2 align-middle whitespace-nowrap [&:has([role=checkbox])]:pr-0', className)}
+	class={cn(
+		'px-3 py-2.5 align-middle whitespace-nowrap first:ps-4 last:pe-4 [&:has([role=checkbox])]:pr-0',
+		className
+	)}
 	{...restProps}
 >
 	{@render children?.()}
