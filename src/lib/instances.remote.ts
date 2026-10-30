@@ -104,6 +104,7 @@ export const deleteInstance = command(id, async (instanceId) => {
 export const restartInstance = command(id, async (instanceId) => {
 	requireAdmin();
 	await userFacing(() => instances.stopInstance(instanceId));
+	await Bun.sleep(3000);
 	await userFacing(() => instances.startInstance(instanceId));
 });
 

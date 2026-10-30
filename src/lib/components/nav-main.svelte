@@ -1,6 +1,5 @@
 <script lang="ts">
 	import ChevronRightIcon from '@tabler/icons-svelte/icons/chevron-right';
-	import CirclePlusFilledIcon from '@tabler/icons-svelte/icons/circle-plus-filled';
 	import { page } from '$app/state';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
@@ -14,21 +13,6 @@
 
 <Sidebar.Group>
 	<Sidebar.GroupContent class="flex flex-col gap-2">
-		<Sidebar.Menu>
-			<Sidebar.MenuItem>
-				<Sidebar.MenuButton
-					class="min-w-8 bg-primary text-primary-foreground duration-200 ease-linear hover:bg-primary/90 hover:text-primary-foreground active:bg-primary/90 active:text-primary-foreground"
-					tooltipContent="New instance"
-				>
-					{#snippet child({ props })}
-						<a href="/instances/new" {...props}>
-							<CirclePlusFilledIcon />
-							<span>New Instance</span>
-						</a>
-					{/snippet}
-				</Sidebar.MenuButton>
-			</Sidebar.MenuItem>
-		</Sidebar.Menu>
 		<Sidebar.Menu>
 			{#each items as item (item.title)}
 				{#if item.url === '/instances'}
