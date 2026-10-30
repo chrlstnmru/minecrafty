@@ -34,7 +34,8 @@ Java is not needed up front: the panel downloads the Temurin JRE each server nee
 download from `chrlstnmru/minecrafty`; to use a fork, set `MINECRAFTY_REPO` (or `-Repo` on Windows).
 
 Settings (port, data folder) are in `/etc/minecrafty/minecrafty.env`. Behind a reverse proxy that sets
-`X-Forwarded-Proto`, nothing else is needed. To remove it: `install.sh --uninstall` (add `--purge` to
+`X-Forwarded-Proto`, set `ADDRESS_HEADER=X-Forwarded-For` so failed sign-ins are counted per
+visitor and not for the proxy as a whole. To remove it: `install.sh --uninstall` (add `--purge` to
 delete the data too).
 
 ## Develop

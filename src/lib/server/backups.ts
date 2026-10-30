@@ -15,6 +15,7 @@ import { backupsDir } from './config';
 import { db } from './db';
 import { backups, instances } from './db/schema';
 import { isRunning } from './files';
+import { busyWith, claim } from './operations';
 import { getInstance, instanceDir, serverDir, wasInstalled } from './instances';
 import * as runner from './runner-client';
 import type { Subscription } from './runner-client';
@@ -48,19 +49,6 @@ export function parseExcludes(text: string) {
 
 const isExcluded = (rel: string, excludes: string[]) =>
 	excludes.some((path) => rel === path || rel.startsWith(`${path}/`));
-
-// one backup or restore per instance at a time
-const busy = new Map<number, 'backup' | 'restore' | 'update'>();
-
-/** Takes the instance for one operation; the returned function gives it back. */
-export function claim(instanceId: number, what: 'backup' | 'restore' | 'update') {
-	const current = busy.get(instanceId);
-	if (current === 'restore') throw new Error('A restore is in progress');
-	if (current === 'update') throw new Error('A loader update is in progress');
-	if (current === 'backup') throw new Error('A backup is already running');
-	busy.set(instanceId, what);
-	return () => busy.delete(instanceId);
-}
 
 export function listBackups(instanceId: number) {
 	return db
@@ -242,7 +230,7 @@ export async function createBackup(
 export function deleteBackup(instanceId: number, backupId: number) {
 	const row = getBackup(instanceId, backupId);
 	if (!row) throw new Error('Backup not found');
-	if (busy.get(instanceId) === 'restore') throw new Error('A restore is in progress');
+	if (busyWith(instanceId) === 'restore') throw new Error('A restore is in progress');
 	removeBackup(row);
 }
 
@@ -313,5 +301,5 @@ export function setBackupSettings(
 	pruneBackups(instanceId);
 }
 
-/** Whether a backup or restore is running for the instance right now. */
-export const backupBusy = (instanceId: number) => busy.get(instanceId) ?? null;
+/** Whether a backup, restore or update is running for the instance right now. */
+export const backupBusy = busyWith;

@@ -29,7 +29,8 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the list and the browser hydrates the same markup
-	const tasks = $derived(await instanceSchedules(id));
+	const schedule = $derived(await instanceSchedules(id));
+	const tasks = $derived(schedule.tasks);
 
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
@@ -58,6 +59,8 @@
 		backup: 'muted',
 		command: 'violet'
 	} as const;
+	// a task's action needs its own permission (console, start and stop, backups), so only those are offered
+	const offered = $derived(actions.filter((a) => schedule.actions.includes(a.value)));
 	const label = (action: ScheduleAction) =>
 		actions.find((a) => a.value === action)?.label ?? action;
 
@@ -73,7 +76,7 @@
 	const fresh = (): Draft => ({
 		name: '',
 		cron: '0 4 * * *',
-		action: 'restart',
+		action: offered[0]?.value ?? 'restart',
 		command: '',
 		warnMinutes: '5',
 		enabled: true
@@ -183,7 +186,7 @@
 				down is skipped.
 			</Card.Description>
 			<Card.Action>
-				<Button size="sm" onclick={() => edit()}>New task</Button>
+				<Button size="sm" disabled={!offered.length} onclick={() => edit()}>New task</Button>
 			</Card.Action>
 		</Card.Header>
 		<Card.Content>
@@ -192,6 +195,7 @@
 					<Switch
 						checked={task.enabled}
 						aria-label="{task.enabled ? 'Switch off' : 'Switch on'} {task.name}"
+						disabled={!task.canChange}
 						onCheckedChange={(on) => toggle(task.id, on)}
 					/>
 					<div class="min-w-0 flex-1 {task.enabled ? '' : 'text-muted-foreground'}">
@@ -225,6 +229,7 @@
 									variant="ghost"
 									size="icon"
 									aria-label="Run {task.name} now"
+									disabled={!task.canChange}
 									onClickPromise={() => runNow(task.id)}
 								>
 									<PlayerPlayIcon />
@@ -233,11 +238,14 @@
 						</Tooltip.Trigger>
 						<Tooltip.Content>Run it now</Tooltip.Content>
 					</Tooltip.Root>
-					<Button variant="ghost" size="sm" onclick={() => edit(task)}>Edit</Button>
+					<Button variant="ghost" size="sm" disabled={!task.canChange} onclick={() => edit(task)}>
+						Edit
+					</Button>
 					<Button
 						variant="ghost"
 						size="sm"
 						class="text-danger"
+						disabled={!task.canChange}
 						onclick={() => {
 							deleting = { id: task.id, name: task.name };
 							deleteOpen = true;
@@ -254,7 +262,7 @@
 						<Empty.Description>A nightly restart or backup is a good first one.</Empty.Description>
 					</Empty.Header>
 					<Empty.Content>
-						<Button size="sm" onclick={() => edit()}>New task</Button>
+						<Button size="sm" disabled={!offered.length} onclick={() => edit()}>New task</Button>
 					</Empty.Content>
 				</Empty.Root>
 			{/each}
@@ -290,7 +298,7 @@
 
 				<Field.Field>
 					<Field.Label for="task-action">Action</Field.Label>
-					<SelectMenu id="task-action" options={actions} bind:value={draft.action} />
+					<SelectMenu id="task-action" options={offered} bind:value={draft.action} />
 				</Field.Field>
 
 				{#if draft.action === 'command'}
