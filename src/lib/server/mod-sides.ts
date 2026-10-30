@@ -18,8 +18,8 @@ type PackFile = { path: string; hashes: { sha512?: string } };
 
 /**
  * The files of a modpack whose project says it does not run on a server, as path to project
- * title. The pack's own `env` flags cannot be trusted for this: packs tend to mark every file as
- * required on both sides. A lookup that fails flags nothing, so an unreachable Modrinth never
+ * title, unless a mod that stays requires it. The pack's own `env` flags cannot be trusted for
+ * this: packs tend to mark every file as required on both sides. A lookup that fails flags nothing, so an unreachable Modrinth never
  * hides a mod.
  */
 export async function clientOnlyFiles(files: PackFile[]) {
@@ -46,9 +46,24 @@ export async function clientOnlyFiles(files: PackFile[]) {
 					serverSide: project.server_side
 				});
 			}
+		const skip = new Set(ids.filter((id) => sides.get(id)?.serverSide === 'unsupported'));
+		// a mod that stays may need one flagged as client-only; that one stays too, or the
+		// loader stops at startup with a missing dependency (and what it needs follows suit)
+		const requires = new Map<string, string[]>();
+		for (const version of versions.values())
+			requires.set(version.project_id, [
+				...(requires.get(version.project_id) ?? []),
+				...(version.dependencies ?? [])
+					.filter((d) => d.dependency_type === 'required' && d.project_id)
+					.map((d) => d.project_id!)
+			]);
+		const pending = ids.filter((id) => !skip.has(id));
+		for (let id = pending.pop(); id; id = pending.pop())
+			for (const needed of requires.get(id) ?? []) if (skip.delete(needed)) pending.push(needed);
+
 		for (const file of jars) {
 			const projectId = versions.get(file.hashes.sha512!)?.project_id;
-			if (projectId && sides.get(projectId)?.serverSide === 'unsupported')
+			if (projectId && skip.has(projectId))
 				flagged.set(file.path, titles.get(projectId) ?? file.path);
 		}
 	} catch {

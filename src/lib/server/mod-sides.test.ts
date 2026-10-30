@@ -8,7 +8,13 @@ import { installedMods } from './db/schema';
 
 // Modrinth is replaced: a project is whatever the test says it is.
 const modrinth = vi.hoisted(() => ({
-	versions: {} as Record<string, { project_id: string }>,
+	versions: {} as Record<
+		string,
+		{
+			project_id: string;
+			dependencies?: { project_id: string | null; dependency_type: string }[];
+		}
+	>,
 	projects: {} as Record<string, { title: string; client_side: string; server_side: string }>,
 	fail: false
 }));
@@ -95,6 +101,77 @@ describe('clientOnlyFiles', () => {
 			};
 		});
 		expect((await clientOnlyFiles(many)).size).toBe(125);
+	});
+});
+
+describe('clientOnlyFiles and dependencies', () => {
+	const dep = (project_id: string, dependency_type = 'required') => ({
+		project_id,
+		dependency_type
+	});
+	const flag = (...ids: string[]) =>
+		ids.forEach(
+			(id) =>
+				(modrinth.projects[id] = { title: id, client_side: 'required', server_side: 'unsupported' })
+		);
+	const server = (...ids: string[]) =>
+		ids.forEach(
+			(id) =>
+				(modrinth.projects[id] = { title: id, client_side: 'required', server_side: 'required' })
+		);
+	const pack = (...ids: string[]) => {
+		ids.forEach((id) => (modrinth.versions[`h-${id}`] ??= { project_id: id }));
+		return ids.map((id) => file(`mods/${id}.jar`, `h-${id}`));
+	};
+	const names = async (files: ReturnType<typeof pack>) =>
+		[...(await clientOnlyFiles(files)).values()].sort();
+
+	beforeEach(() => {
+		modrinth.versions = {};
+		modrinth.projects = {};
+	});
+
+	it('keeps a client-only mod that a mod which stays requires', async () => {
+		server('A');
+		flag('LIB', 'ALONE');
+		modrinth.versions['h-A'] = { project_id: 'A', dependencies: [dep('LIB')] };
+		expect(await names(pack('A', 'LIB', 'ALONE'))).toEqual(['ALONE']);
+	});
+
+	it('follows a chain: what a kept dependency requires is kept as well', async () => {
+		server('A');
+		flag('B', 'C', 'ALONE');
+		modrinth.versions['h-A'] = { project_id: 'A', dependencies: [dep('B')] };
+		modrinth.versions['h-B'] = { project_id: 'B', dependencies: [dep('C')] };
+		expect(await names(pack('A', 'B', 'C', 'ALONE'))).toEqual(['ALONE']);
+	});
+
+	it('does not count optional or embedded dependencies, or a requirement from a skipped mod', async () => {
+		server('A');
+		flag('OPT', 'EMB', 'B', 'ONLY_FOR_B');
+		modrinth.versions['h-A'] = {
+			project_id: 'A',
+			dependencies: [dep('OPT', 'optional'), dep('EMB', 'embedded')]
+		};
+		modrinth.versions['h-B'] = { project_id: 'B', dependencies: [dep('ONLY_FOR_B')] };
+		expect(await names(pack('A', 'OPT', 'EMB', 'B', 'ONLY_FOR_B'))).toEqual([
+			'B',
+			'EMB',
+			'ONLY_FOR_B',
+			'OPT'
+		]);
+	});
+
+	it('copes with a mod that has no dependency list and with circular requirements', async () => {
+		server('A');
+		flag('B', 'C');
+		modrinth.versions['h-A'] = { project_id: 'A' };
+		modrinth.versions['h-B'] = { project_id: 'B', dependencies: [dep('C')] };
+		modrinth.versions['h-C'] = { project_id: 'C', dependencies: [dep('B')] };
+		expect(await names(pack('A', 'B', 'C'))).toEqual(['B', 'C']);
+
+		modrinth.versions['h-A'] = { project_id: 'A', dependencies: [dep('B')] };
+		expect(await names(pack('A', 'B', 'C'))).toEqual([]);
 	});
 });
 
