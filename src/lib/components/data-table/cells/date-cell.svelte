@@ -2,12 +2,20 @@
 	let {
 		value,
 		relative = false,
+		time = false,
 		fallback = '—'
-	}: { value: Date | string | null | undefined; relative?: boolean; fallback?: string } = $props();
+	}: {
+		value: Date | string | null | undefined;
+		relative?: boolean;
+		/** show the time of day too: "Oct 30, 2026, 3:42 PM" */
+		time?: boolean;
+		fallback?: string;
+	} = $props();
 
 	const date = $derived(value ? new Date(value) : undefined);
 
 	const absolute = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium' });
+	const stamp = new Intl.DateTimeFormat(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 	const full = new Intl.DateTimeFormat(undefined, { dateStyle: 'long', timeStyle: 'short' });
 	const rtf = new Intl.RelativeTimeFormat(undefined, { numeric: 'auto' });
 
@@ -31,7 +39,7 @@
 
 {#if date}
 	<time datetime={date.toISOString()} title={full.format(date)}>
-		{relative ? fromNow(date) : absolute.format(date)}
+		{relative ? fromNow(date) : (time ? stamp : absolute).format(date)}
 	</time>
 {:else}
 	<span class="text-muted-foreground">{fallback}</span>

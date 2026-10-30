@@ -85,7 +85,7 @@
 		}),
 		col.accessor('createdAt', {
 			header: 'Created',
-			cell: dateCell(),
+			cell: dateCell({ time: true }),
 			sortFn: 'datetime',
 			meta: { stack: 'subtitle' }
 		}),

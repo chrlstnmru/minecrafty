@@ -22,8 +22,8 @@ export function selectColumn<TData extends RowData>(
 	};
 }
 
-/** Cell renderer for date values: "Oct 14, 2026", or "3 days ago" with `relative`. */
-export function dateCell(options: { relative?: boolean; fallback?: string } = {}) {
+/** Cell renderer for date values: "Oct 14, 2026", with the time of day with `time`, or "3 days ago" with `relative`. */
+export function dateCell(options: { relative?: boolean; time?: boolean; fallback?: string } = {}) {
 	return ({ getValue }: Pick<CellContext<Features, RowData, unknown>, 'getValue'>) =>
 		renderComponent(DateCell, { value: getValue() as Date | string | null, ...options });
 }
