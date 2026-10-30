@@ -1,5 +1,4 @@
 <script lang="ts">
-	import CheckIcon from '@tabler/icons-svelte/icons/check';
 	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
 	import * as Command from '#lib/components/ui/command/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
@@ -38,6 +37,30 @@
 	} = $props();
 
 	let open = $state(false);
+
+	// a long list opens on the chosen item, not at the top
+	$effect(() => {
+		if (!open) return;
+		let frame = 0;
+		let tries = 0;
+		// the popover mounts a moment after `open` flips, so look again for a few frames
+		const center = () => {
+			const item = document.querySelector<HTMLElement>(
+				'[data-slot=command-item][data-checked=true]'
+			);
+			const list = item?.closest<HTMLElement>('[data-slot=command-list]');
+			if (!item || !list) {
+				if (++tries < 10) frame = requestAnimationFrame(center);
+				return;
+			}
+			// the list only: scrollIntoView would move the page behind the popover too
+			const offset = item.getBoundingClientRect().top - list.getBoundingClientRect().top;
+			list.scrollTop += offset - list.clientHeight / 2 + item.offsetHeight / 2;
+		};
+		frame = requestAnimationFrame(center);
+		return () => cancelAnimationFrame(frame);
+	});
+
 	const shown = $derived(options.find((o) => o.value === value));
 
 	function pick(next: string) {
@@ -66,17 +89,21 @@
 		<SelectorIcon class="pointer-events-none size-3.5 shrink-0 text-muted-foreground" />
 	</Popover.Trigger>
 	<Popover.Content class="w-(--bits-popover-anchor-width) gap-0 p-0" align="start">
-		<Command.Root>
+		<!-- start with the chosen item highlighted, so keyboard use continues from it -->
+		<Command.Root value={shown?.label ?? ''}>
 			<Command.Input placeholder={searchPlaceholder} />
 			<Command.List>
 				<Command.Empty>{emptyText}</Command.Empty>
 				<Command.Group>
 					{#each options as option (option.value)}
-						<Command.Item value={option.label} onSelect={() => pick(option.value)}>
+						<!-- the item draws its own check mark for data-checked -->
+						<Command.Item
+							value={option.label}
+							data-checked={option.value === value ? 'true' : undefined}
+							class="data-[checked=true]:bg-primary/10 data-[checked=true]:font-medium data-selected:data-[checked=true]:bg-primary/15"
+							onSelect={() => pick(option.value)}
+						>
 							<span class="truncate">{option.label}</span>
-							<CheckIcon
-								class={cn('ms-auto size-3.5 shrink-0', option.value !== value && 'opacity-0')}
-							/>
 						</Command.Item>
 					{/each}
 				</Command.Group>
