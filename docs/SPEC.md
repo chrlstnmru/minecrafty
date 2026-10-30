@@ -264,13 +264,18 @@ Who did what, and when. Done.
 
 ## Release packaging
 
-- Milestones 1–4: run as plain Bun (`bun build/index.js`). No compile step during development.
-- Milestone 5: ship a single binary per platform via `bun build --compile` (`bun-linux-x64`, `bun-linux-arm64`, `bun-windows-x64`), built in one CI job.
-- Client assets are embedded in the binary.
-- The runner is the same binary started as `minecrafty runner <id>`.
-- The build output must stay runnable with plain Bun as a fallback (e.g. if unsigned Windows binaries hit antivirus problems).
+Done, except that the Windows and arm64 builds are not run here.
+
+- Development and the plain build run as Bun (`bun build/index.js`). `MINECRAFTY_COMPILE=1 bun run build` (or a Bun target such as `bun-linux-arm64`) makes one executable at `build/server` through adapter-bun's `buildOptions.compile`. CI builds `bun-linux-x64`, `bun-linux-arm64` and `bun-windows-x64` in one job per target on a Linux runner.
+- The client files are embedded by the adapter. The database migrations are bundled into the server (`server/db/migrations.ts`) and applied at start the way drizzle's `migrate` does, so no `drizzle/` folder is needed and the binary starts from any working directory. (A pre-migrated `.db` was considered: it could seed a new install but could not upgrade an existing one.)
+- The runner is the same binary started as `minecrafty runner <instanceDir> <id>`: `src/instrumentation.server.ts` sees that argument before anything else loads and becomes the runner, so no web server, database or scheduler starts. Under Bun the runner stays a script.
+- Plain http works with no setup. The adapter assumes TLS ends at a proxy and builds an https origin unless a header names the scheme, which would fail the cross-site check for a panel opened as `http://host:3000`. Unless `PROTOCOL_HEADER` is set, the same file sets the scheme from the proxy's `X-Forwarded-Proto` if there is one, and http otherwise.
+- The build output stays runnable with plain Bun as a fallback (e.g. if unsigned Windows binaries hit antivirus problems).
+- `.github/workflows/ci.yml` checks, lints, tests and builds on every push and pull request. `.github/workflows/release.yml`, on a `v*` tag, repeats those checks, builds the three executables and publishes them with `SHA256SUMS`.
 
 ## Install scripts
+
+Done; `install.sh` is tested with a local binary in a scratch root, `proxmox-lxc.sh` is only syntax-checked, and `install.ps1` has not been run. The repository name in the download URLs is a placeholder (`OWNER/sv-minecrafty`), set by `MINECRAFTY_REPO` / `-Repo` or by editing the scripts.
 
 | Script           | Target                     | Does                                                                          |
 | ---------------- | -------------------------- | ----------------------------------------------------------------------------- |
@@ -278,9 +283,13 @@ Who did what, and when. Done.
 | `install.ps1`    | Windows 10/11, Server      | Download panel binary, register Windows service (WinSW)                       |
 | `proxmox-lxc.sh` | Proxmox VE host            | Create Debian LXC (prompts for CPU/RAM/disk/storage), run `install.sh` inside |
 
-- Java is not installed by the scripts; the panel downloads the Temurin JRE each instance needs.
-- Scripts print the panel URL and first-run setup link when done.
-- Re-running a script upgrades in place.
+- Each download is checked against the release's `SHA256SUMS` and refused if it does not match.
+- `install.sh` puts the program in `/opt/minecrafty`, data in `/var/lib/minecrafty` (owned by a `minecrafty` system user) and settings in `/etc/minecrafty/minecrafty.env`, which is only written the first time so edits survive an upgrade. The unit uses `KillMode=process`, so stopping or restarting the panel leaves the game servers (each in its own runner) running. `--uninstall` removes the service and program; `--purge` also removes the data; `--no-service` installs files only. `MINECRAFTY_ROOT` puts everything under another folder, for trying it without root.
+- `install.ps1` uses WinSW (pinned) to run the executable as the `Minecrafty` service, opens the port in the firewall, and keeps the port from an earlier run. Windows stops every process of a service with it, so game servers stop with the service, an upgrade included.
+- `proxmox-lxc.sh` asks for the container ID, hostname, cores, memory, disk, storage and bridge (or reads them from variables), creates an unprivileged Debian 12 container that starts with the host, and runs `install.sh` in it.
+- Java is not installed by the scripts; the panel downloads the Temurin JRE each instance needs (it needs `tar`, which `install.sh` makes sure is there).
+- Scripts print the panel URL and the first-run setup link when done.
+- Re-running a script upgrades in place, restarting the panel only when the program changed.
 
 ## Milestones
 
@@ -291,7 +300,7 @@ Estimates assume one developer working part-time (evenings).
 3. **Mods** (~2.5 weeks): Modrinth + CurseForge search/install/update, dependency resolution, modpack import, resource pack manager.
    - **3b. Modpack builder** (~2 weeks, estimate): `/modpacks` list and editor, mod search and pinning with dependency resolution, config files, revisions, the "From local" tab, replacing the sidebar's Mods item.
 4. **Operations** (~3 weeks): file manager (done), logs viewer (done), `server.properties` editor (done), backups (done), loader update (done), player management (done), scheduled tasks (done), live stats and the dashboard (done), permissions UI and roles (done), audit log (done).
-5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI.
+5. **Install** (~1 week): `install.sh`, `install.ps1`, `proxmox-lxc.sh`, `bun build --compile` release binaries + CI (done).
 
 ## Future features
 

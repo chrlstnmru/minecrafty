@@ -1,0 +1,79 @@
+name: Release
+
+# Pushing a tag such as v0.1.0 builds one executable per platform and publishes them, with their
+# checksums, as a GitHub release. The install scripts download from there.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      - run: bun run check
+      - run: bun run lint
+      - run: bun run test
+
+  build:
+    needs: verify
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: true
+      matrix:
+        include:
+          - target: bun-linux-x64
+            asset: minecrafty-linux-x64
+            built: build/server
+          - target: bun-linux-arm64
+            asset: minecrafty-linux-arm64
+            built: build/server
+          - target: bun-windows-x64
+            asset: minecrafty-windows-x64.exe
+            built: build/server.exe
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.4.2
+      - run: bun install --frozen-lockfile
+      # one executable with the client files, the migrations and the runner inside it; Bun
+      # downloads the target's runtime, so all three build on this Linux machine
+      - run: bun run build
+        env:
+          MINECRAFTY_COMPILE: ${{ matrix.target }}
+      - run: |
+          mkdir dist
+          cp "${{ matrix.built }}" "dist/${{ matrix.asset }}"
+      - uses: actions/upload-artifact@v7
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+  publish:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
+          merge-multiple: true
+      - name: Checksums
+        working-directory: dist
+        run: sha256sum minecrafty-* > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" dist/* \
+            --repo "$GITHUB_REPOSITORY" \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

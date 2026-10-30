@@ -1,56 +1,64 @@
-# sv
+# Minecrafty
 
-Everything you need to build a Svelte project, powered by [`sv`](https://github.com/sveltejs/cli).
+A self-hosted panel for running Minecraft servers: Vanilla, Paper, Purpur, Fabric, Quilt, Forge and
+NeoForge, with a live console, files, mods and modpacks (Modrinth), backups, scheduled tasks, players,
+users and roles, and a modpack builder. See [docs/SPEC.md](docs/SPEC.md) for what it does in detail.
 
-## Creating a project
+## Install
 
-If you're seeing this, you've probably already done this step. Congrats!
-
-```sh
-# create a new project
-npx sv create my-app
-```
-
-To recreate this project with the same configuration:
+**Debian or Ubuntu** (a Proxmox container works too), as root:
 
 ```sh
-# recreate this project
-bun x sv@1.1.1 create --template minimal --types ts --add prettier eslint tailwindcss="plugins:none" experimental="features:async,remoteFunctions" --install bun sv-minecrafty
+curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.sh | bash
 ```
 
-## Adding features
+It installs one program to `/opt/minecrafty`, keeps data in `/var/lib/minecrafty`, and runs it as a
+systemd service on port 3000. Open `http://<the machine>:3000/setup` and make the owner account.
+Run it again to upgrade; game servers keep running through the upgrade.
 
-Add features to your project with `sv add`:
+**Proxmox VE**, on the host, to make a container and install in it:
 
 ```sh
-npx sv add
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/proxmox-lxc.sh)"
 ```
 
-For example, to add Tailwind CSS:
+**Windows 10/11 or Server**, from an elevated PowerShell:
+
+```powershell
+irm https://raw.githubusercontent.com/OWNER/sv-minecrafty/main/scripts/install.ps1 | iex
+```
+
+Java is not needed up front: the panel downloads the Temurin JRE each server needs. Replace `OWNER`
+with the account the project is published under.
+
+Settings (port, data folder) are in `/etc/minecrafty/minecrafty.env`. Behind a reverse proxy that sets
+`X-Forwarded-Proto`, nothing else is needed. To remove it: `install.sh --uninstall` (add `--purge` to
+delete the data too).
+
+## Develop
+
+You need [Bun](https://bun.sh) 1.4 or newer.
 
 ```sh
-npx sv add tailwindcss
+bun install
+bun run dev        # the panel, with hot reload
+bun run check      # types
+bun run lint
+bun run test
 ```
 
-## Developing
-
-Once you've created a project and installed dependencies with `npm install` (or `pnpm install` or `yarn`), start a development server:
+The plain build runs with `bun build/index.js` (`bun run build`). To build the single executable
+(the client files, the database migrations and the per-server runner are inside it):
 
 ```sh
-npm run dev
-
-# or start the server and open the app in a new browser tab
-npm run dev -- --open
+MINECRAFTY_COMPILE=1 bun run build               # for this machine, at build/server
+MINECRAFTY_COMPILE=bun-linux-arm64 bun run build  # another target
 ```
 
-## Building
+Data lives in `./data` while developing; set `MINECRAFTY_DATA` to move it.
 
-To create a production version of your app:
+## Release
 
-```sh
-npm run build
-```
-
-You can preview the production build with `npm run preview`.
-
-> To deploy your app, you may need to install an [adapter](https://svelte.dev/docs/kit/adapters) for your target environment.
+Push a tag such as `v0.1.0`. `.github/workflows/release.yml` checks, builds the Linux x64, Linux
+arm64 and Windows x64 executables, and publishes them with `SHA256SUMS`; the install scripts download
+from that release.
