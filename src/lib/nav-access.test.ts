@@ -5,7 +5,6 @@ const items = [
 	{ title: 'Dashboard' },
 	{ title: 'Instances', rule: rules.instances },
 	{ title: 'Modpack builder', rule: rules.modpacks },
-	{ title: 'Backups', rule: rules.backups },
 	{ title: 'Users', rule: rules.users },
 	{ title: 'Settings', rule: rules.settings }
 ];
@@ -29,7 +28,6 @@ describe('visibleItems', () => {
 			'Modpack builder'
 		]);
 		expect(titles(['mods'])).not.toContain('Modpack builder');
-		expect(titles(['backups'])).toContain('Backups');
 		expect(titles(['users.read'])).toContain('Users');
 	});
 

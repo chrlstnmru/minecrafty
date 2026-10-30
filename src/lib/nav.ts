@@ -1,6 +1,4 @@
 import HistoryIcon from '@tabler/icons-svelte/icons/history';
-import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
-import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import DashboardIcon from '@tabler/icons-svelte/icons/dashboard';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
 import ServerIcon from '@tabler/icons-svelte/icons/server';
@@ -16,14 +14,7 @@ export type NavItem = { title: string; url: string; icon: Icon; rule?: NavRule }
 export const navMain: NavItem[] = [
 	{ title: 'Dashboard', url: '/', icon: DashboardIcon },
 	{ title: 'Instances', url: '/instances', icon: ServerIcon, rule: rules.instances },
-	{ title: 'Modpack builder', url: '/modpacks', icon: PackageIcon, rule: rules.modpacks },
-	{ title: 'Backups', url: '/backups', icon: ArchiveIcon, rule: rules.backups },
-	{
-		title: 'Schedules',
-		url: '/schedules',
-		icon: CalendarTimeIcon,
-		rule: rules.schedules
-	}
+	{ title: 'Modpack builder', url: '/modpacks', icon: PackageIcon, rule: rules.modpacks }
 ];
 
 export const navSecondary: NavItem[] = [

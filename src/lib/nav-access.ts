@@ -18,8 +18,6 @@ export const rules = {
 	instances: { permission: ['instances.create', ...INSTANCE_PERMISSIONS] },
 	modpacks: { permission: ['modpacks.read'] },
 	audit: { permission: ['audit.read'] },
-	backups: { permission: ['backups'] },
-	schedules: { permission: ['schedules'] },
 	users: { permission: ['users.read'] },
 	roles: { permission: ['roles.read'] },
 	settings: { ownerOnly: true }
