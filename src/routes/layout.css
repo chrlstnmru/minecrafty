@@ -152,6 +152,13 @@
 	--radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/* generated components flip their direction arrows with this class in right-to-left layouts */
+@utility cn-rtl-flip {
+	&:where([dir='rtl'], [dir='rtl'] *) {
+		scale: -1 1;
+	}
+}
+
 @layer base {
 	* {
 		@apply border-border outline-ring/50;

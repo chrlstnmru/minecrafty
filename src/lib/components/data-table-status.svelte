@@ -11,7 +11,7 @@
 
 <Badge variant="outline" class="px-1.5 text-muted-foreground">
 	{#if row.original.status === 'Done'}
-		<CircleCheckFilledIcon class="fill-green-500 dark:fill-green-400" />
+		<CircleCheckFilledIcon class="fill-success" />
 	{:else}
 		<LoaderIcon />
 	{/if}

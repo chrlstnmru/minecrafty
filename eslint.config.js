@@ -1,3 +1,4 @@
+import { plugin as shadcn } from '@shadcn/lint';
 import prettier from 'eslint-config-prettier';
 import oxlint from 'eslint-plugin-oxlint';
 import path from 'node:path';
@@ -28,6 +29,13 @@ export default defineConfig(
 	},
 	{
 		files: ['**/*.svelte', '**/*.svelte.ts', '**/*.svelte.js'],
+		plugins: { shadcn },
+		rules: {
+			// colors come from the theme tokens in src/routes/layout.css (including info, success, warning and danger)
+			'shadcn/no-raw-colors': 'error',
+			// a class Tailwind cannot generate does nothing: a typo, or one that needs an @utility
+			'shadcn/no-unknown-classes': 'error'
+		},
 		languageOptions: {
 			parserOptions: {
 				// no type-aware rules are enabled, and building the TS program for every
