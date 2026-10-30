@@ -22,7 +22,7 @@
 		class: className,
 		role,
 		draft = $bindable(),
-		isAdmin,
+		isOwner,
 		ondelete
 	}: {
 		class?: string;
@@ -36,7 +36,7 @@
 		};
 		/** Undefined when nothing has changed. */
 		draft: RoleDraft | undefined;
-		isAdmin: boolean;
+		isOwner: boolean;
 		ondelete: () => void;
 	} = $props();
 
@@ -165,7 +165,7 @@
 						{#each section.items as permission (permission)}
 							{@const info = registry[permission]}
 							{@const source = includedBy[permission]}
-							{@const adminOnly = info.ownerOnlyGrant && !isAdmin}
+							{@const ownerOnly = info.ownerOnlyGrant && !isOwner}
 							{@const id = `permission-${role.id}-${permission}`}
 							<li>
 								<Field.Field
@@ -176,7 +176,7 @@
 										{id}
 										class="mt-0.5"
 										checked={isOn(permission)}
-										disabled={!!role.lock || !!source || adminOnly}
+										disabled={!!role.lock || !!source || ownerOnly}
 										onCheckedChange={(checked) => toggle(permission, checked)}
 										aria-describedby="{id}-description"
 									/>
@@ -186,8 +186,8 @@
 											{info.description}
 											{#if source}
 												<span class="block text-foreground/80">Included with {source}.</span>
-											{:else if adminOnly}
-												<span class="block text-foreground/80">Only an admin can grant this.</span>
+											{:else if ownerOnly}
+												<span class="block text-foreground/80">Only the owner can grant this.</span>
 											{/if}
 										</Field.Description>
 									</Field.Content>

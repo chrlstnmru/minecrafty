@@ -4,12 +4,12 @@ import { INSTANCE_PERMISSIONS } from './permissions.js';
 export type NavRule = {
 	/** shown when the user holds any of these, panel-wide or (for per-server ones) on any server */
 	permission?: readonly string[];
-	/** shown to admins only */
-	adminOnly?: boolean;
+	/** shown to the owner only */
+	ownerOnly?: boolean;
 };
 
 export type NavContext = {
-	admin: boolean;
+	owner: boolean;
 	/** panel permissions plus the per-server ones held on at least one server */
 	held: ReadonlySet<string>;
 };
@@ -21,14 +21,14 @@ export const rules = {
 	schedules: { permission: ['schedules'] },
 	users: { permission: ['users.read'] },
 	roles: { permission: ['roles.read'] },
-	settings: { adminOnly: true }
+	settings: { ownerOnly: true }
 } satisfies Record<string, NavRule>;
 
-/** The items this user has any permission for; an admin sees all of them. */
+/** The items this user has any permission for; the owner sees all of them. */
 export function visibleItems<T extends { rule?: NavRule }>(items: readonly T[], ctx: NavContext) {
 	return items.filter(({ rule }) => {
-		if (ctx.admin || !rule) return true;
-		if (rule.adminOnly) return false;
+		if (ctx.owner || !rule) return true;
+		if (rule.ownerOnly) return false;
 		return !rule.permission || rule.permission.some((p) => ctx.held.has(p));
 	});
 }

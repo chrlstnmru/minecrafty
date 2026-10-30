@@ -1,4 +1,4 @@
-// What a signed-in user may do. Admins may do everything; anyone else may do what the roles
+// What a signed-in user may do. The owner may do everything; anyone else may do what the roles
 // assigned to them grant. Plain data, so the page and the server read it alike.
 
 import {

@@ -103,7 +103,7 @@
 				<Empty.Description>
 					{canCreate
 						? 'Create your first server to get started.'
-						: 'An admin can give you access to one.'}
+						: 'The owner can give you access to one.'}
 				</Empty.Description>
 			</Empty.Header>
 			{#if canCreate}

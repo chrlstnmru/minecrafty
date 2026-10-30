@@ -116,12 +116,12 @@
 	</div>
 
 	<div class="flex flex-col gap-1 p-2">
-		<div class="flex items-center gap-1 rounded-lg text-sm" aria-label="Admin">
+		<div class="flex items-center gap-1 rounded-lg text-sm" aria-label="Owner">
 			<span class="flex size-7 shrink-0 items-center justify-center text-primary">
 				<CrownIcon class="size-3.5" aria-hidden="true" />
 			</span>
 			<div class="flex flex-col py-1.5">
-				<span>Admin</span>
+				<span>Owner</span>
 				<span class="text-xs text-muted-foreground">Outranks every role</span>
 			</div>
 		</div>

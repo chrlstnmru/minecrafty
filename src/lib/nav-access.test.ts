@@ -9,8 +9,8 @@ const items = [
 	{ title: 'Users', rule: rules.users },
 	{ title: 'Settings', rule: rules.settings }
 ];
-const titles = (held: string[], admin = false) =>
-	visibleItems(items, { admin, held: new Set(held) }).map((i) => i.title);
+const titles = (held: string[], owner = false) =>
+	visibleItems(items, { owner, held: new Set(held) }).map((i) => i.title);
 
 describe('visibleItems', () => {
 	it('shows only the dashboard to someone with no permissions', () => {
@@ -29,7 +29,7 @@ describe('visibleItems', () => {
 		expect(titles(['users.read'])).toContain('Users');
 	});
 
-	it('keeps admin-only items from everyone but admins', () => {
+	it('keeps owner-only items from everyone but the owner', () => {
 		expect(titles(['mods', 'users.read'])).not.toContain('Settings');
 		expect(titles([], true)).toEqual(items.map((i) => i.title));
 	});

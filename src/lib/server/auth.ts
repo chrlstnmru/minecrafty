@@ -92,10 +92,10 @@ export function requirePanel(needed: PanelPermission) {
 	return user;
 }
 
-/** What only an admin may do. */
-export function requireAdmin() {
+/** What only the owner may do. */
+export function requireOwner() {
 	const { locals } = getRequestEvent();
 	if (!locals.user) error(401, 'Not signed in');
-	if (locals.user.role !== 'admin') error(403, 'Admin only');
+	if (locals.user.role !== 'owner') error(403, 'Owner only');
 	return locals.user;
 }

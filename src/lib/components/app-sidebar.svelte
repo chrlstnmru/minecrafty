@@ -20,7 +20,7 @@
 	} = $props();
 
 	const ctx = $derived({
-		admin: user.role === 'admin',
+		owner: user.role === 'owner',
 		held: new Set([...panel, ...anywhere])
 	});
 </script>

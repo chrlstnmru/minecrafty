@@ -10,7 +10,7 @@ import * as R from './roles';
 import * as U from './user-admin';
 import { makeInstance } from '#test/instance.js';
 
-let admin: A.Actor;
+let owner: A.Actor;
 let boss: A.Actor; // rank 70, holds roles.write, roles.assign, users.write panel-wide
 let junior: A.Actor; // rank 20
 let peer: A.Actor; // rank 70
@@ -27,11 +27,11 @@ beforeEach(async () => {
 	db.delete(instances).run();
 	db.delete(users).run();
 	db.delete(roles).where(eq(roles.builtIn, false)).run();
-	const make = async (name: string, r: 'admin' | 'user') => {
+	const make = async (name: string, r: 'owner' | 'user') => {
 		const u = await U.createAccount(name, 'a-long-password', r);
 		return { id: u.id, role: u.role } satisfies A.Actor;
 	};
-	admin = await make('root', 'admin');
+	owner = await make('root', 'owner');
 	boss = await make('boss', 'user');
 	junior = await make('junior', 'user');
 	peer = await make('peer', 'user');
@@ -42,8 +42,8 @@ beforeEach(async () => {
 });
 
 describe('canGrantRolePermissions', () => {
-	it('lets an admin grant anything at any rank in range', () => {
-		expect(G.canGrantRolePermissions(admin, rules(['users.write', 'files']), 99).ok).toBe(true);
+	it('lets the owner grant anything at any rank in range', () => {
+		expect(G.canGrantRolePermissions(owner, rules(['users.write', 'files']), 99).ok).toBe(true);
 	});
 
 	it('needs roles.write', () => {
@@ -51,10 +51,10 @@ describe('canGrantRolePermissions', () => {
 		expect(G.canGrantRolePermissions(peer, rules(['logs']), 5).reason).toMatch(/manage roles/);
 	});
 
-	it('keeps owner-only permissions for admins', () => {
+	it('keeps owner-only permissions for the owner', () => {
 		const result = G.canGrantRolePermissions(boss, rules(['users.write']), 10);
 		expect(result).toMatchObject({ ok: false });
-		expect(result.reason).toMatch(/Only an admin/);
+		expect(result.reason).toMatch(/Only the owner/);
 		expect(G.canGrantRolePermissions(boss, rules(['roles.write']), 10).ok).toBe(false);
 	});
 
@@ -70,9 +70,9 @@ describe('canGrantRolePermissions', () => {
 	it("needs a rank below the giver's own, within 0 to 99", () => {
 		expect(G.canGrantRolePermissions(boss, rules(['logs']), 69).ok).toBe(true);
 		expect(G.canGrantRolePermissions(boss, rules(['logs']), 70).ok).toBe(false);
-		expect(G.canGrantRolePermissions(admin, rules(['logs']), 100).ok).toBe(false);
-		expect(G.canGrantRolePermissions(admin, rules(['logs']), -1).ok).toBe(false);
-		expect(G.canGrantRolePermissions(admin, rules(['logs']), 1.5).ok).toBe(false);
+		expect(G.canGrantRolePermissions(owner, rules(['logs']), 100).ok).toBe(false);
+		expect(G.canGrantRolePermissions(owner, rules(['logs']), -1).ok).toBe(false);
+		expect(G.canGrantRolePermissions(owner, rules(['logs']), 1.5).ok).toBe(false);
 	});
 });
 
@@ -87,10 +87,10 @@ describe('canEditRole and canDeleteRole', () => {
 		expect(G.canEditRole(boss, lower, rules(['logs']), 80).ok).toBe(false);
 	});
 
-	it('never edits or deletes a built-in role, even for an admin', () => {
+	it('never edits or deletes a built-in role, even for an owner', () => {
 		const viewer = db.select().from(roles).where(eq(roles.name, 'Viewer')).get()!.id;
-		expect(G.canEditRole(admin, viewer, rules(['logs']), 10).ok).toBe(false);
-		expect(G.canDeleteRole(admin, viewer).ok).toBe(false);
+		expect(G.canEditRole(owner, viewer, rules(['logs']), 10).ok).toBe(false);
+		expect(G.canDeleteRole(owner, viewer).ok).toBe(false);
 	});
 
 	it('applies the same rank and holding rules to deleting', () => {
@@ -98,26 +98,26 @@ describe('canEditRole and canDeleteRole', () => {
 		expect(G.canDeleteRole(boss, lower).ok).toBe(true);
 		expect(G.canDeleteRole(junior, lower).ok).toBe(false);
 		expect(G.canDeleteRole(boss, A.listAssignments(boss.id)[0].roleId).ok).toBe(false);
-		expect(G.canDeleteRole(admin, lower).ok).toBe(true);
+		expect(G.canDeleteRole(owner, lower).ok).toBe(true);
 	});
 });
 
 describe('roleLock', () => {
 	const row = (id: number) => R.listRoles().find((r) => r.id === id)!;
 
-	it('is read-only without roles.write, and open to an admin for a custom role', () => {
+	it('is read-only without roles.write, and open to an owner for a custom role', () => {
 		const lower = role('Lower', 40, ['logs']);
 		expect(G.roleLock(junior, row(lower))).toBe('read-only');
-		expect(G.roleLock(admin, row(lower))).toBeNull();
+		expect(G.roleLock(owner, row(lower))).toBeNull();
 	});
 
-	it('locks built-in roles for everyone, even an admin', () => {
+	it('locks built-in roles for everyone, even an owner', () => {
 		const viewer = R.listRoles().find((r) => r.name === 'Viewer')!;
-		expect(G.roleLock(admin, viewer)).toBe('built-in');
+		expect(G.roleLock(owner, viewer)).toBe('built-in');
 		expect(G.roleLock(boss, viewer)).toBe('built-in');
 	});
 
-	it('locks a role ranked at or above the actor, one they hold, and one with admin-only permissions', () => {
+	it('locks a role ranked at or above the actor, one they hold, and one with owner-only permissions', () => {
 		expect(G.roleLock(boss, row(role('Same', 70, ['logs'])))).toBe('rank');
 		expect(G.roleLock(boss, row(role('Above', 80, ['logs'])))).toBe('rank');
 		expect(G.roleLock(boss, row(A.listAssignments(boss.id)[0].roleId))).toBe('rank');
@@ -143,10 +143,10 @@ describe('canActOnRecord', () => {
 		expect(G.canActOnRecord(peer, 'users.write', { userId: junior.id }).ok).toBe(false);
 	});
 
-	it('never lets a non-admin act on an admin, and lets an admin act on anyone else', () => {
-		expect(G.canActOnRecord(boss, 'users.write', { userId: admin.id }).ok).toBe(false);
-		expect(G.canActOnRecord(admin, 'users.write', { userId: peer.id }).ok).toBe(true);
-		expect(G.canActOnRecord(admin, 'users.write', { userId: admin.id }).ok).toBe(false);
+	it('never lets a non-owner act on an owner, and lets an owner act on anyone else', () => {
+		expect(G.canActOnRecord(boss, 'users.write', { userId: owner.id }).ok).toBe(false);
+		expect(G.canActOnRecord(owner, 'users.write', { userId: peer.id }).ok).toBe(true);
+		expect(G.canActOnRecord(owner, 'users.write', { userId: owner.id }).ok).toBe(false);
 	});
 
 	it("compares with the person's highest role of any kind, not just the one that grants it", () => {
@@ -184,18 +184,15 @@ describe('canAssignRole', () => {
 		expect(G.canAssignRole(boss, target(mid)).reason).toMatch(/not found/);
 	});
 
-	it('lets an admin assign any role', () => {
-		expect(G.canAssignRole(admin, target(role('Top', 99, ['logs']))).ok).toBe(true);
+	it('lets an owner assign any role', () => {
+		expect(G.canAssignRole(owner, target(role('Top', 99, ['logs']))).ok).toBe(true);
 	});
 });
 
-describe('canAddUser and canChangeAdminRole', () => {
-	it('needs users.write, and making an admin is for admins', () => {
-		expect(G.canAddUser(boss, 'user').ok).toBe(true);
-		expect(G.canAddUser(boss, 'admin').ok).toBe(false);
-		expect(G.canAddUser(junior, 'user').ok).toBe(false);
-		expect(G.canAddUser(admin, 'admin').ok).toBe(true);
-		expect(G.canChangeAdminRole(boss).ok).toBe(false);
-		expect(G.canChangeAdminRole(admin).ok).toBe(true);
+describe('canAddUser', () => {
+	it('needs users.write', () => {
+		expect(G.canAddUser(boss).ok).toBe(true);
+		expect(G.canAddUser(junior).ok).toBe(false);
+		expect(G.canAddUser(owner).ok).toBe(true);
 	});
 });

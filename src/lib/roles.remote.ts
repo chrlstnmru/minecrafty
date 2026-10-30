@@ -20,7 +20,7 @@ function load(user: Actor) {
 		...role,
 		lock: roleLock(user, role),
 		/** whether the caller may hand this role to someone */
-		assignable: user.role === 'admin' || role.rank < mine
+		assignable: user.role === 'owner' || role.rank < mine
 	}));
 }
 
@@ -32,7 +32,7 @@ export const listRoles = query(() => {
 /** What the caller may do on the roles page as a whole. */
 export const getRoleAccess = query(() => {
 	const user = requirePanel('roles.read');
-	return { isAdmin: user.role === 'admin', canWrite: can(user, 'roles.write') };
+	return { isOwner: user.role === 'owner', canWrite: can(user, 'roles.write') };
 });
 
 /** "New role": a name only, placed at the bottom with no permissions. */

@@ -34,7 +34,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	const isPublic = PUBLIC.includes(pathname);
 
-	// first run: nothing works until the admin account exists
+	// first run: nothing works until the owner account exists
 	if (!hasUsers()) {
 		if (pathname !== '/setup') redirect(303, '/setup');
 		return resolve(event);

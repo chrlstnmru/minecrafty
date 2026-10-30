@@ -301,7 +301,7 @@
 							<Empty.Description>
 								{canCreate
 									? 'Create your first one to see it here.'
-									: 'An admin can give you access to one.'}
+									: 'The owner can give you access to one.'}
 							</Empty.Description>
 						</Empty.Header>
 						<Empty.Content>

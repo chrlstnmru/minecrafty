@@ -6,5 +6,5 @@ export const LOCK_MESSAGES: Record<RoleLock, string> = {
 	'built-in': 'Built-in roles cannot be changed; make a new role instead.',
 	rank: 'This role ranks at or above your own, so you can only view it.',
 	held: "You hold this role, so you can't change it.",
-	'owner-only': 'Only an admin can change a role that has admin-only permissions.'
+	'owner-only': 'Only the owner can change a role that has owner-only permissions.'
 };

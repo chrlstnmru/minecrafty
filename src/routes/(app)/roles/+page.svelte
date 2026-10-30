@@ -197,7 +197,7 @@
 			class={flush ? 'rounded-none border-0 [&>header]:pt-1' : undefined}
 			role={selected}
 			bind:draft={drafts[selected.id]}
-			isAdmin={access.isAdmin}
+			isOwner={access.isOwner}
 			ondelete={() => (removing = true)}
 		/>
 	{:else}

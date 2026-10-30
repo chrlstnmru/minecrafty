@@ -14,7 +14,7 @@
 <Card.Root>
 	<Card.Header>
 		<Card.Title>Welcome to Minecrafty</Card.Title>
-		<Card.Description>Create the admin account to get started</Card.Description>
+		<Card.Description>Create the owner account to get started</Card.Description>
 	</Card.Header>
 	<Card.Content>
 		<Form.Root schema={setupSchema} remoteFunction={setup}>
@@ -34,7 +34,7 @@
 						autocomplete="new-password"
 					/>
 					<Form.Errors form={setup} />
-					<Button type="submit" loading={pending > 0}>Create admin</Button>
+					<Button type="submit" loading={pending > 0}>Create owner</Button>
 				</Field.Group>
 			{/snippet}
 		</Form.Root>

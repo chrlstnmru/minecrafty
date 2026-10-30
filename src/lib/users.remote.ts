@@ -1,14 +1,9 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
-import {
-	addUserSchema,
-	userAccessSchema,
-	userPasswordSchema,
-	userRoleSchema
-} from '#lib/schemas/users.js';
+import { addUserSchema, userAccessSchema, userPasswordSchema } from '#lib/schemas/users.js';
 import { listAssignments, setAssignments } from '#lib/server/access.js';
-import { requireAdmin, requirePanel, requireUser } from '#lib/server/auth.js';
+import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { canActOnRecord, canAddUser, canAssignRole, type GrantCheck } from '#lib/server/grants.js';
 import { userFacing } from '#lib/server/http.js';
 import * as admin from '#lib/server/user-admin.js';
@@ -27,22 +22,15 @@ export const allUsers = query(async () => {
 	}));
 });
 
-export const addAccount = form(addUserSchema, async ({ username, _password, role }) => {
+export const addAccount = form(addUserSchema, async ({ username, _password }) => {
 	const actor = requirePanel('users.write');
-	const allowed = canAddUser(actor, role);
+	const allowed = canAddUser(actor);
 	if (!allowed.ok) invalid(allowed.reason ?? 'Not allowed');
 	try {
-		await admin.addUser(username, _password, role);
+		await admin.addUser(username, _password);
 	} catch (e) {
 		invalid(e instanceof Error ? e.message : 'Could not add the user');
 	}
-	await allUsers().refresh();
-});
-
-/** Making someone an admin, or not, is for admins. */
-export const setUserRole = command(userRoleSchema, async ({ id, role }) => {
-	const actor = requireAdmin();
-	await userFacing(() => admin.changeUser(id, { role }, actor.id));
 	await allUsers().refresh();
 });
 

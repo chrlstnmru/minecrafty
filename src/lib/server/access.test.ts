@@ -14,7 +14,7 @@ import { instances, roleAssignments, roles, sessions, users } from './db/schema'
 import * as R from './roles';
 import * as U from './user-admin';
 
-let admin: A.Actor;
+let owner: A.Actor;
 let alice: A.Actor;
 let bob: A.Actor;
 let one: number;
@@ -24,11 +24,11 @@ beforeEach(async () => {
 	db.delete(instances).run();
 	db.delete(users).run();
 	db.delete(roles).where(eq(roles.builtIn, false)).run();
-	const make = async (name: string, role: 'admin' | 'user') => {
+	const make = async (name: string, role: 'owner' | 'user') => {
 		const u = await U.createAccount(name, 'a-long-password', role);
 		return { id: u.id, role: u.role } satisfies A.Actor;
 	};
-	admin = await make('root', 'admin');
+	owner = await make('root', 'owner');
 	alice = await make('alice', 'user');
 	bob = await make('bob', 'user');
 	one = makeInstance().id;
@@ -40,9 +40,9 @@ const custom = (allow: Permission[], name = `role-${Math.random()}`, rank = 10) 
 	makeRole(name, rank, allow);
 
 describe('permissionsFor', () => {
-	it('gives an admin everything on every instance, with nothing granted', () => {
-		expect(A.permissionsFor(admin, one)).toEqual([...INSTANCE_PERMISSIONS]);
-		expect(A.permissionsFor(admin, 999_999)).toEqual([...INSTANCE_PERMISSIONS]);
+	it('gives an owner everything on every instance, with nothing granted', () => {
+		expect(A.permissionsFor(owner, one)).toEqual([...INSTANCE_PERMISSIONS]);
+		expect(A.permissionsFor(owner, 999_999)).toEqual([...INSTANCE_PERMISSIONS]);
 	});
 
 	it('gives a user nothing until a role is assigned', () => {
@@ -93,7 +93,7 @@ describe('permissionsFor', () => {
 		db.update(roles).set({ rules: '{oops' }).where(eq(roles.id, id)).run();
 		expect(A.permissionsFor(alice, one)).toEqual([]);
 		db.update(roles)
-			.set({ rules: JSON.stringify({ allow: ['files', 'root', 'admin'] }) })
+			.set({ rules: JSON.stringify({ allow: ['files', 'root', 'owner'] }) })
 			.where(eq(roles.id, id))
 			.run();
 		expect(A.permissionsFor(alice, one)).toEqual(['files']);
@@ -112,10 +112,10 @@ describe('panel permissions', () => {
 		expect(A.panelPermissionsFor(alice)).toEqual(['instances.create']);
 	});
 
-	it('bring what they imply, and an admin has them all', () => {
+	it('bring what they imply, and an owner has them all', () => {
 		A.setAssignments(alice.id, null, [custom(['roles.assign'])]);
 		expect(A.panelPermissionsFor(alice)).toEqual(['roles.read', 'users.read', 'roles.assign']);
-		expect(A.panelPermissionsFor(admin)).toHaveLength(
+		expect(A.panelPermissionsFor(owner)).toHaveLength(
 			PERMISSIONS.length - INSTANCE_PERMISSIONS.length
 		);
 	});
@@ -145,14 +145,14 @@ describe('check', () => {
 		expect(A.check(alice, 999_999, 'logs')).toBe('unknown');
 	});
 
-	it('is always ok for an admin', () => {
-		for (const p of INSTANCE_PERMISSIONS) expect(A.check(admin, one, p)).toBe('ok');
+	it('is always ok for an owner', () => {
+		for (const p of INSTANCE_PERMISSIONS) expect(A.check(owner, one, p)).toBe('ok');
 	});
 });
 
 describe('visibleInstanceIds', () => {
-	it('is null for an admin, meaning all', () => {
-		expect(A.visibleInstanceIds(admin)).toBeNull();
+	it('is null for an owner, meaning all', () => {
+		expect(A.visibleInstanceIds(owner)).toBeNull();
 	});
 
 	it('lists the servers a user has a role on, and none before', () => {
@@ -190,14 +190,14 @@ describe('assignments', () => {
 		A.setAssignments(bob.id, two, [roleOf('Viewer')]);
 		db.delete(instances).where(eq(instances.id, one)).run();
 		expect(A.listAssignments(alice.id)).toEqual([]);
-		U.removeUser(bob.id, admin.id);
+		U.removeUser(bob.id, owner.id);
 		expect(db.select().from(roleAssignments).all()).toEqual([]);
 	});
 });
 
 describe('rank', () => {
-	it('is unlimited for an admin, the highest role for a user, and none without a role', () => {
-		expect(A.rankOf(admin)).toBe(Infinity);
+	it('is unlimited for an owner, the highest role for a user, and none without a role', () => {
+		expect(A.rankOf(owner)).toBe(Infinity);
 		expect(A.rankOf(alice)).toBe(-Infinity);
 		A.setAssignments(alice.id, one, [roleOf('Viewer')]);
 		A.setAssignments(alice.id, null, [roleOf('Manager')]);
@@ -340,61 +340,41 @@ describe('user administration', () => {
 		expect(list.map((u) => [u.username, u.role, u.assignments])).toEqual([
 			['alice', 'user', 2],
 			['bob', 'user', 0],
-			['root', 'admin', 0]
+			['root', 'owner', 0]
 		]);
 	});
 
 	it('adds an account, and refuses a name that is taken', async () => {
-		const added = await U.addUser('carol', 'another-password', 'user');
+		const added = await U.addUser('carol', 'another-password');
 		expect(added).toMatchObject({ username: 'carol', role: 'user' });
-		await expect(U.addUser('carol', 'whatever-it-is', 'user')).rejects.toThrow(/taken/);
+		await expect(U.addUser('carol', 'whatever-it-is')).rejects.toThrow(/taken/);
 	});
 
 	it('never stores the password itself', async () => {
-		await U.addUser('dave', 'plain-text-password', 'user');
+		await U.addUser('dave', 'plain-text-password');
 		const row = db.select().from(users).where(eq(users.username, 'dave')).get()!;
 		expect(row.passwordHash).not.toContain('plain-text-password');
 		expect(await Bun.password.verify('plain-text-password', row.passwordHash)).toBe(true);
 	});
 
-	it('promotes and demotes, signing the person out so it applies now', async () => {
-		db.insert(sessions)
-			.values({ id: 'tok', userId: alice.id, expiresAt: new Date(Date.now() + 1e6) })
-			.run();
-		await U.changeUser(alice.id, { role: 'admin' }, admin.id);
-		expect(db.select().from(users).where(eq(users.id, alice.id)).get()!.role).toBe('admin');
-		expect(db.select().from(sessions).where(eq(sessions.userId, alice.id)).all()).toEqual([]);
-		await U.changeUser(alice.id, { role: 'user' }, admin.id);
-		expect(db.select().from(users).where(eq(users.id, alice.id)).get()!.role).toBe('user');
-	});
-
-	it('refuses to remove the last admin, by demoting or deleting', async () => {
-		await expect(U.changeUser(admin.id, { role: 'user' }, alice.id)).rejects.toThrow(
-			/at least one admin/
+	it('has exactly one owner, the account made at setup', async () => {
+		await expect(U.createAccount('second', 'a-long-password', 'owner')).rejects.toThrow(
+			'already an owner'
 		);
-		expect(() => U.removeUser(admin.id, alice.id)).toThrow(/at least one admin/);
-		expect(db.select().from(users).where(eq(users.id, admin.id)).get()!.role).toBe('admin');
+		expect(db.select().from(users).where(eq(users.role, 'owner')).all()).toHaveLength(1);
 	});
 
-	it('lets an admin go once there is another', async () => {
-		await U.changeUser(alice.id, { role: 'admin' }, admin.id);
-		await U.changeUser(admin.id, { role: 'user' }, alice.id);
-		expect(db.select().from(users).where(eq(users.id, admin.id)).get()!.role).toBe('user');
-	});
-
-	it('does not let anyone delete their own account or take their own admin rights away', async () => {
-		await U.changeUser(alice.id, { role: 'admin' }, admin.id);
+	it('never deletes the owner, and not oneself', async () => {
+		expect(() => U.removeUser(owner.id, alice.id)).toThrow(/owner cannot be deleted/);
 		expect(() => U.removeUser(alice.id, alice.id)).toThrow(/own account/);
-		await expect(U.changeUser(alice.id, { role: 'user' }, alice.id)).rejects.toThrow(
-			/own admin rights/
-		);
+		expect(db.select().from(users).where(eq(users.id, owner.id)).get()!.role).toBe('owner');
 	});
 
 	it('changes a password, and signs that person out everywhere unless they changed their own', async () => {
 		db.insert(sessions)
 			.values({ id: 'a1', userId: alice.id, expiresAt: new Date(Date.now() + 1e6) })
 			.run();
-		await U.changeUser(alice.id, { password: 'brand-new-password' }, admin.id);
+		await U.changeUser(alice.id, { password: 'brand-new-password' }, owner.id);
 		const row = db.select().from(users).where(eq(users.id, alice.id)).get()!;
 		expect(await Bun.password.verify('brand-new-password', row.passwordHash)).toBe(true);
 		expect(db.select().from(sessions).where(eq(sessions.userId, alice.id)).all()).toEqual([]);
@@ -410,9 +390,9 @@ describe('user administration', () => {
 		db.insert(sessions)
 			.values({ id: 'b1', userId: bob.id, expiresAt: new Date(Date.now() + 1e6) })
 			.run();
-		U.removeUser(bob.id, admin.id);
+		U.removeUser(bob.id, owner.id);
 		expect(db.select().from(users).where(eq(users.id, bob.id)).get()).toBeUndefined();
 		expect(db.select().from(sessions).where(eq(sessions.userId, bob.id)).all()).toEqual([]);
-		expect(() => U.removeUser(bob.id, admin.id)).toThrow(/not found/);
+		expect(() => U.removeUser(bob.id, owner.id)).toThrow(/not found/);
 	});
 });

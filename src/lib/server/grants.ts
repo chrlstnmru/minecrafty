@@ -13,7 +13,7 @@ export interface GrantCheck {
 const deny = (reason: string): GrantCheck => ({ ok: false, reason });
 const allow: GrantCheck = { ok: true };
 
-const isAdmin = (actor: Actor) => actor.role === 'admin';
+const isOwner = (actor: Actor) => actor.role === 'owner';
 
 function activeRole(roleId: number) {
 	const row = db.select().from(roles).where(eq(roles.id, roleId)).get();
@@ -26,7 +26,7 @@ export function roleLock(
 ): RoleLock | null {
 	if (!can(actor, 'roles.write')) return 'read-only';
 	if (role.builtIn) return 'built-in';
-	if (isAdmin(actor)) return null;
+	if (isOwner(actor)) return null;
 	if (!(role.rank < rankOf(actor))) return 'rank';
 	if (holdsRole(actor.id, role.id)) return 'held';
 	if (role.permissions.some((key) => registry[key].ownerOnlyGrant)) return 'owner-only';
@@ -35,7 +35,7 @@ export function roleLock(
 
 /**
  * Whether the actor may create or edit a role holding these permissions at `rank`: they must hold
- * `roles.write`, only an admin may add an admin-only permission, a non-admin may only hand out
+ * `roles.write`, only the owner may add an owner-only permission, anyone else may only hand out
  * what they hold panel-wide themselves (an addition to sv-erp's rules), and the rank must be below
  * their own.
  */
@@ -47,11 +47,11 @@ export function canGrantRolePermissions(
 	if (!Number.isInteger(rank) || rank < 0 || rank > MAX_RANK)
 		return deny(`Rank is a whole number from 0 to ${MAX_RANK}`);
 	if (!can(actor, 'roles.write')) return deny('You cannot manage roles');
-	if (isAdmin(actor)) return allow;
+	if (isOwner(actor)) return allow;
 
 	const wanted = closure(permissions);
 	const ownerOnly = [...wanted].find((key) => registry[key].ownerOnlyGrant);
-	if (ownerOnly) return deny(`Only an admin may grant "${registry[ownerOnly].label}"`);
+	if (ownerOnly) return deny(`Only the owner may grant "${registry[ownerOnly].label}"`);
 
 	const held = resolve(entriesFor(actor.id), null);
 	const missing = [...wanted].find((key) => !held.has(key));
@@ -76,7 +76,7 @@ export function canEditRole(
 		builtIn: role.builtIn,
 		permissions: [] as Permission[]
 	};
-	// the stored permissions matter for the admin-only check, so read them back
+	// the stored permissions matter for the owner-only check, so read them back
 	const stored = JSON.parse(role.rules) as { allow?: Permission[] };
 	current.permissions = stored.allow ?? [];
 	const lock = roleLock(actor, current);
@@ -99,7 +99,7 @@ export function canDeleteRole(actor: Actor, roleId: number): GrantCheck {
 
 /**
  * Whether the actor may use a `hierarchical` permission on a person: they must hold it (on the
- * instance, if given), the person must not be themselves or an admin, and the actor's rank for
+ * instance, if given), the person must not be themselves or the owner, and the actor's rank for
  * that permission must be above the person's highest rank.
  */
 export function canActOnRecord(
@@ -112,8 +112,8 @@ export function canActOnRecord(
 	if (subject.userId === actor.id) return deny('You cannot do that to yourself');
 	const person = db.select().from(users).where(eq(users.id, subject.userId)).get();
 	if (!person) return deny('User not found');
-	if (person.role === 'admin' && !isAdmin(actor)) return deny('Only an admin can act on an admin');
-	if (isAdmin(actor)) return allow;
+	if (person.role === 'owner' && !isOwner(actor)) return deny('Nobody can act on the owner');
+	if (isOwner(actor)) return allow;
 
 	const subjectRank = rankOf({ id: person.id, role: person.role });
 	return grantingRank(actor, key, subject.instanceId ?? null) > subjectRank
@@ -133,19 +133,12 @@ export function canAssignRole(
 		instanceId: null
 	});
 	if (!onRecord.ok) return onRecord;
-	if (!isAdmin(actor) && !(role.rank < rankOf(actor)))
+	if (!isOwner(actor) && !(role.rank < rankOf(actor)))
 		return deny('You can only assign roles ranked below your own');
 	return allow;
 }
 
-/** Whether the actor may add an account with this role. Making an admin is for admins. */
-export function canAddUser(actor: Actor, role: 'admin' | 'user'): GrantCheck {
-	if (!can(actor, 'users.write')) return deny('You are not allowed to add users');
-	if (role === 'admin' && !isAdmin(actor)) return deny('Only an admin can make an admin');
-	return allow;
-}
-
-/** Whether the actor may change an account's role between admin and user: admins only. */
-export function canChangeAdminRole(actor: Actor): GrantCheck {
-	return isAdmin(actor) ? allow : deny('Only an admin can change who is an admin');
+/** Whether the actor may add an account. Accounts start with no roles; the owner is made at setup. */
+export function canAddUser(actor: Actor): GrantCheck {
+	return can(actor, 'users.write') ? allow : deny('You are not allowed to add users');
 }

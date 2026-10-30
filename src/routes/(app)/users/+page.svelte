@@ -15,20 +15,14 @@
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { addUserSchema } from '#lib/schemas/users.js';
-	import {
-		addAccount,
-		allUsers,
-		deleteAccount,
-		setUserPassword,
-		setUserRole
-	} from '#lib/users.remote.js';
+	import { addAccount, allUsers, deleteAccount, setUserPassword } from '#lib/users.remote.js';
 	import type { PageProps } from './$types';
 	import AccessSheet from './access-sheet.svelte';
 
 	type Row = {
 		id: number;
 		username: string;
-		role: 'admin' | 'user';
+		role: 'owner' | 'user';
 		assignments: number;
 		canManage: boolean;
 		canAssign: boolean;
@@ -36,15 +30,10 @@
 
 	let { data }: PageProps = $props();
 	const users = allUsers();
-	const isAdmin = $derived(data.user.role === 'admin');
 	const canAddUsers = $derived(data.panel.includes('users.write'));
-	const { username, role } = addAccount.fields;
+	const { username } = addAccount.fields;
 
 	let adding = $state(false);
-	// new accounts are plain users unless the admin picks otherwise
-	$effect(() => {
-		if (adding && !role.value()) role.set('user');
-	});
 	let accessFor = $state<Row | null>(null);
 	let accessOpen = $state(false);
 	let passwordFor = $state<Row | null>(null);
@@ -53,14 +42,6 @@
 
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
-
-	async function changeRole(row: Row) {
-		try {
-			await setUserRole({ id: row.id, role: row.role === 'admin' ? 'user' : 'admin' });
-		} catch (e) {
-			toast.error(message(e, 'Could not change the role'));
-		}
-	}
 
 	async function savePassword() {
 		if (!passwordFor) return;
@@ -89,7 +70,7 @@
 <div class="flex flex-col gap-4 p-4 lg:p-6">
 	<PageHeader
 		title="Users"
-		description="Admins manage everything. Other users get roles, panel-wide or on a server."
+		description="The owner can do everything. Everyone else can only do what their roles allow, panel-wide or on a server."
 	>
 		{#snippet actions()}
 			{#if canAddUsers}
@@ -102,7 +83,6 @@
 		<Table.Header>
 			<Table.Row>
 				<Table.Head>Username</Table.Head>
-				<Table.Head>Role</Table.Head>
 				<Table.Head>Roles</Table.Head>
 				<Table.Head class="w-px"><span class="sr-only">Actions</span></Table.Head>
 			</Table.Row>
@@ -114,16 +94,18 @@
 					<Table.Cell class="font-medium">
 						{row.username}
 						{#if self}<span class="text-xs text-muted-foreground">(you)</span>{/if}
-					</Table.Cell>
-					<Table.Cell>
-						<Badge variant={row.role === 'admin' ? 'default' : 'secondary'}>{row.role}</Badge>
+						{#if row.role === 'owner'}<Badge class="ms-2">Owner</Badge>{/if}
 					</Table.Cell>
 					<Table.Cell class="text-muted-foreground">
-						{row.role === 'admin' ? 'Everything' : row.assignments}
+						{row.role === 'owner'
+							? 'Everything'
+							: row.assignments
+								? `${row.assignments} ${row.assignments === 1 ? 'role' : 'roles'}`
+								: 'No roles'}
 					</Table.Cell>
 					<Table.Cell>
 						<div class="flex justify-end gap-1">
-							{#if row.role !== 'admin' && row.canAssign}
+							{#if row.role !== 'owner' && row.canAssign}
 								{@render tip(
 									'Give roles, panel-wide or per server',
 									ShieldIcon,
@@ -141,11 +123,6 @@
 								})}
 							{/if}
 							{#if !self}
-								{#if isAdmin}
-									<Button variant="ghost" size="sm" onclick={() => changeRole(row)}>
-										{row.role === 'admin' ? 'Make user' : 'Make admin'}
-									</Button>
-								{/if}
 								{#if row.canManage}
 									{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
 										removing = row;
@@ -199,14 +176,6 @@
 						field={addAccount.fields._password}
 						autocomplete="new-password"
 						description="At least 8 characters."
-					/>
-					<Form.Select
-						label="Role"
-						field={role}
-						options={[
-							{ value: 'user', label: 'User (only what their roles give them)' },
-							...(isAdmin ? [{ value: 'admin', label: 'Admin (everything)' }] : [])
-						]}
 					/>
 					<Form.Errors form={addAccount} />
 					<div><Button type="submit" loading={pending > 0}>Add user</Button></div>

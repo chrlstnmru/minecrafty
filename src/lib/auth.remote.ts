@@ -15,7 +15,7 @@ export const setup = form(setupSchema, async ({ username, _password }) => {
 	// the hook blocks /setup once a user exists; re-check in case of a race
 	if (hasUsers()) redirect(303, '/login');
 
-	const user = await createUser(username, _password, 'admin');
+	const user = await createUser(username, _password, 'owner');
 	startSession(getRequestEvent().cookies, user.id);
 	redirect(303, '/');
 });

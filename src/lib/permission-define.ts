@@ -17,7 +17,7 @@ export interface Permission<Key extends string = string> {
 	implies?: readonly NoInfer<Key>[];
 	/** Using it on a person needs more rank than that person has (see `canActOnRecord`). */
 	hierarchical?: boolean;
-	/** Only an admin may put it in a role. */
+	/** Only the owner may put it in a role. */
 	ownerOnlyGrant?: boolean;
 }
 

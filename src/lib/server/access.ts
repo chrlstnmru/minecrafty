@@ -13,7 +13,7 @@ import {
 import { db } from './db';
 import { instances, roleAssignments, roles } from './db/schema';
 
-export type Actor = { id: number; role: 'admin' | 'user' };
+export type Actor = { id: number; role: 'owner' | 'user' };
 
 /** One role given to a user, with what it grants and denies already worked out. */
 export type Entry = {
@@ -68,10 +68,10 @@ export function resolve(entries: readonly Entry[], instanceId: number | null): S
 const allKeys = () => new Set<Permission>(PERMISSIONS);
 
 function grantedTo(user: Actor, instanceId: number | null) {
-	return user.role === 'admin' ? allKeys() : resolve(entriesFor(user.id), instanceId);
+	return user.role === 'owner' ? allKeys() : resolve(entriesFor(user.id), instanceId);
 }
 
-/** What this user may do on this instance: everything for an admin, what their roles grant otherwise. */
+/** What this user may do on this instance: everything for the owner, what their roles grant otherwise. */
 export function permissionsFor(user: Actor, instanceId: number): InstancePermission[] {
 	const granted = grantedTo(user, instanceId);
 	return INSTANCE_PERMISSIONS.filter((p) => granted.has(p));
@@ -85,15 +85,15 @@ export function panelPermissionsFor(user: Actor): PanelPermission[] {
 
 /** Whether the user holds a permission, on the given instance for per-server ones. */
 export function can(user: Actor, key: Permission, options?: { instanceId?: number }): boolean {
-	if (user.role === 'admin') return true;
+	if (user.role === 'owner') return true;
 	const instanceId = isInstancePermission(key) ? (options?.instanceId ?? null) : null;
 	if (isInstancePermission(key) && instanceId === null) return false;
 	return grantedTo(user, instanceId).has(key);
 }
 
-/** The instances the user may see, or null for all of them (an admin). */
+/** The instances the user may see, or null for all of them (the owner). */
 export function visibleInstanceIds(user: Actor): number[] | null {
-	if (user.role === 'admin') return null;
+	if (user.role === 'owner') return null;
 	const entries = entriesFor(user.id);
 	if (!entries.length) return [];
 	return db
@@ -123,15 +123,15 @@ export function check(user: Actor, instanceId: number, needed: InstancePermissio
 	return granted.has(needed) ? 'ok' : 'denied';
 }
 
-/** The user's own rank: an admin outranks every role, someone with no role has none. */
+/** The user's own rank: the owner outranks every role, someone with no role has none. */
 export function rankOf(user: Actor): number {
-	if (user.role === 'admin') return Infinity;
+	if (user.role === 'owner') return Infinity;
 	return entriesFor(user.id).reduce((max, e) => Math.max(max, e.rank), -Infinity);
 }
 
-/** The highest rank among the user's roles that grant `key` where it applies (admin: unlimited). */
+/** The highest rank among the user's roles that grant `key` where it applies (owner: unlimited). */
 export function grantingRank(user: Actor, key: Permission, instanceId: number | null): number {
-	if (user.role === 'admin') return Infinity;
+	if (user.role === 'owner') return Infinity;
 	return entriesFor(user.id)
 		.filter(
 			(e) =>
@@ -191,7 +191,7 @@ export function setAssignments(userId: number, instanceId: number | null, roleId
 
 /** The per-server permissions the user holds on at least one server, for deciding what to show in the sidebar. */
 export function permissionsAnywhere(user: Actor): InstancePermission[] {
-	if (user.role === 'admin') return [...INSTANCE_PERMISSIONS];
+	if (user.role === 'owner') return [...INSTANCE_PERMISSIONS];
 	const entries = entriesFor(user.id);
 	if (!entries.length) return [];
 	const held = new Set<Permission>();
