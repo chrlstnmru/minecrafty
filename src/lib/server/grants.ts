@@ -20,6 +20,28 @@ function activeRole(roleId: number) {
 	return row && !row.deletedAt ? row : undefined;
 }
 
+const storedPermissions = (role: { rules: string }) =>
+	(JSON.parse(role.rules) as { allow?: Permission[] }).allow ?? [];
+
+const ownerOnlyIn = (permissions: readonly Permission[]) =>
+	[...closure(permissions)].find((key) => registry[key].ownerOnlyGrant);
+
+/**
+ * Whether the actor may hand this role to people at all: the owner may give any role, anyone
+ * else only one ranked below their own that grants nothing owner-only.
+ */
+export function roleAssignable(
+	actor: Actor,
+	role: { rank: number; permissions: readonly Permission[] }
+): GrantCheck {
+	if (isOwner(actor)) return allow;
+	if (!(role.rank < rankOf(actor))) return deny('You can only assign roles ranked below your own');
+	const ownerOnly = ownerOnlyIn(role.permissions);
+	if (ownerOnly)
+		return deny(`Only the owner may assign a role that grants "${registry[ownerOnly].label}"`);
+	return allow;
+}
+
 export function roleLock(
 	actor: Actor,
 	role: { id: number; rank: number; permissions: readonly Permission[] }
@@ -49,7 +71,7 @@ export function canGrantRolePermissions(
 	if (isOwner(actor)) return allow;
 
 	const wanted = closure(permissions);
-	const ownerOnly = [...wanted].find((key) => registry[key].ownerOnlyGrant);
+	const ownerOnly = ownerOnlyIn(permissions);
 	if (ownerOnly) return deny(`Only the owner may grant "${registry[ownerOnly].label}"`);
 
 	const held = resolve(entriesFor(actor.id), null);
@@ -69,15 +91,12 @@ export function canEditRole(
 ): GrantCheck {
 	const role = activeRole(roleId);
 	if (!role) return deny('Role not found');
-	const current = {
+	// the stored permissions matter for the owner-only check, so read them back
+	const lock = roleLock(actor, {
 		id: role.id,
 		rank: role.rank,
-		permissions: [] as Permission[]
-	};
-	// the stored permissions matter for the owner-only check, so read them back
-	const stored = JSON.parse(role.rules) as { allow?: Permission[] };
-	current.permissions = stored.allow ?? [];
-	const lock = roleLock(actor, current);
+		permissions: storedPermissions(role)
+	});
 	if (lock) return deny(LOCK_MESSAGES[lock]);
 	return canGrantRolePermissions(actor, permissions, rank);
 }
@@ -85,11 +104,10 @@ export function canEditRole(
 export function canDeleteRole(actor: Actor, roleId: number): GrantCheck {
 	const role = activeRole(roleId);
 	if (!role) return deny('Role not found');
-	const stored = JSON.parse(role.rules) as { allow?: Permission[] };
 	const lock = roleLock(actor, {
 		id: role.id,
 		rank: role.rank,
-		permissions: stored.allow ?? []
+		permissions: storedPermissions(role)
 	});
 	return lock ? deny(LOCK_MESSAGES[lock]) : allow;
 }
@@ -130,9 +148,7 @@ export function canAssignRole(
 		instanceId: null
 	});
 	if (!onRecord.ok) return onRecord;
-	if (!isOwner(actor) && !(role.rank < rankOf(actor)))
-		return deny('You can only assign roles ranked below your own');
-	return allow;
+	return roleAssignable(actor, { rank: role.rank, permissions: storedPermissions(role) });
 }
 
 /** Whether the actor may add an account. Accounts start with no roles; the owner is made at setup. */

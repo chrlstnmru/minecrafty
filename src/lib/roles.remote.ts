@@ -2,12 +2,13 @@ import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import { idSchema } from '#lib/schemas/common.js';
 import { newRoleSchema, saveRolesSchema } from '#lib/schemas/roles.js';
-import { can, rankOf, type Actor } from '#lib/server/access.js';
+import { can, type Actor } from '#lib/server/access.js';
 import { requirePanel } from '#lib/server/auth.js';
 import {
 	canDeleteRole,
 	canEditRole,
 	canGrantRolePermissions,
+	roleAssignable,
 	roleLock
 } from '#lib/server/grants.js';
 import { record } from '#lib/server/audit.js';
@@ -16,12 +17,11 @@ import * as roles from '#lib/server/roles.js';
 
 /** Every role, highest first, with why the caller cannot change it (null when they can). */
 function load(user: Actor) {
-	const mine = rankOf(user);
 	return roles.listRoles().map((role) => ({
 		...role,
 		lock: roleLock(user, role),
 		/** whether the caller may hand this role to someone */
-		assignable: user.role === 'owner' || role.rank < mine
+		assignable: roleAssignable(user, role).ok
 	}));
 }
 
