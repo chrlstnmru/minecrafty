@@ -4,6 +4,7 @@ import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
 import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
 import FolderIcon from '@tabler/icons-svelte/icons/folder';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
+import PackageImportIcon from '@tabler/icons-svelte/icons/package-import';
 import PaletteIcon from '@tabler/icons-svelte/icons/palette';
 import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
@@ -54,6 +55,12 @@ export const instanceModules: InstanceModule[] = [
 		title: 'Mods',
 		icon: PackageIcon,
 		description: 'Search and install mods from Modrinth and CurseForge, and keep them updated.'
+	},
+	{
+		slug: 'modpack',
+		title: 'Modpack',
+		icon: PackageImportIcon,
+		description: 'Update this server to another version of the modpack it was created from.'
 	},
 	{
 		slug: 'resource-packs',

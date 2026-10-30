@@ -131,6 +131,12 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
+			{#if row?.packProjectId}
+				<p class="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+					This server follows the modpack {row.packName}, which decides its Minecraft version and
+					loader build. Update it from the Modpack tab; changing the loader here can break the pack.
+				</p>
+			{/if}
 			{#if info.error}
 				<p class="text-sm text-destructive" role="alert">
 					Could not reach the version service: {info.error}

@@ -35,6 +35,10 @@
 	const status = $derived(row?.state ?? 'stopped');
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
+	// the Modpack tab only makes sense for a server created from a modpack
+	const modules = $derived(
+		instanceModules.filter((m) => m.slug !== 'modpack' || !!instance?.packProjectId)
+	);
 	const current = $derived(instanceModules.find((m) => m.slug === slug));
 	const labelOf = (m: InstanceModule) =>
 		m.slug === 'mods' && instance?.loader && ['paper', 'purpur'].includes(instance.loader)
@@ -122,7 +126,7 @@
 	</div>
 
 	<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Instance modules">
-		{#each instanceModules as m (m.slug)}
+		{#each modules as m (m.slug)}
 			<Button
 				variant={slug === m.slug ? 'secondary' : 'ghost'}
 				size="sm"
