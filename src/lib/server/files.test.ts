@@ -10,7 +10,7 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import * as F from './files';
 import { serverDir } from './instances';
 

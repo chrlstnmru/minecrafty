@@ -1,6 +1,6 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import { setProgress, clearProgress } from './install-progress';
 import * as I from './instances';
 

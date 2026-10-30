@@ -3,7 +3,13 @@ import { defineConfig } from 'vitest/config';
 
 // Run with Bun (`bun run test`): the server code uses bun:sqlite and Bun.* APIs.
 export default defineConfig({
-	resolve: { alias: { '#lib': fileURLToPath(new URL('./src/lib', import.meta.url)) } },
+	resolve: {
+		alias: {
+			'#lib': fileURLToPath(new URL('./src/lib', import.meta.url)),
+			'#runner': fileURLToPath(new URL('./runner', import.meta.url)),
+			'#test': fileURLToPath(new URL('./src/test', import.meta.url))
+		}
+	},
 	test: {
 		include: ['src/**/*.test.ts'],
 		setupFiles: ['./vitest.setup.ts'],

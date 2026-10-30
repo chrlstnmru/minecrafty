@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import { propertyFields, propertyGroups, validateProperty } from '../server-properties-catalog';
 import { getServerProperties, saveServerProperties } from './properties';
 import { serverDir } from './instances';

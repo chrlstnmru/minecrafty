@@ -1,8 +1,8 @@
 import { mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import type { LaunchSpec, RunnerStatus } from '../../../runner/protocol';
-import { instancesDir, javaOverride, runnerEntry } from './config';
+import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
+import { backupsDir, instancesDir, javaOverride, runnerEntry } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -69,10 +69,15 @@ export async function installBase(row: Instance) {
 	);
 }
 
+function removeInstanceFiles(id: number) {
+	rmSync(instanceDir(id), { recursive: true, force: true });
+	rmSync(join(backupsDir, String(id)), { recursive: true, force: true });
+}
+
 /** Removes a half-created instance: its row (and anything cascading from it) and its folder. */
 export function discardInstance(id: number) {
 	db.delete(instances).where(eq(instances.id, id)).run();
-	rmSync(instanceDir(id), { recursive: true, force: true });
+	removeInstanceFiles(id);
 }
 
 export async function createInstance(input: NewInstance) {
@@ -179,7 +184,7 @@ export async function deleteInstance(id: number) {
 	const live = await runner.status(instanceDir(id), id);
 	if (live && live.state !== 'exited') throw new Error('Stop the instance before deleting it');
 	db.delete(instances).where(eq(instances.id, id)).run();
-	rmSync(instanceDir(id), { recursive: true, force: true });
+	removeInstanceFiles(id);
 }
 
 export type InstanceSettings = Pick<

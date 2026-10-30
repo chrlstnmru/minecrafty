@@ -12,7 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { CHUNK_BYTES } from '../upload-limits';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import { serverDir } from './instances';
 import * as U from './uploads';
 

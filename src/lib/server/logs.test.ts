@@ -9,7 +9,7 @@ import {
 import { join } from 'node:path';
 import { gzipSync } from 'node:zlib';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import { serverDir } from './instances';
 import { followLog, listLogs, readLog, searchLog, type LogFrame } from './logs';
 

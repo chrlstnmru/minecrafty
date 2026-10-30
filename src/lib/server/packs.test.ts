@@ -1,7 +1,7 @@
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
-import { makeInstance } from '../../test/instance';
+import { makeInstance } from '#test/instance.js';
 import { serverDir } from './instances';
 import * as P from './packs';
 
