@@ -13,15 +13,22 @@
 	}: ComponentProps<typeof Sidebar.Root> & { user: { name: string; role: string } } = $props();
 </script>
 
-<Sidebar.Root collapsible="offcanvas" class="group-data-[side=left]:border-e-0" {...restProps}>
+<Sidebar.Root collapsible="icon" {...restProps}>
 	<Sidebar.Header>
 		<Sidebar.Menu>
 			<Sidebar.MenuItem>
-				<Sidebar.MenuButton class="data-[slot=sidebar-menu-button]:!p-1.5">
+				<Sidebar.MenuButton size="lg">
 					{#snippet child({ props })}
 						<a href="/" {...props}>
-							<CubeIcon class="!size-5" />
-							<span class="text-base font-semibold">Minecrafty</span>
+							<div
+								class="flex aspect-square size-8 items-center justify-center rounded-lg bg-sidebar-primary text-sidebar-primary-foreground"
+							>
+								<CubeIcon class="size-4" />
+							</div>
+							<div class="grid flex-1 text-start text-sm leading-tight">
+								<span class="truncate font-semibold">Minecrafty</span>
+								<span class="truncate text-xs text-muted-foreground">Server panel</span>
+							</div>
 						</a>
 					{/snippet}
 				</Sidebar.MenuButton>
@@ -35,4 +42,5 @@
 	<Sidebar.Footer>
 		<NavUser {user} />
 	</Sidebar.Footer>
+	<Sidebar.Rail />
 </Sidebar.Root>

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import DotsVerticalIcon from '@tabler/icons-svelte/icons/dots-vertical';
+	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
 	import LogoutIcon from '@tabler/icons-svelte/icons/logout';
 	import { logout } from '#lib/auth.remote.js';
 	import * as Avatar from '#lib/components/ui/avatar/index.js';
@@ -35,7 +35,7 @@
 								{user.role}
 							</span>
 						</div>
-						<DotsVerticalIcon class="ms-auto size-4" />
+						<SelectorIcon class="ms-auto size-4" />
 					</Sidebar.MenuButton>
 				{/snippet}
 			</DropdownMenu.Trigger>
