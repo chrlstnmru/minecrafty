@@ -1,4 +1,5 @@
 <script lang="ts">
+	import PageHeader from '#lib/components/page-header.svelte';
 	import { toast } from 'svelte-sonner';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
@@ -39,10 +40,11 @@
 <svelte:head><title>Instances · Minecrafty</title></svelte:head>
 
 <div class="flex flex-col gap-4 p-4 lg:p-6">
-	<div class="flex items-center justify-between">
-		<p class="text-sm text-muted-foreground">Create and manage your Minecraft servers.</p>
-		<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
-	</div>
+	<PageHeader title="Instances" description="Create and manage your Minecraft servers.">
+		{#snippet actions()}
+			<Button onclick={() => (createOpen = true)}><PlusIcon />New instance</Button>
+		{/snippet}
+	</PageHeader>
 
 	{#if !instances.length}
 		<Empty.Root class="border">

@@ -3,7 +3,7 @@
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
-	import { instanceModules } from '#lib/instance-modules.js';
+	import { instanceModules, type InstanceModule } from '#lib/instance-modules.js';
 	import {
 		getInstance,
 		killInstance,
@@ -12,6 +12,7 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
+	import PageHeader from '#lib/components/page-header.svelte';
 	import StatusPill from '#lib/components/status-pill.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
@@ -34,6 +35,11 @@
 	const status = $derived(row?.state ?? 'stopped');
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
+	const current = $derived(instanceModules.find((m) => m.slug === slug));
+	const labelOf = (m: InstanceModule) =>
+		m.slug === 'mods' && instance?.loader && ['paper', 'purpur'].includes(instance.loader)
+			? 'Plugins'
+			: m.title;
 	const startHint = $derived(
 		installState === 'installing'
 			? 'Installing…'
@@ -55,57 +61,64 @@
 <svelte:head><title>{instance?.name ?? 'Instance'} · Minecrafty</title></svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
-	<div class="flex flex-wrap items-center gap-3">
-		<Button variant="ghost" size="icon" href="/instances" aria-label="Back to instances">
+	<div class="flex items-start gap-2">
+		<Button
+			variant="ghost"
+			size="icon"
+			href="/instances"
+			aria-label="Back to instances"
+			class="mt-0.5"
+		>
 			<ArrowLeftIcon />
 		</Button>
 		<div class="min-w-0 flex-1">
-			<div class="flex min-w-0 items-center gap-2">
-				<h2 class="truncate text-lg font-semibold">{instance?.name ?? ''}</h2>
-				<StatusPill state={status} />
-			</div>
-			{#if instance}
-				<p class="text-sm text-muted-foreground">
-					{instance.loader}
-					{instance.mcVersion} · port {instance.port}
-				</p>
-			{/if}
+			<PageHeader
+				title={instance?.name ?? ''}
+				description={instance
+					? `${instance.loader} ${instance.mcVersion} · port ${instance.port}`
+					: undefined}
+			>
+				{#snippet badge()}<StatusPill state={status} />{/snippet}
+				{#snippet actions()}
+					<ButtonGroup.Root>
+						{#if !active}
+							{@render action({
+								label: 'Start',
+								tip: startHint,
+								icon: PlayerPlayFilledIcon,
+								tone: 'text-success',
+								disabled: installState !== 'ready',
+								run: () => run(startInstance)
+							})}
+						{:else}
+							{@render action({
+								label: 'Restart',
+								tip: 'Stop the server, then start it again',
+								icon: RefreshIcon,
+								disabled: status === 'stopping',
+								run: () => run(restartInstance)
+							})}
+						{/if}
+						{@render action({
+							label: 'Stop',
+							tip: 'Stop the server and save the world',
+							icon: PlayerStopFilledIcon,
+							tone: 'text-warning',
+							disabled: !active || status === 'stopping',
+							run: () => run(stopInstance)
+						})}
+						{@render action({
+							label: 'Kill',
+							tip: 'Kill the process now. Unsaved progress is lost',
+							icon: SkullIcon,
+							tone: 'text-danger',
+							disabled: !active,
+							run: async () => void (confirmKill = true)
+						})}
+					</ButtonGroup.Root>
+				{/snippet}
+			</PageHeader>
 		</div>
-		<ButtonGroup.Root>
-			{#if !active}
-				{@render action({
-					label: 'Start',
-					tip: startHint,
-					icon: PlayerPlayFilledIcon,
-					tone: 'text-success',
-					disabled: installState !== 'ready',
-					run: () => run(startInstance)
-				})}
-			{:else}
-				{@render action({
-					label: 'Restart',
-					tip: 'Stop the server, then start it again',
-					icon: RefreshIcon,
-					disabled: status === 'stopping',
-					run: () => run(restartInstance)
-				})}
-				{@render action({
-					label: 'Stop',
-					tip: 'Stop the server and save the world',
-					icon: PlayerStopFilledIcon,
-					tone: 'text-warning',
-					disabled: status === 'stopping',
-					run: () => run(stopInstance)
-				})}
-				{@render action({
-					label: 'Kill',
-					tip: 'Kill the process now. Unsaved progress is lost',
-					icon: SkullIcon,
-					tone: 'text-danger',
-					run: async () => void (confirmKill = true)
-				})}
-			{/if}
-		</ButtonGroup.Root>
 	</div>
 
 	<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Instance modules">
@@ -117,14 +130,14 @@
 				aria-current={slug === m.slug ? 'page' : undefined}
 				class={m.planned ? 'text-muted-foreground' : ''}
 			>
-				<m.icon />{m.slug === 'mods' &&
-				instance.loader &&
-				['paper', 'purpur'].includes(instance.loader)
-					? 'Plugins'
-					: m.title}
+				<m.icon />{labelOf(m)}
 			</Button>
 		{/each}
 	</nav>
+
+	{#if current && !current.planned}
+		<PageHeader level={2} title={labelOf(current)} description={current.description} />
+	{/if}
 
 	<!-- header and tabs stay put; the active module fills the rest and scrolls inside it. The
 	     padding and matching negative margin leave room for a card's 1px ring, which a scroll
