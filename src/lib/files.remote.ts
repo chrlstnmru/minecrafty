@@ -2,7 +2,7 @@ import { command, query } from '$app/server';
 import * as v from 'valibot';
 import { idSchema } from '#lib/schemas/common.js';
 import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/files.js';
-import { requireAdmin } from '#lib/server/auth.js';
+import { requirePermission } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
 import * as uploads from '#lib/server/uploads.js';
 import { userFacing } from '#lib/server/http.js';
@@ -11,7 +11,7 @@ const id = idSchema;
 const location = v.object({ id, path: filePathSchema });
 
 export const listFiles = query(location, async ({ id: instanceId, path }) => {
-	requireAdmin();
+	requirePermission(instanceId, 'files');
 	return userFacing(async () => ({
 		...files.listDirectory(instanceId, path),
 		running: await files.isRunning(instanceId)
@@ -19,14 +19,14 @@ export const listFiles = query(location, async ({ id: instanceId, path }) => {
 });
 
 export const readFile = query(location, async ({ id: instanceId, path }) => {
-	requireAdmin();
+	requirePermission(instanceId, 'files');
 	return userFacing(async () => files.readTextFile(instanceId, path));
 });
 
 export const saveFile = command(
 	v.object({ id, path: filePathSchema, content: v.pipe(v.string(), v.maxLength(2_200_000)) }),
 	async ({ id: instanceId, path, content }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.writeTextFile(instanceId, path, content));
 		await readFile({ id: instanceId, path }).refresh();
 	}
@@ -39,7 +39,7 @@ const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
 export const newFolder = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.makeDirectory(instanceId, path, name));
 		await listFiles({ id: instanceId, path }).refresh();
 	}
@@ -48,7 +48,7 @@ export const newFolder = command(
 export const newFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'files');
 		await userFacing(async () => files.createTextFile(instanceId, path, name));
 		await listFiles({ id: instanceId, path }).refresh();
 	}
@@ -57,7 +57,7 @@ export const newFile = command(
 export const renameFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'files');
 		await userFacing(async () => {
 			await files.assertWorldStopped(instanceId, path, 'renaming');
 			files.renameEntry(instanceId, path, name);
@@ -69,7 +69,7 @@ export const renameFile = command(
 export const removeFile = command(
 	v.object({ id, path: filePathSchema }),
 	async ({ id: instanceId, path }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'files');
 		await userFacing(async () => {
 			await files.assertWorldStopped(instanceId, path, 'deleting from');
 			files.deleteEntry(instanceId, path);
@@ -79,7 +79,7 @@ export const removeFile = command(
 );
 
 export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, path, items }) => {
-	requireAdmin();
+	requirePermission(instanceId, 'files');
 	await userFacing(async () => {
 		for (const { file, path: relPath } of items) {
 			await files.assertWorldStopped(instanceId, joinPath(path, relPath), 'uploading into');
@@ -99,7 +99,7 @@ export const beginUpload = command(
 		size: v.pipe(v.number(), v.integer(), v.minValue(0))
 	}),
 	async ({ id: instanceId, path, name, size }) => {
-		const user = requireAdmin();
+		const user = requirePermission(instanceId, 'files');
 		return userFacing(async () => {
 			await files.assertWorldStopped(instanceId, joinPath(path, name), 'uploading into');
 			return uploads.beginUpload({
@@ -123,7 +123,7 @@ export const uploadPiece = command(
 		sha256: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{64}$/i)))
 	}),
 	async ({ id: instanceId, uploadId, index, piece, sha256 }) => {
-		const user = requireAdmin();
+		const user = requirePermission(instanceId, 'files');
 		return userFacing(() =>
 			uploads.writePiece({ uploadId, instanceId, userId: user.id, index, piece, sha256 })
 		);
@@ -134,7 +134,7 @@ export const uploadPiece = command(
 export const uploadProgress = command(
 	v.object({ id, uploadId }),
 	async ({ id: instanceId, uploadId }) => {
-		const user = requireAdmin();
+		const user = requirePermission(instanceId, 'files');
 		return userFacing(async () => uploads.uploadStatus(uploadId, instanceId, user.id));
 	}
 );
@@ -142,7 +142,7 @@ export const uploadProgress = command(
 export const finishUpload = command(
 	v.object({ id, uploadId, path: filePathSchema }),
 	async ({ id: instanceId, uploadId, path }) => {
-		const user = requireAdmin();
+		const user = requirePermission(instanceId, 'files');
 		const shown = await userFacing(async () => uploads.finishUpload(uploadId, instanceId, user.id));
 		await listFiles({ id: instanceId, path }).refresh();
 		return shown;
@@ -152,7 +152,7 @@ export const finishUpload = command(
 export const abortUpload = command(
 	v.object({ id, uploadId }),
 	async ({ id: instanceId, uploadId }) => {
-		const user = requireAdmin();
+		const user = requirePermission(instanceId, 'files');
 		await userFacing(async () => uploads.abortUpload(uploadId, instanceId, user.id));
 	}
 );

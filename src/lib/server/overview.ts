@@ -11,12 +11,13 @@ export type Overview = {
 };
 
 /** What the dashboard says about backups and scheduled tasks across every server. */
-export function overview(now = new Date()): Overview {
+export function overview(now = new Date(), visible: number[] | null = null): Overview {
 	const names = new Map(
 		db
 			.select({ id: instances.id, name: instances.name })
 			.from(instances)
 			.all()
+			.filter((r) => !visible || visible.includes(r.id))
 			.map((r) => [r.id, r.name])
 	);
 
@@ -24,8 +25,8 @@ export function overview(now = new Date()): Overview {
 		.select()
 		.from(backups)
 		.orderBy(desc(backups.createdAt), desc(backups.id))
-		.limit(1)
-		.get();
+		.all()
+		.find((b) => names.has(b.instanceId));
 	const backedUp = new Set(
 		db
 			.select({ id: backups.instanceId })
@@ -36,6 +37,7 @@ export function overview(now = new Date()): Overview {
 
 	let nextTask: Overview['nextTask'] = null;
 	for (const task of db.select().from(schedules).where(eq(schedules.enabled, true)).all()) {
+		if (!names.has(task.instanceId)) continue;
 		const parsed = parseCron(task.cron);
 		if (!parsed.ok) continue;
 		const at = nextRun(parsed.spec, now);

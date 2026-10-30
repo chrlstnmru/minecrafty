@@ -1,6 +1,6 @@
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
-import { requireAdmin } from '#lib/server/auth.js';
+import { requirePermission } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import {
 	idSchema,
@@ -16,27 +16,27 @@ const projectId = projectIdSchema;
 const versionId = versionIdSchema;
 
 export const searchPacks = query(searchArgsSchema, async ({ id: instanceId, query, limit }) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	return userFacing(() => packs.search(instanceId, query.trim(), limit));
 });
 
 export const packVersions = query(
 	v.object({ id, projectId }),
 	async ({ id: instanceId, projectId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		return userFacing(() => packs.listPackVersions(instanceId, projectId));
 	}
 );
 
 export const serverPack = query(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	return packs.serverPack(instanceId);
 });
 
 export const useResourcePack = command(
 	v.object({ id, projectId, versionId }),
 	async ({ id: instanceId, projectId, versionId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		const result = await userFacing(() => packs.useAsServerPack(instanceId, projectId, versionId));
 		await serverPack(instanceId).refresh();
 		return result;
@@ -46,7 +46,7 @@ export const useResourcePack = command(
 export const removePack = command(
 	v.object({ id, rowId: idSchema }),
 	async ({ id: instanceId, rowId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		await userFacing(async () => packs.removePack(instanceId, rowId));
 		await serverPack(instanceId).refresh();
 	}
@@ -55,7 +55,7 @@ export const removePack = command(
 export const setPackOptions = form(
 	packOptionsSchema,
 	async ({ id: instanceId, required, prompt }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		await userFacing(async () => packs.setServerPackOptions(instanceId, { required, prompt }));
 		await serverPack(instanceId).refresh();
 	}

@@ -1,7 +1,8 @@
 import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
-import { requireAdmin } from '#lib/server/auth.js';
+import { visibleInstanceIds } from '#lib/server/access.js';
+import { requireAdmin, requirePermission, requireUser } from '#lib/server/auth.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { userFacing } from '#lib/server/http.js';
@@ -14,10 +15,13 @@ const id = idSchema;
 
 // there is no runner event for "instance changed", so the stream samples the panel's view of them
 export const listInstances = query.live(async function* () {
-	requireAdmin();
+	const user = requireUser();
 	let last = '';
 	while (true) {
-		const rows = await instances.listInstances();
+		const visible = visibleInstanceIds(user);
+		const rows = (await instances.listInstances()).filter(
+			(r) => !visible || visible.includes(r.id)
+		);
 		const json = JSON.stringify(rows);
 		if (json !== last) {
 			last = json;
@@ -28,7 +32,7 @@ export const listInstances = query.live(async function* () {
 });
 
 export const getInstance = query(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'view');
 	const row = instances.getInstance(instanceId);
 	if (!row) error(404, 'Instance not found');
 	// the RCON password is for the panel's own use
@@ -72,7 +76,7 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 export const updateInstance = form(
 	updateInstanceSchema,
 	async ({ id: instanceId, ...settings }, issue) => {
-		requireAdmin();
+		requirePermission(instanceId, 'settings');
 		if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
 		try {
 			instances.updateSettings(instanceId, { ...settings, jvmArgs: settings.jvmArgs.trim() });
@@ -86,17 +90,17 @@ export const updateInstance = form(
 );
 
 export const startInstance = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.startInstance(instanceId));
 });
 
 export const stopInstance = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.stopInstance(instanceId));
 });
 
 export const killInstance = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.killInstance(instanceId));
 });
 
@@ -106,7 +110,7 @@ export const deleteInstance = command(id, async (instanceId) => {
 });
 
 export const restartInstance = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.stopInstance(instanceId));
 	await Bun.sleep(3000);
 	await userFacing(() => instances.startInstance(instanceId));
@@ -129,7 +133,7 @@ const OVERLAP_LINES = 200;
  * frame repeats the most recent lines and clients merge them by sequence number.
  */
 export const consoleStream = query.live(id, async function* (instanceId) {
-	requireAdmin();
+	requirePermission(instanceId, 'console');
 	if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
 
 	const dir = instances.instanceDir(instanceId);
@@ -180,7 +184,7 @@ export const consoleStream = query.live(id, async function* (instanceId) {
 export const sendCommand = command(
 	v.object({ id, line: v.pipe(v.string(), v.maxLength(1000)) }),
 	async ({ id: instanceId, line }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'console');
 		const sent = await runner.send(instances.instanceDir(instanceId), instanceId, {
 			type: 'stdin',
 			line
@@ -197,6 +201,6 @@ export const refreshPackIcons = command(async () => {
 
 /** Runs a failed install again; it carries on in the background. */
 export const retryInstall = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'settings');
 	await userFacing(async () => void instances.retryInstall(instanceId));
 });

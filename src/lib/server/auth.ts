@@ -4,6 +4,8 @@ import { and, eq, gt, lt } from 'drizzle-orm';
 import type { Cookies } from '@sveltejs/kit';
 import { db } from './db';
 import { sessions, users } from './db/schema';
+import type { Permission } from '#lib/permissions.js';
+import { check } from './access';
 import { createAccount } from './user-admin';
 
 const COOKIE = 'session';
@@ -60,7 +62,23 @@ export function userFromCookies(cookies: Cookies): SessionUser | null {
 	);
 }
 
-/** Guards remote functions. Per-instance permissions arrive with the permissions UI (M4). */
+/** Any signed-in user; for what is not tied to one instance. */
+export function requireUser() {
+	const { locals } = getRequestEvent();
+	if (!locals.user) error(401, 'Not signed in');
+	return locals.user;
+}
+
+/** Guards one instance: unseen instances are 404, seen but not allowed is 403. */
+export function requirePermission(instanceId: number, needed: Permission) {
+	const user = requireUser();
+	const result = check(user, instanceId, needed);
+	if (result === 'unknown') error(404, 'Instance not found');
+	if (result === 'denied') error(403, 'You do not have permission to do that');
+	return user;
+}
+
+/** Host-wide and account operations. */
 export function requireAdmin() {
 	const { locals } = getRequestEvent();
 	if (!locals.user) error(401, 'Not signed in');

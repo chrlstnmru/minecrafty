@@ -6,25 +6,25 @@ import {
 	searchArgsSchema,
 	versionIdSchema
 } from '#lib/schemas/common.js';
-import { requireAdmin } from '#lib/server/auth.js';
+import { requirePermission } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import * as mods from '#lib/server/mods.js';
 
 const id = idSchema;
 
 export const installedMods = query(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	return mods.listInstalled(instanceId);
 });
 
 /** Newer releases of the installed mods; one Modrinth request regardless of how many are installed. */
 export const modUpdates = query(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	return userFacing(() => mods.checkUpdates(instanceId));
 });
 
 export const searchMods = query(searchArgsSchema, async ({ id: instanceId, query, limit }) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	return userFacing(() => mods.search(instanceId, query.trim(), limit));
 });
 
@@ -32,7 +32,7 @@ export const searchMods = query(searchArgsSchema, async ({ id: instanceId, query
 export const modVersions = query(
 	v.object({ id, projectId: projectIdSchema }),
 	async ({ id: instanceId, projectId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		return userFacing(() => mods.listModVersions(instanceId, projectId));
 	}
 );
@@ -40,7 +40,7 @@ export const modVersions = query(
 export const installMod = command(
 	v.object({ id, projectId: projectIdSchema, versionId: versionIdSchema }),
 	async ({ id: instanceId, projectId, versionId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		const result = await userFacing(() => mods.install(instanceId, projectId, versionId));
 		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
 		return result;
@@ -50,7 +50,7 @@ export const installMod = command(
 export const removeMod = command(
 	v.object({ id, modId: idSchema }),
 	async ({ id: instanceId, modId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		await userFacing(async () => mods.remove(instanceId, modId));
 		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
 	}
@@ -59,7 +59,7 @@ export const removeMod = command(
 export const setModEnabled = command(
 	v.object({ id, modId: idSchema, enabled: v.boolean() }),
 	async ({ id: instanceId, modId, enabled }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		await userFacing(async () => mods.setEnabled(instanceId, modId, enabled));
 		await installedMods(instanceId).refresh();
 	}
@@ -68,7 +68,7 @@ export const setModEnabled = command(
 export const updateMod = command(
 	v.object({ id, modId: idSchema, versionId: versionIdSchema }),
 	async ({ id: instanceId, modId, versionId }) => {
-		requireAdmin();
+		requirePermission(instanceId, 'mods');
 		const result = await userFacing(() => mods.update(instanceId, modId, versionId));
 		await Promise.all([installedMods(instanceId).refresh(), modUpdates(instanceId).refresh()]);
 		return result;
@@ -77,7 +77,7 @@ export const updateMod = command(
 
 /** Records where each installed mod runs, for mods installed before that was kept. */
 export const refreshModSides = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	const filled = await userFacing(() => mods.backfillSides(instanceId));
 	if (filled) await installedMods(instanceId).refresh();
 	return filled;
@@ -85,7 +85,7 @@ export const refreshModSides = command(id, async (instanceId) => {
 
 /** Disables every mod that does not run on a server; they stay installed and can be enabled again. */
 export const disableClientOnlyMods = command(id, async (instanceId) => {
-	requireAdmin();
+	requirePermission(instanceId, 'mods');
 	const titles = await userFacing(async () => mods.disableClientOnly(instanceId));
 	await installedMods(instanceId).refresh();
 	return titles;
