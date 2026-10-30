@@ -22,7 +22,7 @@ import {
 } from './protected-files';
 import * as runner from './runner-client';
 import { readProperties } from './server-properties';
-import type { ZipEntry } from './zip-writer';
+import { listZipEntries } from './zip-entries';
 
 // Everything the file manager does stays inside an instance's server folder. Every path is
 // resolved through `resolveSafe`, which refuses `..`, absolute paths and symlinks pointing out.
@@ -238,23 +238,7 @@ export function describeDownload(instanceId: number, rel: string) {
 	if (stat.isFile()) return { kind: 'file' as const, path: absolute, name: basename(absolute) };
 	if (!stat.isDirectory()) throw new Error('Nothing to download');
 
-	// symlinks are skipped: following one could pull in files from outside the folder
-	const entries: ZipEntry[] = [];
-	const walk = (dir: string) => {
-		for (const name of readdirSync(dir)) {
-			const path = join(dir, name);
-			const entry = lstatSync(path);
-			const zipName = relative(absolute, path).split(sep).join('/');
-			if (entry.isSymbolicLink()) continue;
-			if (entry.isDirectory()) {
-				entries.push({ kind: 'dir', name: zipName, modified: entry.mtime });
-				walk(path);
-			} else if (entry.isFile()) {
-				entries.push({ kind: 'file', name: zipName, path, modified: entry.mtime });
-			}
-		}
-	};
-	walk(absolute);
+	const entries = listZipEntries(absolute);
 	return {
 		kind: 'folder' as const,
 		entries,

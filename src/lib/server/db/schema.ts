@@ -47,6 +47,10 @@ export const instances = sqliteTable('instances', {
 		.notNull()
 		.default('ready'),
 	installMessage: text('install_message'),
+	// how many backups to keep, oldest removed first; null keeps them all
+	backupKeep: integer('backup_keep').default(5),
+	// paths left out of a backup, one per line, relative to the server folder
+	backupExcludes: text('backup_excludes').notNull().default('logs\ncrash-reports'),
 	createdAt: createdAt()
 });
 
@@ -83,6 +87,26 @@ export const installedMods = sqliteTable(
 		uniqueIndex('installed_mods_project').on(t.instanceId, t.kind, t.source, t.projectId),
 		index('installed_mods_instance').on(t.instanceId)
 	]
+);
+
+// zip backups of an instance; the file sits in backups/<instance id>/
+export const backups = sqliteTable(
+	'backups',
+	{
+		id: integer('id').primaryKey({ autoIncrement: true }),
+		instanceId: integer('instance_id')
+			.notNull()
+			.references(() => instances.id, { onDelete: 'cascade' }),
+		file: text('file').notNull(),
+		size: integer('size').notNull(),
+		// manual and scheduled backups are pruned by the retention setting; the others are kept
+		kind: text('kind', { enum: ['manual', 'scheduled', 'before-restore'] })
+			.notNull()
+			.default('manual'),
+		note: text('note'),
+		createdAt: createdAt()
+	},
+	(t) => [index('backups_instance').on(t.instanceId)]
 );
 
 // panel-wide key/value settings (public URL, later the CurseForge API key)
