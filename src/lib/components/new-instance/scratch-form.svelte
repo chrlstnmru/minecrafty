@@ -30,6 +30,13 @@
 		{ value: 'forge', label: 'Forge' },
 		{ value: 'neoforge', label: 'NeoForge' }
 	];
+
+	// the form empties itself once it has submitted, so the name is kept as it is typed
+	let typedName = $state('');
+	$effect(() => {
+		const value = name.value();
+		if (value) typedName = value;
+	});
 </script>
 
 <Form.Root
@@ -39,7 +46,7 @@
 	onSubmitted={(succeeded) => {
 		if (!succeeded) return;
 		// the instance exists already; its server downloads in the background
-		toast.info(`Creating ${name.value()}`, {
+		toast.info(`Creating ${typedName}`, {
 			description: 'The server installs in the background. Its progress is on the Instances page.'
 		});
 		onDone();
