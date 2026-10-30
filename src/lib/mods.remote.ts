@@ -84,3 +84,19 @@ export const updateMod = command(
 		return result;
 	}
 );
+
+/** Records where each installed mod runs, for mods installed before that was kept. */
+export const refreshModSides = command(id, async (instanceId) => {
+	requireAdmin();
+	const filled = await userFacing(() => mods.backfillSides(instanceId));
+	if (filled) await installedMods(instanceId).refresh();
+	return filled;
+});
+
+/** Disables every mod that does not run on a server; they stay installed and can be enabled again. */
+export const disableClientOnlyMods = command(id, async (instanceId) => {
+	requireAdmin();
+	const titles = await userFacing(async () => mods.disableClientOnly(instanceId));
+	await installedMods(instanceId).refresh();
+	return titles;
+});

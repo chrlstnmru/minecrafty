@@ -6,9 +6,11 @@
 	import { toast } from 'svelte-sonner';
 	import {
 		installMod,
+		disableClientOnlyMods,
 		installedMods,
 		modUpdates,
 		modsInfo,
+		refreshModSides,
 		removeMod,
 		setModEnabled,
 		searchMods,
@@ -121,6 +123,59 @@
 		}
 	}
 
+	/** What the project says about where a mod runs, as badges; nothing while that is unknown. */
+	function sides(mod: { clientSide: string | null; serverSide: string | null }) {
+		if (!mod.clientSide || !mod.serverSide) return [];
+		const label = (name: string, side: string) =>
+			`${name}: ${side === 'required' ? 'required' : 'optional'}`;
+		if (mod.serverSide === 'unsupported')
+			return [
+				{ text: 'Client only', variant: 'warning', title: 'Does not run on a server' }
+			] as const;
+		if (mod.clientSide === 'unsupported')
+			return [{ text: 'Server only', variant: 'info', title: 'Does not run on a client' }] as const;
+		return [
+			{
+				text: 'Client',
+				variant: mod.clientSide === 'required' ? 'info' : 'muted',
+				title: label('Client', mod.clientSide)
+			},
+			{
+				text: 'Server',
+				variant: mod.serverSide === 'required' ? 'success' : 'muted',
+				title: label('Server', mod.serverSide)
+			}
+		] as const;
+	}
+
+	const clientOnly = $derived(
+		installed.filter((m) => m.enabled && m.serverSide === 'unsupported').length
+	);
+
+	// mods recorded before this was kept learn where they run, once per server
+	let askedSides: number | null = null;
+	$effect(() => {
+		if (askedSides === id) return;
+		if (installed.some((m) => m.source === 'modrinth' && (!m.clientSide || !m.serverSide))) {
+			askedSides = id;
+			void refreshModSides(id).catch(() => undefined);
+		}
+	});
+
+	async function disableClientSide() {
+		try {
+			const titles = await disableClientOnlyMods(id);
+			toast.success(
+				`Disabled ${titles.length} client-only ${titles.length === 1 ? 'mod' : 'mods'}`,
+				{
+					description: 'Restart the server to apply.'
+				}
+			);
+		} catch (e) {
+			toast.error(message(e, 'Could not disable them'));
+		}
+	}
+
 	async function toggle(modId: number, title: string, enabled: boolean) {
 		try {
 			await setModEnabled({ id, modId, enabled });
@@ -163,11 +218,18 @@
 					Files in <code class="font-mono">{info.folder}/</code>. Changes apply the next time the
 					server starts.
 				</Card.Description>
-				{#if updates.current?.length}
-					<Card.Action>
-						<Button size="sm" onClickPromise={updateAll}>
-							Update all ({updates.current.length})
-						</Button>
+				{#if updates.current?.length || clientOnly}
+					<Card.Action class="flex flex-wrap gap-2">
+						{#if clientOnly}
+							<Button variant="outline" size="sm" onClickPromise={disableClientSide}>
+								Disable client-only ({clientOnly})
+							</Button>
+						{/if}
+						{#if updates.current?.length}
+							<Button size="sm" onClickPromise={updateAll}>
+								Update all ({updates.current.length})
+							</Button>
+						{/if}
 					</Card.Action>
 				{/if}
 			</Card.Header>
@@ -195,6 +257,9 @@
 								<span class="truncate text-sm font-medium">{mod.title}</span>
 								{#if !mod.enabled}<Badge variant="muted">Disabled</Badge>{/if}
 								{#if mod.dependencyOf}<Badge variant="pink">Dependency</Badge>{/if}
+								{#each sides(mod) as side (side.text)}
+									<Badge variant={side.variant} title={side.title}>{side.text}</Badge>
+								{/each}
 							</div>
 							<p class="truncate text-xs text-muted-foreground">
 								{mod.versionNumber} · {mod.file}

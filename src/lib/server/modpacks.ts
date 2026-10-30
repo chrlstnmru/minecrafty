@@ -9,6 +9,7 @@ import { clearProgress, setProgress } from './install-progress';
 import { installBase, insertInstance, serverDir } from './instances';
 import type { Loader } from './loaders';
 import * as modrinth from './modrinth';
+import { clientOnlyFiles } from './mod-sides';
 import { safeEntryName } from '#lib/safe-entry-name.js';
 import { Zip, type ZipEntry } from './zip';
 import { writeManifest } from './modpack-manifest';
@@ -60,6 +61,8 @@ export type ModpackSummary = {
 	/** files that will be downloaded for the server */
 	files: number;
 	clientOnly: number;
+	/** titles of the mods Modrinth says do not run on a server; they are not installed */
+	clientOnlyMods: string[];
 	downloadBytes: number;
 	/** files copied straight from the pack (configs, scripts, ...) */
 	overrides: number;
@@ -138,10 +141,27 @@ function parseIndex(zip: Zip): PackIndex {
 
 export const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
 
+const FLAG_CACHE_MS = 10 * 60_000;
+const flagCache = new Map<string, { at: number; flagged: Map<string, string> }>();
+
+/** The lookup is a few Modrinth requests, and a preview then an import ask for it twice. */
+async function flaggedClientOnly(versionId: string, files: IndexFile[]) {
+	const hit = flagCache.get(versionId);
+	if (hit && Date.now() - hit.at < FLAG_CACHE_MS) return hit.flagged;
+	const flagged = await clientOnlyFiles(files);
+	flagCache.set(versionId, { at: Date.now(), flagged });
+	return flagged;
+}
+
 export async function loadModpack(versionId: string): Promise<LoadedPack> {
 	const { version, path } = await fetchPack(versionId);
 	const zip = new Zip(new Uint8Array(await Bun.file(path).arrayBuffer()));
 	const index = parseIndex(zip);
+
+	// packs mark every file as needed on the server; the projects know better
+	const flagged = await flaggedClientOnly(versionId, index.files.filter(wantsOnServer));
+	for (const file of index.files)
+		if (flagged.has(file.path)) file.env = { ...file.env, server: 'unsupported' };
 
 	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
 	const files = index.files.filter(wantsOnServer);
@@ -159,6 +179,7 @@ export async function loadModpack(versionId: string): Promise<LoadedPack> {
 			loaderVersion: found ? index.dependencies[found[0]] : null,
 			files: files.length,
 			clientOnly: index.files.length - files.length,
+			clientOnlyMods: [...flagged.values()].toSorted((a, b) => a.localeCompare(b)),
 			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
 			overrides: zip.entries.filter(
 				(e) =>
@@ -355,6 +376,8 @@ export async function trackMods(instanceId: number, files: IndexFile[]) {
 			title: project?.title ?? version.project_id,
 			iconUrl: project?.icon_url ?? null,
 			versionNumber: version.version_number,
+			clientSide: project?.client_side ?? null,
+			serverSide: project?.server_side ?? null,
 			file: file.path,
 			hash: file.hashes.sha512!,
 			dependencyOf: null
@@ -363,39 +386,17 @@ export async function trackMods(instanceId: number, files: IndexFile[]) {
 	if (rows.length) db.insert(installedMods).values(rows).onConflictDoNothing().run();
 }
 
-const SEARCH_PAGE = 100;
-const MAX_SEARCH_PAGES = 5;
-
-/**
- * Modrinth modpacks. Packs a result marks as unsupported on the server (optimisation packs and
- * launcher bundles that only make sense on a player's machine) are left out unless asked for.
- * The search's own `server_side` facet is not used: it lets some of those through, so each
- * result's flag is checked instead, reading further pages until `limit` packs are found.
- */
-export async function searchModpacks(query: string, limit: number, includeClientOnly = false) {
-	const hits: modrinth.ModrinthHit[] = [];
-	let offset = 0;
-	let more = false;
-	for (let page = 0; page < MAX_SEARCH_PAGES; page++) {
-		const res = await modrinth.searchProjects({
-			query,
-			loaders: [],
-			type: 'modpack',
-			serverSide: false,
-			offset,
-			limit: includeClientOnly ? limit : SEARCH_PAGE
-		});
-		offset += res.hits.length;
-		hits.push(
-			...(includeClientOnly
-				? res.hits
-				: res.hits.filter((hit) => hit.server_side !== 'unsupported'))
-		);
-		more = offset < res.total_hits;
-		if (hits.length >= limit || !res.hits.length || !more) break;
-	}
-	// a full list means there may be more; a short one only if the search stopped early
-	return { hits: hits.slice(0, limit), more: hits.length > limit || more };
+export async function searchModpacks(query: string, limit: number) {
+	const res = await modrinth.searchProjects({
+		query,
+		loaders: [],
+		type: 'modpack',
+		// Modrinth's server-side flag is not reliable for packs: client-only mods are handled when
+		// a pack is read, so every pack is listed
+		serverSide: false,
+		limit
+	});
+	return { hits: res.hits, total: res.total_hits };
 }
 
 export type ModpackVersion = {

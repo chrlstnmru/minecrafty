@@ -71,6 +71,13 @@
       "when": 1793339887381,
       "tag": "0009_modpack_origin",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1793341355895,
+      "tag": "0010_mod_sides",
+      "breakpoints": true
     }
   ]
 }

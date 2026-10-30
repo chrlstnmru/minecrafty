@@ -76,6 +76,9 @@ export const installedMods = sqliteTable(
 		title: text('title').notNull(),
 		iconUrl: text('icon_url'),
 		versionNumber: text('version_number').notNull(),
+		// where the project says it runs: required, optional or unsupported; null until known
+		clientSide: text('client_side'),
+		serverSide: text('server_side'),
 		// path relative to the instance's server folder, e.g. mods/sodium-0.6.jar; empty for
 		// server resource packs, which are referenced by `url` instead of stored on the host
 		file: text('file').notNull(),

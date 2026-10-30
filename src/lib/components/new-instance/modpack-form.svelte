@@ -12,8 +12,6 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import { Label } from '#lib/components/ui/label/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import SelectMenu from '#lib/components/select-menu.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
@@ -34,8 +32,6 @@
 	let query = $state('');
 	let debounced = $state('');
 	let limit = $state(PAGE_SIZE);
-	// packs Modrinth marks as client-only cannot run a server, so they are hidden unless asked for
-	let includeClientOnly = $state(false);
 
 	// wait for a pause in typing before asking Modrinth
 	$effect(() => {
@@ -51,9 +47,7 @@
 	let picked = $state<Picked | null>(null);
 	let versionId = $state('');
 
-	const results = $derived(
-		picked ? null : searchModpacks({ query: debounced, limit, includeClientOnly })
-	);
+	const results = $derived(picked ? null : searchModpacks({ query: debounced, limit }));
 	const versions = $derived(picked ? modpackVersions(picked.projectId) : null);
 	const preview = $derived(versionId ? modpackPreview(versionId) : null);
 
@@ -100,16 +94,6 @@
 				spellcheck="false"
 			/>
 		</InputGroup.Root>
-		<div class="flex items-center gap-2">
-			<Checkbox
-				id="show-client-only"
-				bind:checked={includeClientOnly}
-				onCheckedChange={() => (limit = PAGE_SIZE)}
-			/>
-			<Label for="show-client-only" class="text-xs text-muted-foreground">
-				Show client-only modpacks
-			</Label>
-		</div>
 		{#if results?.error}
 			<p class="text-sm text-destructive" role="alert">Search failed. Try again shortly.</p>
 		{/if}
@@ -155,7 +139,7 @@
 					</Empty.Root>
 				{/if}
 			{/each}
-			{#if results?.current && results.current.more}
+			{#if results?.current && results.current.hits.length < results.current.total}
 				<div class="py-2">
 					<Button variant="outline" size="sm" onclick={() => (limit += PAGE_SIZE)}>Show more</Button
 					>
@@ -233,11 +217,34 @@
 									<span class="text-muted-foreground">({s.clientOnly} client-only skipped)</span>
 								{/if}
 							</dd>
+							{#if s.clientOnlyMods.length}
+								<dt class="text-muted-foreground">Client-only</dt>
+								<dd>
+									<details>
+										<summary class="cursor-pointer select-none">
+											{s.clientOnlyMods.length}
+											{s.clientOnlyMods.length === 1 ? 'mod does' : 'mods do'} not run on a server and
+											will not be installed
+										</summary>
+										<ul
+											class="mt-1 grid max-h-40 gap-0.5 overflow-y-auto ps-4 text-xs text-muted-foreground"
+										>
+											{#each s.clientOnlyMods as title (title)}<li>{title}</li>{/each}
+										</ul>
+									</details>
+								</dd>
+							{/if}
 							{#if s.overrides}
 								<dt class="text-muted-foreground">Config</dt>
 								<dd>{s.overrides} files copied from the pack</dd>
 							{/if}
 						</dl>
+						{#if s.clientOnly > s.files}
+							<p class="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
+								Most of this pack is for players: only {s.files} of {s.files + s.clientOnly} files run
+								on a server, so the server may be nearly vanilla.
+							</p>
+						{/if}
 					{/if}
 				</div>
 

@@ -44,6 +44,7 @@ export type ModrinthProject = {
 	id: string;
 	title: string;
 	icon_url: string | null;
+	client_side: string;
 	server_side: string;
 };
 

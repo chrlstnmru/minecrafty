@@ -6,6 +6,7 @@ import { installedMods } from './db/schema';
 import { downloadFile } from './download';
 import { getInstance, serverDir, type Instance } from './instances';
 import * as modrinth from './modrinth';
+import { projectSides } from './mod-sides';
 
 export type InstalledMod = typeof installedMods.$inferSelect;
 
@@ -164,6 +165,8 @@ async function apply(
 				title: projects.get(id)?.title ?? id,
 				iconUrl: projects.get(id)?.icon_url ?? null,
 				versionNumber: version.version_number,
+				clientSide: projects.get(id)?.client_side ?? null,
+				serverSide: projects.get(id)?.server_side ?? null,
 				file: rel,
 				hash: file.hashes.sha512,
 				dependencyOf: replacing?.projectId === id ? replacing.dependencyOf : dependencyOf
@@ -308,4 +311,32 @@ export function remove(instanceId: number, modId: number) {
 	// `file` is stored relative to the server folder and was validated when written
 	rmSync(join(serverDir(instanceId), row.file), { force: true });
 	db.delete(installedMods).where(eq(installedMods.id, row.id)).run();
+}
+
+/** Fills in where mods run for rows recorded before that was kept; returns how many it filled. */
+export async function backfillSides(instanceId: number) {
+	const unknown = listInstalled(instanceId).filter(
+		(m) => m.source === 'modrinth' && (m.clientSide === null || m.serverSide === null)
+	);
+	if (!unknown.length) return 0;
+	const sides = await projectSides(unknown.map((m) => m.projectId));
+	let filled = 0;
+	for (const mod of unknown) {
+		const found = sides.get(mod.projectId);
+		if (!found) continue;
+		db.update(installedMods).set(found).where(eq(installedMods.id, mod.id)).run();
+		filled++;
+	}
+	return filled;
+}
+
+/** Disables every enabled mod its project says does not run on a server; returns their titles. */
+export function disableClientOnly(instanceId: number) {
+	const titles: string[] = [];
+	for (const mod of listInstalled(instanceId)) {
+		if (!mod.enabled || mod.serverSide !== 'unsupported') continue;
+		setEnabled(instanceId, mod.id, false);
+		titles.push(mod.title);
+	}
+	return titles;
 }
