@@ -36,12 +36,14 @@ const I = await import('./instances');
 const { getProgress } = await import('./install-progress');
 
 type NewInstance = import('./instances').NewInstance;
+// each instance gets the next port; a random one now and then repeats and fails the UNIQUE check
+let port = 27000;
 const input = (over: Partial<NewInstance> = {}): NewInstance => ({
 	name: 'New server',
 	loader: 'paper',
 	mcVersion: '1.21.4',
 	loaderVersion: '120',
-	port: 27000 + Math.floor(Math.random() * 1000),
+	port: port++,
 	ramMinMb: 512,
 	ramMaxMb: 1024,
 	jvmArgs: '',
