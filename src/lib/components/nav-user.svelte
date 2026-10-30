@@ -15,7 +15,17 @@
 
 <Sidebar.Menu>
 	<Sidebar.MenuItem>
-		<form {...logout} bind:this={logoutForm} hidden></form>
+		<!-- a client-side redirect would re-run this page's queries signed out and keep their 401s
+		     cached, so signing back in without a reload showed an error page; skip that refresh and
+		     load /login afresh, which also drops whatever the last user had on screen -->
+		<form
+			{...logout.enhance(async (form) => {
+				await form.submit().updates();
+				location.assign('/login');
+			})}
+			bind:this={logoutForm}
+			hidden
+		></form>
 		<DropdownMenu.Root>
 			<DropdownMenu.Trigger>
 				{#snippet child({ props })}
