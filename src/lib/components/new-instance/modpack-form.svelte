@@ -220,34 +220,11 @@
 									<span class="text-muted-foreground">({s.clientOnly} client-only skipped)</span>
 								{/if}
 							</dd>
-							{#if s.clientOnlyMods.length}
-								<dt class="text-muted-foreground">Client-only</dt>
-								<dd>
-									<details>
-										<summary class="cursor-pointer select-none">
-											{s.clientOnlyMods.length}
-											{s.clientOnlyMods.length === 1 ? 'mod does' : 'mods do'} not run on a server and
-											will not be installed
-										</summary>
-										<ul
-											class="mt-1 grid max-h-40 gap-0.5 overflow-y-auto ps-4 text-xs text-muted-foreground"
-										>
-											{#each s.clientOnlyMods as title (title)}<li>{title}</li>{/each}
-										</ul>
-									</details>
-								</dd>
-							{/if}
 							{#if s.overrides}
 								<dt class="text-muted-foreground">Config</dt>
 								<dd>{s.overrides} files copied from the pack</dd>
 							{/if}
 						</dl>
-						{#if s.clientOnly > s.files}
-							<p class="mt-2 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-xs">
-								Most of this pack is for players: only {s.files} of {s.files + s.clientOnly} files run
-								on a server, so the server may be nearly vanilla.
-							</p>
-						{/if}
 					{/if}
 				</div>
 

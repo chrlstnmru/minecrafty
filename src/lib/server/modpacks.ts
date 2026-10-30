@@ -9,7 +9,6 @@ import { clearProgress, setProgress } from './install-progress';
 import { installBase, insertInstance, serverDir } from './instances';
 import type { Loader } from './loaders';
 import * as modrinth from './modrinth';
-import { clientOnlyFiles } from './mod-sides';
 import { safeEntryName } from '#lib/safe-entry-name.js';
 import { Zip, type ZipEntry } from './zip';
 import { writeManifest } from './modpack-manifest';
@@ -61,8 +60,6 @@ export type ModpackSummary = {
 	/** files that will be downloaded for the server */
 	files: number;
 	clientOnly: number;
-	/** titles of the mods Modrinth says do not run on a server; they are not installed */
-	clientOnlyMods: string[];
 	downloadBytes: number;
 	/** files copied straight from the pack (configs, scripts, ...) */
 	overrides: number;
@@ -153,27 +150,10 @@ export async function projectTitle(projectId: string, fallback: string) {
 	}
 }
 
-const FLAG_CACHE_MS = 10 * 60_000;
-const flagCache = new Map<string, { at: number; flagged: Map<string, string> }>();
-
-/** The lookup is a few Modrinth requests, and a preview then an import ask for it twice. */
-async function flaggedClientOnly(versionId: string, files: IndexFile[]) {
-	const hit = flagCache.get(versionId);
-	if (hit && Date.now() - hit.at < FLAG_CACHE_MS) return hit.flagged;
-	const flagged = await clientOnlyFiles(files);
-	flagCache.set(versionId, { at: Date.now(), flagged });
-	return flagged;
-}
-
 export async function loadModpack(versionId: string): Promise<LoadedPack> {
 	const { version, path } = await fetchPack(versionId);
 	const zip = new Zip(new Uint8Array(await Bun.file(path).arrayBuffer()));
 	const index = parseIndex(zip);
-
-	// packs mark every file as needed on the server; the projects know better
-	const flagged = await flaggedClientOnly(versionId, index.files.filter(wantsOnServer));
-	for (const file of index.files)
-		if (flagged.has(file.path)) file.env = { ...file.env, server: 'unsupported' };
 
 	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
 	const files = index.files.filter(wantsOnServer);
@@ -191,7 +171,6 @@ export async function loadModpack(versionId: string): Promise<LoadedPack> {
 			loaderVersion: found ? index.dependencies[found[0]] : null,
 			files: files.length,
 			clientOnly: index.files.length - files.length,
-			clientOnlyMods: [...flagged.values()].toSorted((a, b) => a.localeCompare(b)),
 			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
 			overrides: zip.entries.filter(
 				(e) =>
