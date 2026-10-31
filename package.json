@@ -55,6 +55,7 @@
 		"globals": "^17.6.0",
 		"jsonc-parser": "^3.3.1",
 		"lefthook": "^2.2.2",
+		"marked": "^18.1.2",
 		"mode-watcher": "^1.1.0",
 		"monaco-editor": "^0.57.0",
 		"oxfmt": "^0.75.0",
