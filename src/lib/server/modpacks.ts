@@ -5,7 +5,7 @@ import { dataDir } from './config';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
 import { downloadFile } from './download';
-import { clearProgress, setProgress } from './install-progress';
+import { runInstall, setProgress } from './install-progress';
 import { installBase, insertInstance, serverDir, type NewInstance } from './instances';
 import type { Loader } from './loaders';
 import * as modrinth from './modrinth';
@@ -237,9 +237,9 @@ export async function startImportLoaded(
 	return row;
 }
 
-async function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack) {
+function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack) {
 	const server = serverDir(row.id);
-	try {
+	return runInstall(row, 'modpack import', async () => {
 		setProgress(row.id, { label: 'Installing the server', done: 0, total: 1 });
 		await installBase(row);
 
@@ -251,21 +251,7 @@ async function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack
 		setProgress(row.id, { label: 'Recording mods', done: 0, total: 1 });
 		await trackMods(row.id, pack.index.files.filter(wantsOnServer));
 		writeManifest(row.id, { files: await packFileHashes(server, pack.index.files), overrides });
-
-		db.update(instances)
-			.set({ installState: 'ready', installMessage: null })
-			.where(eq(instances.id, row.id))
-			.run();
-	} catch (e) {
-		const message = e instanceof Error ? e.message : String(e);
-		console.error(`[modpack] import of "${row.name}" (#${row.id}) failed: ${message}`);
-		db.update(instances)
-			.set({ installState: 'failed', installMessage: message.slice(0, 500) })
-			.where(eq(instances.id, row.id))
-			.run();
-	} finally {
-		clearProgress(row.id);
-	}
+	});
 }
 
 export async function downloadFiles(instanceId: number, server: string, files: IndexFile[]) {

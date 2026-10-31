@@ -5,6 +5,7 @@ import { db } from './db';
 import { installedMods } from './db/schema';
 import { downloadFile } from './download';
 import { getInstance, serverDir, type Instance } from './instances';
+import { assertWritable } from './operations';
 import * as modrinth from './modrinth';
 import { modSupport } from '#lib/mod-support.js';
 import { projectSides } from './mod-sides';
@@ -217,6 +218,7 @@ async function resolveVersion(inst: Instance, projectId: string, versionId: stri
 
 export async function install(instanceId: number, projectId: string, versionId?: string) {
 	const inst = requireInstance(instanceId);
+	assertWritable(instanceId);
 	if (listInstalled(instanceId).some((m) => m.projectId === projectId))
 		throw new Error('Already installed');
 	const chosen = versionId ? await resolveVersion(inst, projectId, versionId) : undefined;
@@ -249,6 +251,7 @@ export async function checkUpdates(instanceId: number): Promise<ModUpdate[]> {
 /** Moves an installed mod to its newest release, or to a chosen version (including older ones). */
 export async function update(instanceId: number, modId: number, versionId?: string) {
 	const inst = requireInstance(instanceId);
+	assertWritable(instanceId);
 	const row = listInstalled(instanceId).find((m) => m.id === modId);
 	if (!row?.hash) throw new Error('Not installed');
 	const target = versionId
@@ -266,6 +269,12 @@ export async function update(instanceId: number, modId: number, versionId?: stri
 
 /** Turns a mod on or off by renaming its file; the server picks the change up on its next start. */
 export function setEnabled(instanceId: number, modId: number, enabled: boolean) {
+	assertWritable(instanceId);
+	setEnabledHeld(instanceId, modId, enabled);
+}
+
+/** The same for a job that already holds the instance, which `setEnabled` would refuse as busy. */
+export function setEnabledHeld(instanceId: number, modId: number, enabled: boolean) {
 	const row = db
 		.select()
 		.from(installedMods)
@@ -282,6 +291,7 @@ export function setEnabled(instanceId: number, modId: number, enabled: boolean) 
 }
 
 export function remove(instanceId: number, modId: number) {
+	assertWritable(instanceId);
 	const row = db
 		.select()
 		.from(installedMods)
