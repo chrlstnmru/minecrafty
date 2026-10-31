@@ -8,6 +8,7 @@ import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
 import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
 import * as modrinth from './modrinth';
+import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
 	LOADER_KEYS,
 	overrideEntries,
@@ -261,20 +262,6 @@ export async function searchMods(packId: number, query: string, limit: number) {
 const sideOf = (value: string | null | undefined) =>
 	value === 'required' || value === 'optional' || value === 'unsupported' ? value : null;
 
-/** Prefers a stable release over betas and alphas; versions arrive newest first. */
-const pickVersion = (versions: modrinth.ModrinthVersion[]) =>
-	versions.find((v) => v.version_type === 'release') ?? versions[0];
-
-function pickFile(version: modrinth.ModrinthVersion) {
-	const file = version.files.find((f) => f.primary) ?? version.files[0];
-	if (!file) throw new Error(`Version ${version.version_number} has no files`);
-	// the name comes from a third party and is joined onto a path
-	const name = basename(file.filename);
-	if (name !== file.filename || name.startsWith('.') || !name.endsWith('.jar'))
-		throw new Error(`Refusing unexpected file name "${file.filename}"`);
-	return { ...file, filename: name };
-}
-
 const rowFor = (
 	packId: number,
 	version: modrinth.ModrinthVersion,
@@ -300,40 +287,14 @@ const rowFor = (
 	};
 };
 
-/** Works out which versions to add: the project plus every required dependency not in the pack yet. */
-async function plan(pack: LocalPack, projectId: string, root?: modrinth.ModrinthVersion) {
-	const have = new Set(listFiles(pack.id).flatMap((f) => (f.projectId ? [f.projectId] : [])));
-	const planned = new Map<
-		string,
-		{ version: modrinth.ModrinthVersion; dependencyOf: string | null }
-	>();
-	const skipped: string[] = [];
-	const queue: { projectId: string | null; versionId: string | null; parent: string | null }[] = [
-		{ projectId, versionId: root?.id ?? null, parent: null }
-	];
-	while (queue.length) {
-		const next = queue.shift()!;
-		let version: modrinth.ModrinthVersion | undefined;
-		if (root && next.versionId === root.id) version = root;
-		else if (next.versionId) version = await modrinth.getVersion(next.versionId);
-		else if (next.projectId)
-			version = pickVersion(
-				await modrinth.listVersions(next.projectId, [pack.loader], pack.mcVersion)
-			);
-		const id = next.projectId ?? version?.project_id;
-		if (!id || have.has(id) || planned.has(id)) continue;
-		if (!version) {
-			if (!next.parent)
-				throw new Error(`No ${pack.loader} version for Minecraft ${pack.mcVersion} was found`);
-			skipped.push(id);
-			continue;
-		}
-		planned.set(id, { version, dependencyOf: next.parent });
-		for (const dep of version.dependencies)
-			if (dep.dependency_type === 'required')
-				queue.push({ projectId: dep.project_id, versionId: dep.version_id, parent: id });
-	}
-	return { planned, skipped };
+/** Which versions to add: the project plus every required dependency not in the pack yet. */
+function plan(pack: LocalPack, projectId: string, root?: modrinth.ModrinthVersion) {
+	return resolveMods(
+		{ loader: pack.loader, loaders: [pack.loader], mcVersion: pack.mcVersion },
+		new Set(listFiles(pack.id).flatMap((f) => (f.projectId ? [f.projectId] : []))),
+		projectId,
+		{ root }
+	);
 }
 
 /** Adds a mod, pinned to a version (the newest release when none is given), with its required dependencies. */
