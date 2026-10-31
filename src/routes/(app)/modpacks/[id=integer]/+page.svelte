@@ -270,7 +270,11 @@
 		     rows they would shrink to fit this box instead of letting it scroll. The padding and matching
 		     negative margin leave room for a card's ring, which a scroll container would clip. -->
 		<div
-			class="-m-1 grid min-h-0 flex-1 auto-rows-max grid-rows-1 content-start gap-4 overflow-y-auto p-1"
+			class={cn(
+				'-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1',
+				// the only row is the config editor, which fills the height
+				tab === 'configs' && 'grid-rows-1'
+			)}
 		>
 			{#if tab === 'mods'}
 				<Card.Root>
