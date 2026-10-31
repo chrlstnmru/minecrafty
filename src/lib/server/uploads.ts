@@ -152,6 +152,12 @@ export function uploadStatus(uploadId: string, instanceId: number, userId: numbe
 	return { have: s.received.flatMap((got, i) => (got ? [i] : [])), pieces: s.pieces };
 }
 
+/** Where an upload in progress is headed, so the rules can be applied again before it is placed. */
+export function pendingTarget(uploadId: string, instanceId: number, userId: number) {
+	const { dirRel, relPath } = session(uploadId, instanceId, userId);
+	return { dirRel, relPath };
+}
+
 /** Moves the finished file into place, after checking that all of it arrived. */
 export function finishUpload(uploadId: string, instanceId: number, userId: number) {
 	const s = session(uploadId, instanceId, userId);

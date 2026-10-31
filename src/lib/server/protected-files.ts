@@ -15,7 +15,7 @@ const ROOT_FOLDERS = new Set(['libraries']);
 const FORGE_LAUNCHER = /^forge-.*\.jar$/;
 
 /** One path segment as the filesystem may see it: Windows and macOS ignore case and trailing dots/spaces. */
-const fold = (segment: string) =>
+export const fold = (segment: string) =>
 	segment
 		.normalize('NFC')
 		.toLowerCase()
