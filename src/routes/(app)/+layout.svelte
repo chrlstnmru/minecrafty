@@ -8,6 +8,7 @@
 </script>
 
 <Sidebar.Provider
+	open={data.sidebarOpen}
 	class="h-svh"
 	style="--sidebar-width: calc(var(--spacing) * 72); --header-height: calc(var(--spacing) * 12);"
 >
