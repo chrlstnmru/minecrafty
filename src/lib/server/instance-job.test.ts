@@ -6,6 +6,7 @@ import { getProgress, runInstall, setProgress } from './install-progress';
 import { runUpdate } from './instance-job';
 import { getInstance, instanceDir } from './instances';
 import { assertWritable, busyWith, claim } from './operations';
+import { listAudit, setActorProvider } from './audit';
 import { lastOutcome } from './update-outcome';
 
 const opts = { kind: 'loader', backup: null } as const;
@@ -72,6 +73,35 @@ describe('runUpdate', () => {
 		} finally {
 			release();
 		}
+	});
+});
+
+describe('the audit log', () => {
+	it('records how an update ended, credited to whoever started it', async () => {
+		const row = makeInstance();
+		setActorProvider(() => ({ id: 7, name: 'alex' }));
+		const done = runUpdate(row.id, opts, async () => ({ set: {}, message: 'Updated to 1.21.5.' }));
+		// the request is over by the time the update settles
+		setActorProvider(() => null);
+		await done;
+		expect(listAudit({ instanceId: row.id })).toMatchObject([
+			{ action: 'loader.update.done', summary: 'Updated to 1.21.5.', actorId: 7, actorName: 'alex' }
+		]);
+	});
+
+	it('records a failure, with the same message the page shows', async () => {
+		const row = makeInstance();
+		await runUpdate(row.id, { kind: 'modpack', backup: null }, async ({ commit }) => {
+			commit();
+			throw new Error('disk full');
+		});
+		expect(listAudit({ instanceId: row.id })).toMatchObject([
+			{
+				action: 'modpack.update.failed',
+				summary: 'Update failed: The update stopped part way: disk full',
+				actorName: 'Panel'
+			}
+		]);
 	});
 });
 

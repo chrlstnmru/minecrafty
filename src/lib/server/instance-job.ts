@@ -1,6 +1,7 @@
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { eq } from 'drizzle-orm';
+import { currentActor, record } from './audit';
 import { writeBackup } from './backups';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -34,7 +35,8 @@ export type UpdateResult = {
  * settles when it is over, whichever way it went. The instance is claimed and marked installing
  * before this returns (and throws if something else holds it); on success it becomes ready with
  * `set` applied, on failure it becomes ready again or failed depending on whether the steps
- * reached the commit point, and the outcome is recorded either way.
+ * reached the commit point, and the outcome is recorded either way, in the audit log too, credited
+ * to whoever started the update.
  *
  * `backup` is the note for a backup taken first, or null for none.
  */
@@ -44,6 +46,7 @@ export function runUpdate(
 	steps: (tools: UpdateTools) => Promise<UpdateResult>
 ) {
 	const release = claim(instanceId, 'update');
+	const actor = currentActor();
 	db.update(instances)
 		.set({ installState: 'installing', installMessage: null })
 		.where(eq(instances.id, instanceId))
@@ -79,6 +82,7 @@ export function runUpdate(
 				.get();
 			writeInstanceMeta(row);
 			setOutcome(instanceId, { ok: true, message: result.message, details: result.details });
+			record({ action: `${opts.kind}.update.done`, summary: result.message, instanceId }, actor);
 		} catch (e) {
 			const message = e instanceof Error ? e.message : String(e);
 			console.error(`[${opts.kind}] update of #${instanceId} failed: ${message}`);
@@ -90,10 +94,12 @@ export function runUpdate(
 				)
 				.where(eq(instances.id, instanceId))
 				.run();
-			setOutcome(instanceId, {
-				ok: false,
-				message: committed ? `The update stopped part way: ${message}` : message
-			});
+			const failure = committed ? `The update stopped part way: ${message}` : message;
+			setOutcome(instanceId, { ok: false, message: failure });
+			record(
+				{ action: `${opts.kind}.update.failed`, summary: `Update failed: ${failure}`, instanceId },
+				actor
+			);
 		} finally {
 			rmSync(staging, { recursive: true, force: true });
 			clearProgress(instanceId);

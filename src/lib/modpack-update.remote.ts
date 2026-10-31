@@ -39,7 +39,7 @@ export const updateModpack = command(
 		void finished;
 		record({
 			action: 'modpack.update',
-			summary: `Updated the modpack to ${plan.versionNumber}`,
+			summary: `Started updating the modpack to ${plan.versionNumber}`,
 			instanceId: id
 		});
 		return { versionNumber: plan.versionNumber };
