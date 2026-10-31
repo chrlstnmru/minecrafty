@@ -240,6 +240,14 @@
 	// an empty field only keeps Create disabled; a mistake is shown once something is typed
 	const shownError = $derived(naming?.value.trim() ? nameError : undefined);
 
+	const nameHint = $derived(
+		naming?.from
+			? 'The path inside the server folder, such as config/mod.toml.'
+			: naming?.kind === 'folder'
+				? 'A folder name such as sodium. It cannot contain slashes.'
+				: 'A text file such as mod.toml, options.json or config.yml.'
+	);
+
 	function startNaming(kind: 'file' | 'folder', from?: string) {
 		naming = { kind, from, dir: target, value: from ?? '' };
 		namingOpen = true;
@@ -590,8 +598,13 @@
 						class="font-mono"
 						autocomplete="off"
 						aria-invalid={shownError ? true : undefined}
+						aria-describedby="config-path-help"
 					/>
-					{#if shownError}<Field.Error>{shownError}</Field.Error>{/if}
+					{#if shownError}
+						<Field.Error id="config-path-help">{shownError}</Field.Error>
+					{:else}
+						<Field.Description id="config-path-help">{nameHint}</Field.Description>
+					{/if}
 				</Field.Field>
 				<Dialog.Footer>
 					<Button type="button" variant="ghost" onclick={() => (namingOpen = false)}>Cancel</Button>
