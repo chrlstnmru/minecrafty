@@ -83,4 +83,8 @@ export const init: ServerInit = () => {
 	startUpdateChecks();
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
+	// On SIGTERM or SIGINT the adapter stops taking requests, then waits for the process to end on
+	// its own; the timers above would keep it alive for good (systemd then kills it after 90 s).
+	// Game servers run in their own runner processes and keep going.
+	process.once('sveltekit:shutdown', () => process.exit(0));
 };
