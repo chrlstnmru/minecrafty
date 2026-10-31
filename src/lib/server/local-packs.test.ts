@@ -246,6 +246,78 @@ describe('config files', () => {
 		P.removeOverride(pack.id, 'config/sodium.json');
 		expect(P.listOverrides(pack.id)).toEqual([]);
 	});
+
+	it('edits text: a new file, then a changed one adds a revision, an identical save adds none', async () => {
+		const pack = await make();
+		const revision = () => P.getPack(pack.id).revision;
+		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 1\n');
+		expect(revision()).toBe(pack.revision + 1);
+
+		const opened = P.readOverrideText(pack.id, 'config/a.toml');
+		expect(opened).toMatchObject({ content: 'x = 1\n', size: 6 });
+
+		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 1\n', opened.hash);
+		expect(revision()).toBe(pack.revision + 1);
+
+		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 2\n', opened.hash);
+		expect(revision()).toBe(pack.revision + 2);
+		expect(P.readOverrideText(pack.id, 'config/a.toml').content).toBe('x = 2\n');
+	});
+
+	it('refuses a save over a file that changed since it was opened, or a new file onto an existing one', async () => {
+		const pack = await make();
+		await P.writeOverrideText(pack.id, 'a.txt', 'one');
+		const { hash } = P.readOverrideText(pack.id, 'a.txt');
+		await P.writeOverrideText(pack.id, 'a.txt', 'two', hash);
+		await expect(P.writeOverrideText(pack.id, 'a.txt', 'three', hash)).rejects.toThrow(
+			'changed since you opened it'
+		);
+		expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('two');
+		await expect(P.writeOverrideText(pack.id, 'a.txt', 'new')).rejects.toThrow('already exists');
+		P.removeOverride(pack.id, 'a.txt');
+		await expect(P.writeOverrideText(pack.id, 'a.txt', 'again', hash)).rejects.toThrow(
+			'changed since you opened it'
+		);
+	});
+
+	it('keeps a byte order mark and refuses a type, size, binary file or path it cannot edit', async () => {
+		const pack = await make();
+		await P.writeOverrideText(pack.id, 'bom.txt', '﻿hi');
+		expect(P.readOverrideText(pack.id, 'bom.txt').content).toBe('﻿hi');
+
+		await expect(P.writeOverrideText(pack.id, 'mods/a.jar', 'x')).rejects.toThrow(
+			'cannot be edited'
+		);
+		await expect(P.writeOverrideText(pack.id, '../a.txt', 'x')).rejects.toThrow('unsafe');
+		await expect(
+			P.writeOverrideText(pack.id, 'big.txt', 'x'.repeat(2 * 1024 * 1024 + 1))
+		).rejects.toThrow('too large');
+
+		await P.saveOverride(pack.id, 'blob.json', new Uint8Array([123, 0, 125]));
+		expect(() => P.readOverrideText(pack.id, 'blob.json')).toThrow('binary');
+		expect(() => P.readOverrideText(pack.id, 'missing.json')).toThrow('not found');
+	});
+
+	it('moves a file into another folder in one revision, and refuses a missing source, an existing target or a path that leaves the folder', async () => {
+		const pack = await make();
+		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 1');
+		await P.writeOverrideText(pack.id, 'config/b.toml', 'y = 1');
+		const before = P.getPack(pack.id).revision;
+
+		P.moveOverride(pack.id, 'config/a.toml', 'config/sub/a.toml');
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual([
+			'config/b.toml',
+			'config/sub/a.toml'
+		]);
+
+		expect(() => P.moveOverride(pack.id, 'config/nope.toml', 'config/c.toml')).toThrow('not found');
+		expect(() => P.moveOverride(pack.id, 'config/b.toml', 'config/sub/a.toml')).toThrow(
+			'already exists'
+		);
+		expect(() => P.moveOverride(pack.id, 'config/b.toml', '../b.toml')).toThrow('unsafe');
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+	});
 });
 
 describe('the .mrpack', () => {
