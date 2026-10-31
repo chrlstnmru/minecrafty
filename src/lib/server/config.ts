@@ -1,8 +1,11 @@
-import { basename, resolve } from 'node:path';
+import { basename, join, resolve } from 'node:path';
 
 export const dataDir = resolve(process.env.MINECRAFTY_DATA ?? './data');
 
 export const instancesDir = resolve(dataDir, 'instances');
+
+export const instanceDir = (id: number) => join(instancesDir, String(id));
+export const serverDir = (id: number) => join(instanceDir(id), 'server');
 
 // zip backups live outside the instance folder so a restore or delete of the server never touches them
 export const backupsDir = resolve(dataDir, 'backups');

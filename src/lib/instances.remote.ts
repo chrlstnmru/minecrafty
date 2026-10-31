@@ -8,7 +8,7 @@ import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instanc
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
-import * as runner from '#lib/server/runner-client.js';
+import * as live from '#lib/server/live-server.js';
 import { backfillPackIcons } from '#lib/server/modpacks.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
 
@@ -174,7 +174,6 @@ export const consoleStream = query.live(id, async function* (instanceId) {
 	requirePermission(instanceId, 'console');
 	if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
 
-	const dir = instances.instanceDir(instanceId);
 	let state: ConsoleFrame['state'] = 'stopped';
 	let run: number | null = null;
 	let after = 0;
@@ -184,7 +183,7 @@ export const consoleStream = query.live(id, async function* (instanceId) {
 
 	// the runner may not exist yet (or exit and be replaced), so keep looking for one
 	while (true) {
-		const sub = await runner.subscribe(dir, instanceId, { after, run: run ?? undefined });
+		const sub = await live.subscribe(instanceId, { after, run: run ?? undefined });
 		if (!sub) {
 			if (state !== 'stopped') {
 				state = 'stopped';
@@ -223,10 +222,7 @@ export const sendCommand = command(
 	v.object({ id, line: v.pipe(v.string(), v.maxLength(1000)) }),
 	async ({ id: instanceId, line }) => {
 		requirePermission(instanceId, 'console');
-		const sent = await runner.send(instances.instanceDir(instanceId), instanceId, {
-			type: 'stdin',
-			line
-		});
+		const sent = await live.sendLine(instanceId, line);
 		if (!sent) error(400, 'Instance is not running');
 		record({
 			action: 'console.command',

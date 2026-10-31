@@ -14,12 +14,9 @@ import { and, desc, eq, inArray } from 'drizzle-orm';
 import { backupsDir } from './config';
 import { db } from './db';
 import { backups, instances } from './db/schema';
-import { isRunning } from './files';
 import { busyWith, claim } from './operations';
-import { getInstance, instanceDir, serverDir, wasInstalled } from './instances';
-import * as runner from './runner-client';
-import type { Subscription } from './runner-client';
-import type { ServerMessage } from '#runner/protocol.js';
+import { getInstance, serverDir, wasInstalled } from './instances';
+import { isRunning, withWorldSaved } from './live-server';
 import { listZipEntries } from './zip-entries';
 import { safeEntryName } from '#lib/safe-entry-name.js';
 import { extractZip } from './zip-extract';
@@ -65,82 +62,6 @@ export function getBackup(instanceId: number, backupId: number) {
 		.from(backups)
 		.where(and(eq(backups.id, backupId), eq(backups.instanceId, instanceId)))
 		.get();
-}
-
-/** How long to wait on the server while pausing saves; adjustable so tests need not wait. */
-export const timing = { quietMs: 300, saveOffMs: 15_000, saveAllMs: 120_000 };
-
-/** Whether the line is the server confirming something (it logs after "[Server thread/INFO]: "). */
-const SAVE_OFF_DONE = /Automatic saving is now disabled|Saving is already turned off/;
-const SAVE_ALL_DONE = /Saved the (game|world)/;
-
-/** Reads a runner's log in order, so a line is matched once and none is dropped between waits. */
-class LogWatcher {
-	private pending: ReturnType<Subscription['nextBatch']> | null = null;
-	private queue: ServerMessage[] = [];
-
-	constructor(private sub: Subscription) {}
-
-	/** One more message, or null after `ms` or when the runner closed. */
-	private async next(ms: number) {
-		if (!this.queue.length) {
-			this.pending ??= this.sub.nextBatch(50);
-			const batch = await Promise.race([
-				this.pending,
-				Bun.sleep(ms).then(() => 'timeout' as const)
-			]);
-			if (batch === 'timeout' || !batch) return batch === 'timeout' ? undefined : null;
-			this.pending = null;
-			this.queue.push(...batch);
-		}
-		return this.queue.shift();
-	}
-
-	/** Skips whatever is already logged (the replay of history), up to a quiet moment. */
-	async settle(quietMs: number) {
-		while (await this.next(quietMs)) continue;
-	}
-
-	/** True once a log line matching `pattern` arrives; false on timeout or when the runner ends. */
-	async until(pattern: RegExp, timeoutMs: number) {
-		const deadline = Date.now() + timeoutMs;
-		for (;;) {
-			const msg = await this.next(Math.max(0, deadline - Date.now()));
-			if (!msg) return false;
-			if (msg.type === 'log' && pattern.test(msg.line)) return true;
-		}
-	}
-}
-
-/**
- * Runs `work` with the world's autosave paused and flushed to disk when the server is
- * running, so the files copied are consistent. Autosave is always switched back on.
- */
-async function withWorldSaved<T>(instanceId: number, work: () => Promise<T>) {
-	if (!(await isRunning(instanceId))) return work();
-	const dir = instanceDir(instanceId);
-	const sub = await runner.subscribe(dir, instanceId);
-	if (!sub) return work();
-
-	const log = new LogWatcher(sub);
-	const command = (line: string) => runner.send(dir, instanceId, { type: 'stdin', line });
-	try {
-		// the replayed history can hold old confirmations; only what follows the commands counts
-		await log.settle(timing.quietMs);
-		await command('save-off');
-		try {
-			if (!(await log.until(SAVE_OFF_DONE, timing.saveOffMs)))
-				throw new Error('The server did not confirm it paused saving');
-			await command('save-all flush');
-			if (!(await log.until(SAVE_ALL_DONE, timing.saveAllMs)))
-				throw new Error('The server did not finish saving the world');
-			return await work();
-		} finally {
-			await command('save-on');
-		}
-	} finally {
-		sub.close();
-	}
 }
 
 function stamp(date = new Date()) {

@@ -53,6 +53,7 @@ vi.mock('./runner-client', () => ({
 }));
 
 const B = await import('./backups');
+const L = await import('./live-server');
 const { deleteInstance, getInstance, instanceDir, serverDir } = await import('./instances');
 
 let id: number;
@@ -63,7 +64,7 @@ const put = (rel: string, content: string) => {
 };
 
 beforeEach(() => {
-	Object.assign(B.timing, { quietMs: 30, saveOffMs: 300, saveAllMs: 300 });
+	Object.assign(L.saveTiming, { quietMs: 30, saveOffMs: 300, saveAllMs: 300 });
 	Object.assign(fake, {
 		running: false,
 		sent: [],

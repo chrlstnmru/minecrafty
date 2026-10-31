@@ -7,7 +7,7 @@ import * as backups from '#lib/server/backups.js';
 import { requirePermission } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import { getInstance } from '#lib/server/instances.js';
-import { isRunning } from '#lib/server/files.js';
+import { isRunning } from '#lib/server/live-server.js';
 
 /** The backups with the settings that govern them, and whether the server runs (restore needs it stopped). */
 export const instanceBackups = query(idSchema, async (instanceId) => {

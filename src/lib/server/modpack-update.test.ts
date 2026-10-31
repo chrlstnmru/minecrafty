@@ -12,6 +12,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
@@ -21,7 +22,6 @@ import { zipStream, type ZipEntry } from './zip-writer';
 // Modrinth, the downloads, the runner and the installer are replaced: what matters is what an
 // update does to the server folder, the Mods tab and the instance, given two versions of a pack.
 const fake = vi.hoisted(() => ({
-	running: false,
 	content: new Map<string, string>(),
 	failUrl: null as string | null,
 	known: new Map<string, { project_id: string; id: string; version_number: string }>(),
@@ -41,12 +41,7 @@ vi.mock('./local-packs', async (original) => ({
 	loadLocalPack: async (packId: number) => fake.builder.get(packId)!.loaded
 }));
 
-vi.mock('./runner-client', () => ({
-	status: async () =>
-		fake.running ? { state: 'running', pid: 1, startedAt: 0, exitCode: null } : null,
-	send: async () => true,
-	subscribe: async () => null
-}));
+vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
 
 vi.mock('./java', () => ({
 	ensureJava: async () => '/fake/java',
@@ -232,8 +227,8 @@ const run = async (
 };
 
 beforeEach(() => {
+	runner.running = false;
 	Object.assign(fake, {
-		running: false,
 		failUrl: null,
 		installs: []
 	});
@@ -549,7 +544,7 @@ describe('refusals', () => {
 	});
 
 	it('a running server', async () => {
-		fake.running = true;
+		runner.running = true;
 		await expect(
 			U.startModpackUpdate(id, { versionId: 'V2', backup: false, replaceConfigs: false })
 		).rejects.toThrow(/Stop the server/);

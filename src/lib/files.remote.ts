@@ -8,6 +8,7 @@ import { assertMayWriteCode } from '#lib/server/host-code.js';
 import * as uploads from '#lib/server/uploads.js';
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
+import { isRunning } from '#lib/server/live-server.js';
 
 const id = idSchema;
 const location = v.object({ id, path: filePathSchema });
@@ -16,7 +17,7 @@ export const listFiles = query(location, async ({ id: instanceId, path }) => {
 	requirePermission(instanceId, 'files');
 	return userFacing(async () => ({
 		...files.listDirectory(instanceId, path),
-		running: await files.isRunning(instanceId)
+		running: await isRunning(instanceId)
 	}));
 });
 

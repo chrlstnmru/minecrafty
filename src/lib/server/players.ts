@@ -2,10 +2,8 @@ import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { PlayerAction } from '#lib/schemas/players.js';
-import { isRunning } from './files';
 import { getInstance, serverDir } from './instances';
-import { RconError } from './rcon';
-import { rconCommand } from './rcon-sessions';
+import { isRunning, LiveServerError, rcon } from './live-server';
 import { readProperties, setProperties } from './server-properties';
 
 export type ListedPlayer = { uuid: string; name: string };
@@ -119,35 +117,16 @@ export function parseList(reply: string) {
 	};
 }
 
-function rconTarget(instanceId: number) {
-	const inst = getInstance(instanceId);
-	if (!inst) throw new Error('Instance not found');
-	if (!inst.rconPort || !inst.rconPassword) return null;
-	return { port: inst.rconPort, password: inst.rconPassword };
-}
-
-const rconProblem = (e: unknown) =>
-	e instanceof RconError && (e.kind === 'refused' || e.kind === 'timeout')
-		? 'RCON is not answering yet. It is switched on when the server starts, so a server that was already running needs a restart; a server that is still starting needs a moment.'
-		: e instanceof Error
-			? e.message
-			: 'Could not reach the server';
-
 /** Who is on the server right now. */
 export async function onlinePlayers(instanceId: number): Promise<Online> {
 	if (!(await isRunning(instanceId))) return { state: 'stopped' };
-	const target = rconTarget(instanceId);
-	if (!target)
+	try {
+		return { state: 'online', ...parseList(await rcon(instanceId, 'list')) };
+	} catch (e) {
 		return {
 			state: 'unavailable',
-			reason:
-				'RCON is switched on the next time the server starts. Restart it to see who is online.'
+			reason: e instanceof Error ? e.message : 'Could not reach the server'
 		};
-	try {
-		const reply = await rconCommand(instanceId, target, 'list');
-		return { state: 'online', ...parseList(reply) };
-	} catch (e) {
-		return { state: 'unavailable', reason: rconProblem(e) };
 	}
 }
 
@@ -313,15 +292,8 @@ export async function runPlayerAction(instanceId: number, action: PlayerAction) 
 	if (!getInstance(instanceId)) throw new Error('Instance not found');
 	if (!(await isRunning(instanceId))) return editFiles(instanceId, action);
 
-	const target = rconTarget(instanceId);
-	if (!target)
-		throw new Error('RCON is switched on the next time the server starts. Restart it first.');
-	try {
-		const reply = await rconCommand(instanceId, target, commandFor(action));
-		return reply.replace(/§./g, '').trim() || 'Done';
-	} catch (e) {
-		throw new Error(rconProblem(e));
-	}
+	const reply = await rcon(instanceId, commandFor(action));
+	return reply.replace(/§./g, '').trim() || 'Done';
 }
 
 /** Turns the whitelist on or off: a command while running, the setting while stopped. */
@@ -329,11 +301,10 @@ export async function setWhitelistEnabled(instanceId: number, enabled: boolean) 
 	if (!getInstance(instanceId)) throw new Error('Instance not found');
 	setProperties(file(instanceId, 'server.properties'), { 'white-list': enabled });
 	if (!(await isRunning(instanceId))) return;
-	const target = rconTarget(instanceId);
-	if (!target) return;
 	try {
-		await rconCommand(instanceId, target, `whitelist ${enabled ? 'on' : 'off'}`);
+		await rcon(instanceId, `whitelist ${enabled ? 'on' : 'off'}`);
 	} catch (e) {
-		throw new Error(rconProblem(e));
+		// RCON never switched on: the setting is in the file and applies at the next start
+		if (!(e instanceof LiveServerError && e.kind === 'no-rcon')) throw e;
 	}
 }

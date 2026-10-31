@@ -2,14 +2,14 @@ import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
-import { backupsDir, instancesDir, javaOverride, runnerCommand } from './config';
+import { backupsDir, instanceDir, javaOverride, runnerCommand, serverDir } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import { clearProgress, getProgress, setProgress } from './install-progress';
 import { busyWith } from './operations';
-import * as runner from './runner-client';
+import * as live from './live-server';
 import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;
@@ -18,8 +18,7 @@ export type InstanceState = 'stopped' | RunnerStatus['state'];
 export const PORT_START = 25565;
 const RCON_PORT_START = 25575;
 
-export const instanceDir = (id: number) => join(instancesDir, String(id));
-export const serverDir = (id: number) => join(instanceDir(id), 'server');
+export { instanceDir, serverDir };
 
 /** RCON gets its own port and a password the first time it is needed; both stay the same after. */
 export function ensureRcon(id: number) {
@@ -228,7 +227,7 @@ export async function listInstances() {
 	const rows = db.select().from(instances).all();
 	return Promise.all(
 		rows.map(async ({ rconPassword: _secret, ...row }) => {
-			const s = await runner.status(instanceDir(row.id), row.id);
+			const s = await live.status(row.id);
 			return {
 				...row,
 				state: (s?.state ?? 'stopped') as InstanceState,
@@ -256,12 +255,12 @@ export async function startInstance(id: number) {
 	if (busyWith(id) === 'restore') throw new Error('Wait for the restore to finish');
 
 	const dir = instanceDir(id);
-	let live = await runner.status(dir, id);
-	if (live && live.state !== 'exited') throw new Error('Instance is already running');
+	let current = await live.status(id);
+	if (current && current.state !== 'exited') throw new Error('Instance is already running');
 	// a finished runner lingers briefly so subscribers see the exit; let it go first
-	for (let i = 0; live && i < 30; i++) {
+	for (let i = 0; current && i < 30; i++) {
 		await Bun.sleep(100);
-		live = await runner.status(dir, id);
+		current = await live.status(id);
 	}
 
 	const server = serverDir(id);
@@ -301,7 +300,7 @@ export async function startInstance(id: number) {
 
 	// wait for the runner to come up so the caller sees a consistent state
 	for (let i = 0; i < 30; i++) {
-		if (await runner.status(dir, id)) return;
+		if (await live.status(id)) return;
 		if (proc.exitCode !== null) break;
 		await Bun.sleep(100);
 	}
@@ -309,21 +308,7 @@ export async function startInstance(id: number) {
 }
 
 export async function stopInstance(id: number) {
-	await runner.send(instanceDir(id), id, { type: 'stop' });
-}
-
-/** How long a restart waits for the server to stop; adjustable so tests need not wait. */
-export const stopTiming = { timeoutMs: 3 * 60_000, pollMs: 500 };
-
-/** Resolves true once the instance's server has exited, false if it still runs after the timeout. */
-export async function waitForExit(id: number) {
-	const deadline = Date.now() + stopTiming.timeoutMs;
-	for (;;) {
-		const live = await runner.status(instanceDir(id), id);
-		if (!live || live.state === 'exited') return true;
-		if (Date.now() >= deadline) return false;
-		await Bun.sleep(stopTiming.pollMs);
-	}
+	await live.stop(id);
 }
 
 /**
@@ -331,23 +316,22 @@ export async function waitForExit(id: number) {
  * it again. A server that is not running is just started.
  */
 export async function restartInstance(id: number) {
-	const live = await runner.status(instanceDir(id), id);
-	if (live && live.state !== 'exited') {
+	if (await live.isRunning(id)) {
 		await stopInstance(id);
-		if (!(await waitForExit(id))) throw new Error('The server did not stop within three minutes');
+		if (!(await live.waitForExit(id)))
+			throw new Error('The server did not stop within three minutes');
 	}
 	await startInstance(id);
 }
 
 export async function killInstance(id: number) {
-	await runner.send(instanceDir(id), id, { type: 'kill' });
+	await live.kill(id);
 }
 
 export async function deleteInstance(id: number) {
 	if (getInstance(id)?.installState === 'installing')
 		throw new Error('Wait for the install to finish before deleting it');
-	const live = await runner.status(instanceDir(id), id);
-	if (live && live.state !== 'exited') throw new Error('Stop the instance before deleting it');
+	if (await live.isRunning(id)) throw new Error('Stop the instance before deleting it');
 	db.delete(instances).where(eq(instances.id, id)).run();
 	removeInstanceFiles(id);
 }
