@@ -321,6 +321,27 @@ describe('config files', () => {
 		expect(() => P.readOverrideText(pack.id, 'missing.json')).toThrow('not found');
 	});
 
+	it('deletes a folder with everything in it as one revision, and refuses a missing folder, a file, the root or a path that leaves it', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'config/sodium/a.json', bytes },
+			{ rel: 'config/sodium/deep/b.json', bytes },
+			{ rel: 'config/keep.toml', bytes }
+		]);
+		const before = P.getPack(pack.id).revision;
+
+		expect(P.removeOverrideFolder(pack.id, 'config/sodium')).toBe(2);
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual(['config/keep.toml']);
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+
+		expect(() => P.removeOverrideFolder(pack.id, 'config/sodium')).toThrow('not found');
+		expect(() => P.removeOverrideFolder(pack.id, 'config/keep.toml')).toThrow('not found');
+		expect(() => P.removeOverrideFolder(pack.id, '')).toThrow('unsafe');
+		expect(() => P.removeOverrideFolder(pack.id, '../x')).toThrow('unsafe');
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+	});
+
 	it('moves a file into another folder in one revision, and refuses a missing source, an existing target or a path that leaves the folder', async () => {
 		const pack = await make();
 		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 1');

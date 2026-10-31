@@ -215,6 +215,16 @@ export const savePackConfig = command(
 	}
 );
 
+export const removePackConfigFolder = command(overridePathSchema, async ({ id, path }) => {
+	requirePanel('modpacks.write');
+	const removed = await userFacing(async () => packs.removeOverrideFolder(id, path));
+	record({
+		action: 'pack.config',
+		summary: `Removed the config folder ${path} (${removed} ${removed === 1 ? 'file' : 'files'}) from the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
 export const movePackConfig = command(movePackConfigSchema, async ({ id, from, to }) => {
 	const user = requirePanel('modpacks.write');
 	await userFacing(async () => {

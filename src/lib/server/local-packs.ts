@@ -561,6 +561,18 @@ export function moveOverride(packId: number, from: string, to: string) {
 	bump(packId);
 }
 
+/** Deletes a folder of config files with everything in it, as one revision. Returns how many files went. */
+export function removeOverrideFolder(packId: number, rel: string) {
+	requirePack(packId);
+	const dest = safeJoin(overridesDir(packId), rel);
+	if (!existsSync(dest) || !statSync(dest).isDirectory()) throw new Error('Folder not found');
+	const prefix = `${rel.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')}/`;
+	const removed = listOverrides(packId).filter((f) => f.path.startsWith(prefix)).length;
+	rmSync(dest, { recursive: true, force: true });
+	bump(packId);
+	return removed;
+}
+
 export function removeOverride(packId: number, rel: string) {
 	requirePack(packId);
 	const dest = safeJoin(overridesDir(packId), rel);

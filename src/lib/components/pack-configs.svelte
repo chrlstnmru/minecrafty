@@ -14,6 +14,7 @@
 		getLocalPack,
 		movePackConfig,
 		readPackConfig,
+		removePackConfigFolder,
 		removePackOverride,
 		savePackConfig
 	} from '#lib/builder.remote.js';
@@ -194,6 +195,39 @@
 			if (open === path) show(null);
 		} catch (e) {
 			toast.error(message(e, 'Could not remove the file'));
+		}
+	}
+
+	const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+
+	let deletingFolder = $state<{ path: string; count: number } | null>(null);
+	let deletingOpen = $state(false);
+
+	/** Forgets a folder the page was showing: its empty-folder marks, the target and the open file. */
+	function forgetFolder(path: string) {
+		emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
+		if (under(targetDir, path)) targetDir = dirOf(path);
+		if (open && under(open, path)) show(null);
+	}
+
+	function askDeleteFolder(path: string) {
+		const count = files.filter((f) => under(f.path, path)).length;
+		// a folder made here that holds nothing is not on the server, so there is nothing to confirm
+		if (!count) return forgetFolder(path);
+		deletingFolder = { path, count };
+		deletingOpen = true;
+	}
+
+	async function deleteFolder() {
+		const folder = deletingFolder;
+		deletingOpen = false;
+		if (!folder) return;
+		try {
+			await removePackConfigFolder({ id, path: folder.path });
+			forgetFolder(folder.path);
+			toast.success(`Deleted ${folder.path}`);
+		} catch (e) {
+			toast.error(message(e, 'Could not delete the folder'));
 		}
 	}
 
@@ -461,6 +495,18 @@
 						onselectfolder={(path) => (targetDir = path)}
 						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
 					>
+						{#snippet folderTrailing(folder)}
+							{#if canWrite}
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label="Delete the folder {folder.path}"
+									onclick={() => askDeleteFolder(folder.path)}
+								>
+									<TrashIcon />
+								</Button>
+							{/if}
+						{/snippet}
 						{#snippet trailing(file)}
 							{#if file.pending}
 								<Button
@@ -616,6 +662,25 @@
 		{/if}
 	</Dialog.Content>
 </Dialog.Root>
+
+<AlertDialog.Root bind:open={deletingOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Delete {deletingFolder?.path}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				This removes the folder and its {deletingFolder?.count}
+				{deletingFolder?.count === 1 ? 'file' : 'files'} from the pack. It cannot be undone.
+				{#if deletingFolder && open && unsaved && under(open, deletingFolder.path)}
+					Your unsaved edits to {open} are lost too.
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Keep it</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={deleteFolder}>Delete</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
 
 <AlertDialog.Root
 	bind:open={confirmDiscard}
