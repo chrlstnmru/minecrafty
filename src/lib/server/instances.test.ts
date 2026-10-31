@@ -1,9 +1,12 @@
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
 import { makeInstance } from '#test/instance.js';
 import { setProgress, clearProgress } from './install-progress';
 import * as I from './instances';
 import { claim } from './operations';
+import { db } from './db';
+import { instances } from './db/schema';
 
 describe('ports', () => {
 	it('suggests the first free port from 25565 upward', () => {
@@ -16,8 +19,30 @@ describe('ports', () => {
 	});
 
 	it('refuses two instances on one port', () => {
-		makeInstance({ port: 27001 });
-		expect(() => makeInstance({ port: 27001 })).toThrow(/UNIQUE/);
+		makeInstance({ port: 27001, name: 'First' });
+		expect(() => makeInstance({ port: 27001 })).toThrow('Port 27001 is used by First');
+	});
+
+	it('skips RCON ports, and refuses a game port that is one', () => {
+		const a = makeInstance({ port: 27100, name: 'Alpha' });
+		// RCON on the port that would be suggested next
+		const rcon = I.nextFreePort();
+		db.update(instances)
+			.set({ rconPort: rcon, rconPassword: 'x' })
+			.where(eq(instances.id, a.id))
+			.run();
+		expect(I.nextFreePort()).not.toBe(rcon);
+
+		expect(() => makeInstance({ port: rcon })).toThrow(`Port ${rcon} is the RCON port of Alpha`);
+		const b = makeInstance({ port: 27101 });
+		expect(() => I.updateSettings(b.id, { ...I.getInstance(b.id)!, port: rcon })).toThrow(
+			/RCON port of Alpha/
+		);
+		expect(() => I.updateSettings(a.id, { ...I.getInstance(a.id)!, port: rcon })).toThrow(
+			"this server's RCON port"
+		);
+		expect(I.portConflict(new I.PortTakenError('x'))).toBe('x');
+		expect(I.portConflict(new Error('boom'))).toBeNull();
 	});
 });
 
@@ -151,11 +176,18 @@ describe('RCON', () => {
 	});
 
 	it('gives every instance its own port, never one that is a game port', () => {
-		const a = makeInstance({ port: 25575 }).id;
+		// find the RCON port the next instance would get, then free it and put a game server on it
+		const probe = makeInstance().id;
+		const next = I.ensureRcon(probe).port;
+		db.update(instances)
+			.set({ rconPort: null, rconPassword: null })
+			.where(eq(instances.id, probe))
+			.run();
+		const a = makeInstance({ port: next }).id;
 		const b = makeInstance().id;
 		const ports = [I.ensureRcon(a).port, I.ensureRcon(b).port];
 		expect(new Set(ports).size).toBe(2);
-		expect(ports).not.toContain(25575);
+		expect(ports).not.toContain(next);
 	});
 
 	it('gives each instance a different password', () => {

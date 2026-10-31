@@ -17,6 +17,7 @@ import { PACK_LOADERS } from '#lib/pack-loaders.js';
 import { requirePanel } from '#lib/server/auth.js';
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
+import { portConflict } from '#lib/server/instances.js';
 import * as packs from '#lib/server/local-packs.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
 
@@ -180,8 +181,8 @@ export const installPack = command(installFromPackSchema, async ({ id, ...opts }
 			});
 			return { id: row.id };
 		} catch (e) {
-			if (String(e).includes('UNIQUE')) throw new Error('Port is already used by another instance');
-			throw e;
+			const port = portConflict(e);
+			throw port ? new Error(port) : e;
 		}
 	});
 });

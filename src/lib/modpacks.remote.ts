@@ -6,6 +6,7 @@ import { importModpackSchema } from '#lib/schemas/modpack.js';
 import { requirePanel } from '#lib/server/auth.js';
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
+import { portConflict } from '#lib/server/instances.js';
 import * as modpacks from '#lib/server/modpacks.js';
 
 export const searchModpacks = query(
@@ -44,8 +45,8 @@ export const importModpack = form(importModpackSchema, async (data, issue) => {
 			instanceId: row.id
 		});
 	} catch (e) {
-		if (String(e).includes('UNIQUE'))
-			invalid(issue.port('Port is already used by another instance'));
+		const port = portConflict(e);
+		if (port) invalid(issue.port(port));
 		invalid(e instanceof Error ? e.message : 'Could not import the modpack');
 	}
 });
