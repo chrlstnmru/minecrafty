@@ -328,11 +328,13 @@
 			Copied into every server made from this pack, and into the .mrpack under overrides/.
 		</Card.Description>
 	</Card.Header>
-	<Card.Content class="grid flex-1 gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
+	<Card.Content
+		class="grid min-h-0 flex-1 gap-4 max-md:overflow-y-auto md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
+	>
 		<div
 			role="group"
 			aria-label="Config files"
-			class="flex min-h-64 min-w-0 flex-col gap-1 rounded-lg border p-2 {dragging
+			class="flex min-h-0 min-w-0 flex-col gap-1 rounded-lg border p-2 max-md:min-h-64 {dragging
 				? 'bg-accent/30 ring-2 ring-ring/50'
 				: ''}"
 			ondragover={(event) => {
@@ -473,7 +475,7 @@
 			</div>
 		</div>
 
-		<div class="grid h-full min-w-0 grid-rows-[auto_1fr] content-start gap-3">
+		<div class="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] content-start gap-3">
 			{#if open === null}
 				<Empty.Root class="p-8">
 					<Empty.Header>
@@ -512,6 +514,7 @@
 							readonly={!canWrite}
 							onsave={save}
 							onformat={canWrite ? format : undefined}
+							class="max-md:h-96"
 						/>
 					{/key}
 				{/if}
