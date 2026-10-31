@@ -364,7 +364,7 @@
 		<div
 			role="group"
 			aria-label="Config files"
-			class="flex min-h-0 min-w-0 flex-col gap-1 rounded-lg border p-2 max-md:min-h-64 {dragging
+			class="flex min-h-0 min-w-0 flex-col overflow-hidden rounded-lg border max-md:min-h-64 {dragging
 				? 'bg-accent/30 ring-2 ring-ring/50'
 				: ''}"
 			ondragover={(event) => {
@@ -382,7 +382,7 @@
 				void drop(event.dataTransfer, '');
 			}}
 		>
-			<div class="flex items-center gap-1 ps-1.5">
+			<div class="flex items-center gap-1 border-b bg-muted/50 py-1.5 ps-3 pe-2">
 				<button
 					type="button"
 					class="min-w-0 flex-1 truncate rounded-sm text-start font-mono text-xs {target === ''
@@ -435,7 +435,7 @@
 					}}
 				/>
 			{/if}
-			<div class="min-h-0 flex-1 overflow-y-auto">
+			<div class="min-h-0 flex-1 overflow-y-auto p-2">
 				{#if tree.length}
 					<FileTree
 						nodes={tree}
