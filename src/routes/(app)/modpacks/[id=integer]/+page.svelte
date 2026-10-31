@@ -57,7 +57,6 @@
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
-	// ---- mods ----
 	const inPack = $derived(
 		new Set((pack.current?.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
 	);
@@ -107,7 +106,6 @@
 
 	const sideLabel = (side: string | null) => (side === 'unsupported' ? 'no' : (side ?? '?'));
 
-	// ---- config files ----
 	let folder = $state('config');
 	let uploading = $state(false);
 	let fileInput = $state<HTMLInputElement>();
@@ -146,7 +144,6 @@
 				? `${(bytes / 1024).toFixed(1)} KB`
 				: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
-	// ---- icon ----
 	let iconInput = $state<HTMLInputElement>();
 	let iconBusy = $state(false);
 
@@ -179,7 +176,6 @@
 		}
 	}
 
-	// ---- settings ----
 	let name = $state('');
 	let description = $state('');
 	// load the saved values when the pack arrives or changes

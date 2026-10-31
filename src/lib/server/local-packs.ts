@@ -62,8 +62,6 @@ function bump(id: number) {
 		.run();
 }
 
-// ---- the pack's icon ----
-
 /** The image's kind from its first bytes, not from a name or type the uploader chose. */
 function sniffIcon(bytes: Uint8Array): IconExt | null {
 	const starts = (...sig: number[]) => sig.every((b, i) => bytes[i] === b);
@@ -243,8 +241,6 @@ export function duplicatePack(id: number) {
 	});
 }
 
-// ---- the mods of a pack ----
-
 /** Searches Modrinth for mods that run in this pack. */
 export async function searchMods(packId: number, query: string, limit: number) {
 	const pack = requirePack(packId);
@@ -368,8 +364,6 @@ export async function setModVersion(packId: number, fileId: number, versionId: s
 	bump(packId);
 }
 
-// ---- changing the Minecraft version ----
-
 export type VersionChange = {
 	mcVersion: string;
 	/** mods with a version for the new Minecraft version */
@@ -453,8 +447,6 @@ export async function applyVersionChange(
 	return { updated: rows.size, removed: preview.incompatible.length };
 }
 
-// ---- loader version ----
-
 /** The loader builds a pack may use on its Minecraft version, newest first. */
 export async function packLoaderBuilds(packId: number) {
 	const pack = requirePack(packId);
@@ -471,8 +463,6 @@ export async function setLoaderVersion(packId: number, loaderVersion: string) {
 	bump(packId);
 }
 
-// ---- config files ----
-
 /** Stores a config file at a path inside the server folder (a path that leaves it is refused). */
 export async function saveOverride(packId: number, rel: string, bytes: Uint8Array) {
 	requirePack(packId);
@@ -488,8 +478,6 @@ export function removeOverride(packId: number, rel: string) {
 	rmSync(dest, { force: true });
 	bump(packId);
 }
-
-// ---- .mrpack ----
 
 const MAX_ENV = { required: 'required', optional: 'optional', unsupported: 'unsupported' } as const;
 
