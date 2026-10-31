@@ -15,7 +15,7 @@ export type AuditInput = {
 	instanceId?: number | null;
 };
 
-type Actor = { id: number | null; name: string };
+export type Actor = { id: number | null; name: string };
 
 type ActorProvider = () => Actor | null;
 let provider: ActorProvider | null = null;
@@ -28,8 +28,11 @@ export function setActorProvider(next: ActorProvider) {
 	provider = next;
 }
 
-/** Whoever made the request, or the panel itself when there is none (a schedule, a start at boot). */
-function currentActor(): Actor {
+/**
+ * Whoever made the request, or the panel itself when there is none (a schedule, a start at boot).
+ * Work that outlives its request takes this while the request is still there.
+ */
+export function currentActor(): Actor {
 	try {
 		const actor = provider?.();
 		if (actor) return actor;

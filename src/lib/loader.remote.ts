@@ -40,7 +40,7 @@ export const updateLoader = command(updateSchema, async ({ id, mcVersion, build,
 	void finished;
 	record({
 		action: 'loader.update',
-		summary: `Updated the loader to Minecraft ${mcVersion}${build ? ` (build ${build})` : ''}${backup ? ' (with a backup)' : ''}`,
+		summary: `Started updating the loader to Minecraft ${mcVersion}${build ? ` (build ${build})` : ''}${backup ? ' (with a backup)' : ''}`,
 		instanceId: id
 	});
 	return started;
