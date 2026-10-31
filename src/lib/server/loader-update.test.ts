@@ -11,6 +11,7 @@ import { instances } from './db/schema';
 const fake = vi.hoisted(() => ({
 	running: false,
 	builds: {} as Record<string, string | null | undefined>,
+	lists: {} as Record<string, string[]>,
 	known: new Set<string>(),
 	install: null as null | ((dir: string, mc: string, build?: string) => void),
 	seen: [] as { dir: string; mc: string; build?: string }[]
@@ -34,6 +35,7 @@ vi.mock('./loaders', async (original) => ({
 	isKnownVersion: async (_loader: string, mc: string) => fake.known.has(mc),
 	getMinecraftVersions: async () => [...fake.known],
 	latestBuild: async (_loader: string, mc: string) => fake.builds[mc],
+	loaderBuilds: async (_loader: string, mc: string) => fake.lists[mc] ?? [],
 	launchArgs: () => ['-jar', 'server.jar', 'nogui'],
 	installServer: async (o: { serverDir: string; mc: string; build?: string }) => {
 		fake.seen.push({ dir: o.serverDir, mc: o.mc, build: o.build });
@@ -59,6 +61,7 @@ beforeEach(() => {
 	Object.assign(fake, {
 		running: false,
 		builds: { '1.21.4': '130', '1.21.5': '140', '1.20.1': '20' },
+		lists: { '1.21.4': ['130', '125', '120'], '1.21.5': ['140', '135'] },
 		known: new Set(['1.21.5', '1.21.4', '1.20.1']),
 		install: (dir: string, mc: string, build?: string) =>
 			writeFileSync(join(dir, 'server.jar'), `${mc}-${build}`),
@@ -79,6 +82,28 @@ const run = async (mcVersion: string, backup = false) => {
 };
 
 describe('startLoaderUpdate', () => {
+	it('installs a build picked by hand, an older one too', async () => {
+		const started = await U.startLoaderUpdate(id, {
+			mcVersion: '1.21.4',
+			build: '125',
+			backup: false
+		});
+		await started.finished;
+		expect(fake.seen[0]).toMatchObject({ mc: '1.21.4', build: '125' });
+		expect(state()).toMatchObject({ loaderVersion: '125', installState: 'ready' });
+		expect(await U.buildsFor(id, '1.21.5')).toEqual(['140', '135']);
+	});
+
+	it('refuses a build the loader does not have, or the one it already runs', async () => {
+		await expect(
+			U.startLoaderUpdate(id, { mcVersion: '1.21.5', build: '130', backup: false })
+		).rejects.toThrow('paper has no build 130 for Minecraft 1.21.5');
+		await expect(
+			U.startLoaderUpdate(id, { mcVersion: '1.21.4', build: '120', backup: false })
+		).rejects.toThrow(/Already up to date/);
+		expect(fake.seen).toEqual([]);
+	});
+
 	it('replaces the server jar with the newest build and records it', async () => {
 		const started = await run('1.21.4');
 		expect(started.kind).toBe('build');

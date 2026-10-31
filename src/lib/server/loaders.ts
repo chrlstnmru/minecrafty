@@ -152,6 +152,56 @@ export async function latestBuild(loader: Loader, mc: string): Promise<string | 
 	}
 }
 
+/** Every stable build of a loader for a Minecraft version, newest first, for picking one by hand. Vanilla has none. */
+export async function loaderBuilds(loader: Loader, mc: string): Promise<string[]> {
+	switch (loader) {
+		case 'vanilla':
+			return [];
+		case 'paper': {
+			const builds = (await paperBuilds(mc)).toSorted((a, b) => b.id - a.id);
+			const stable = builds.filter((b) => b.channel === 'STABLE');
+			return (stable.length ? stable : builds).map((b) => String(b.id));
+		}
+		case 'purpur': {
+			const v = await cached(`purpur:${mc}`, () =>
+				getJson<{ builds: { latest: string; all?: string[] } }>(`${PURPUR}/${mc}`)
+			);
+			return (v.builds.all ?? [v.builds.latest]).toReversed();
+		}
+		case 'fabric':
+			return newestFirst(
+				(await cached('fabric:loader', () => getJson<MetaVersion[]>(`${FABRIC}/loader`))).map(
+					(l) => l.version
+				)
+			);
+		case 'quilt':
+			return newestFirst(
+				(await cached('quilt:loader', () => getJson<{ version: string }[]>(`${QUILT}/loader`))).map(
+					(l) => l.version
+				)
+			);
+		case 'forge': {
+			const xml = await cached('forge:maven', async () => {
+				const res = await fetch(`${FORGE_MAVEN}/maven-metadata.xml`, {
+					signal: AbortSignal.timeout(15_000)
+				});
+				if (!res.ok) throw new Error(`Forge's version list responded ${res.status}`);
+				return res.text();
+			});
+			// entries read <minecraft>-<forge>, such as 1.20.1-47.3.0
+			const prefix = `${mc}-`;
+			return newestFirst(
+				[...xml.matchAll(/<version>([^<]+)<\/version>/g)]
+					.map((m) => m[1])
+					.filter((v) => v.startsWith(prefix))
+					.map((v) => v.slice(prefix.length))
+			);
+		}
+		case 'neoforge':
+			return (await neoforgeVersions()).get(mc) ?? [];
+	}
+}
+
 export async function isKnownVersion(loader: Loader, mc: string) {
 	return (await getMinecraftVersions(loader)).includes(mc);
 }

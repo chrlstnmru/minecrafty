@@ -12,12 +12,14 @@
 		applyPackVersionChange,
 		deleteLocalPack,
 		getLocalPack,
+		packLoaderBuilds,
 		packMinecraftVersions,
 		previewPackVersionChange,
 		removePackFile,
 		removePackIcon,
 		removePackOverride,
 		setPackFileVersion,
+		setPackLoaderVersion,
 		updateLocalPack
 	} from '#lib/builder.remote.js';
 	import Combobox from '#lib/components/combobox.svelte';
@@ -220,6 +222,29 @@
 			toast.error(message(e, 'Could not change the version'));
 		} finally {
 			applying = false;
+		}
+	}
+
+	let nextBuild = $state('');
+	const builds = $derived(pack.current ? packLoaderBuilds({ id }) : null);
+	const buildOptions = $derived(
+		(builds?.current ?? []).map((b, i) => ({
+			value: b,
+			label: i === 0 ? `${b} (newest)` : b
+		}))
+	);
+	let savingBuild = $state(false);
+
+	async function saveBuild() {
+		savingBuild = true;
+		try {
+			await setPackLoaderVersion({ id, loaderVersion: nextBuild });
+			toast.success(`Now on ${pack.current?.loader} ${nextBuild}`);
+			nextBuild = '';
+		} catch (e) {
+			toast.error(message(e, 'Could not change the loader version'));
+		} finally {
+			savingBuild = false;
 		}
 	}
 
@@ -568,6 +593,33 @@
 									<Button variant="ghost" onclick={() => (nextMc = '')}>Cancel</Button>
 								</div>
 							{/if}
+						{/if}
+					</Card.Content>
+				</Card.Root>
+
+				<Card.Root>
+					<Card.Header>
+						<Card.Title>Loader version</Card.Title>
+						<Card.Description>
+							The {pack.current.loader} build servers made from this pack install. Changing the Minecraft
+							version moves it to that version's newest build.
+						</Card.Description>
+					</Card.Header>
+					<Card.Content class="grid max-w-xl gap-4">
+						{#if builds?.error}
+							<p class="text-sm text-destructive" role="alert">Could not load the builds.</p>
+						{:else}
+							<Combobox
+								options={buildOptions}
+								bind:value={nextBuild}
+								placeholder="Currently {pack.current.loaderVersion ?? 'none'}"
+							/>
+						{/if}
+						{#if nextBuild && nextBuild !== pack.current.loaderVersion}
+							<div class="flex flex-wrap gap-2">
+								<Button loading={savingBuild} onclick={saveBuild}>Use {nextBuild}</Button>
+								<Button variant="ghost" onclick={() => (nextBuild = '')}>Cancel</Button>
+							</div>
 						{/if}
 					</Card.Content>
 				</Card.Root>
