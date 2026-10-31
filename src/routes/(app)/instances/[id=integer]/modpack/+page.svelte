@@ -9,6 +9,7 @@
 		modpackUpdatePreview,
 		updateModpack
 	} from '#lib/modpack-update.remote.js';
+	import Notice from '#lib/components/notice.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -153,12 +154,7 @@
 		</Card.Root>
 
 		{#if data.outcome}
-			<div
-				class="grid gap-2 rounded-md border px-3 py-2 text-sm {data.outcome.ok
-					? 'border-success/40 bg-success/10'
-					: 'border-danger/40 bg-danger/10'}"
-				role={data.outcome.ok ? 'status' : 'alert'}
-			>
+			<Notice tone={data.outcome.ok ? 'success' : 'danger'}>
 				<p>{data.outcome.message}</p>
 				{#if data.outcome.details?.length}
 					<details>
@@ -168,7 +164,7 @@
 						</ul>
 					</details>
 				{/if}
-			</div>
+			</Notice>
 		{/if}
 
 		<Card.Root>
@@ -221,12 +217,12 @@
 							{@const plan = preview.current}
 							<div class="grid gap-2">
 								{#if plan.loaderChange}
-									<p class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+									<Notice tone="warning">
 										This version runs Minecraft {plan.mcVersion}{plan.loaderVersion
 											? ` with ${plan.loader} ${plan.loaderVersion}`
 											: ''}. The server is moved to it, and the world is upgraded the first time it
 										starts.
-									</p>
+									</Notice>
 								{/if}
 								{#if !plan.added.length && !plan.updated.length && !plan.remove.length && !plan.writeConfigs.length && !plan.removeConfigs.length && !plan.loaderChange}
 									<p class="text-sm text-muted-foreground">Nothing in the files would change.</p>

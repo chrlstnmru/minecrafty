@@ -3,6 +3,7 @@
 	import { toast } from 'svelte-sonner';
 	import { getInstance, listInstances } from '#lib/instances.remote.js';
 	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
+	import Notice from '#lib/components/notice.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
@@ -141,14 +142,7 @@
 	</Card.Root>
 
 	{#if info.outcome}
-		<p
-			class="rounded-md border px-3 py-2 text-sm {info.outcome.ok
-				? 'border-success/40 bg-success/10'
-				: 'border-danger/40 bg-danger/10'}"
-			role={info.outcome.ok ? 'status' : 'alert'}
-		>
-			{info.outcome.message}
-		</p>
+		<Notice tone={info.outcome.ok ? 'success' : 'danger'}>{info.outcome.message}</Notice>
 	{/if}
 
 	<Card.Root>
@@ -162,10 +156,10 @@
 		</Card.Header>
 		<Card.Content>
 			{#if row?.packProjectId}
-				<p class="mb-4 rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+				<Notice tone="warning" class="mb-4">
 					This server follows the modpack {row.packName}, which decides its Minecraft version and
 					loader build. Update it from the Modpack tab; changing the loader here can break the pack.
-				</p>
+				</Notice>
 			{/if}
 			{#if info.error}
 				<p class="text-sm text-destructive" role="alert">
@@ -202,23 +196,23 @@
 					{/if}
 
 					{#if kind === 'upgrade'}
-						<p class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+						<Notice tone="warning">
 							The world is upgraded to {target} the first time the server starts, and an older version
 							cannot open it afterwards.
-						</p>
+						</Notice>
 					{:else if kind === 'downgrade'}
-						<p class="rounded-md border border-danger/40 bg-danger/10 px-3 py-2 text-sm">
+						<Notice tone="danger">
 							A world that was opened in {info.mcVersion} can be damaged by {target}. Only go back
 							with a backup you can restore.
-						</p>
+						</Notice>
 					{/if}
 					{#if kind !== 'build' && info.mods > 0}
-						<p class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">
+						<Notice tone="warning">
 							{info.mods}
 							{info.mods === 1 ? 'mod is' : 'mods are'} installed for {info.mcVersion}. Check the
 							Mods tab for compatible versions after the update; the ones that have none will fail
 							to load.
-						</p>
+						</Notice>
 					{/if}
 
 					<div class="flex items-center gap-2">
