@@ -72,6 +72,7 @@
 			<Collapsible.Root {open}>
 				<div
 					role="presentation"
+					data-tree-row
 					class="flex items-center gap-1 rounded-md hover:bg-accent/50 {selectedFolder === node.path
 						? 'bg-accent'
 						: ''} {dropOn === node.path ? 'bg-accent ring-2 ring-ring/50' : ''}"
@@ -109,6 +110,7 @@
 			</Collapsible.Root>
 		{:else}
 			<div
+				data-tree-row
 				class="flex items-center gap-1 rounded-md ps-2 {selected === node.path ? 'bg-accent' : ''}"
 			>
 				<FileIcon class="size-4 shrink-0 text-muted-foreground" />

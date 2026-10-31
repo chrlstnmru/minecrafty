@@ -494,7 +494,14 @@
 					}}
 				/>
 			{/if}
-			<div class="min-h-0 flex-1 overflow-y-auto p-2">
+			<!-- clicking anywhere in the tree but on a row goes back to the server folder; the overrides button is the keyboard way -->
+			<div
+				role="presentation"
+				class="min-h-0 flex-1 overflow-y-auto p-2"
+				onclick={(event) => {
+					if (!(event.target as Element).closest('[data-tree-row]')) targetDir = '';
+				}}
+			>
 				{#if tree.length}
 					<FileTree
 						nodes={tree}
