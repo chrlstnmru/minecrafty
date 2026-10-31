@@ -18,7 +18,6 @@
 		previewPackVersionChange,
 		removePackFile,
 		removePackIcon,
-		removePackOverride,
 		setPackFileVersion,
 		setPackLoaderVersion,
 		updateLocalPack
@@ -29,6 +28,7 @@
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
+	import PackConfigs from '#lib/components/pack-configs.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -39,6 +39,7 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { cn } from '#lib/utils.js';
 
 	import type { PageProps } from './$types';
 
@@ -46,7 +47,8 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(Number(page.params.id));
-	const pack = $derived(getLocalPack({ id }));
+	const loadedPack = $derived(getLocalPack({ id }));
+	const pack = $derived(await loadedPack);
 	const canWrite = $derived(data.panel.includes('modpacks.write'));
 	const canMakeServer = $derived(data.panel.includes('instances.create'));
 
@@ -58,7 +60,7 @@
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
 	const inPack = $derived(
-		new Set((pack.current?.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
+		new Set((pack.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
 	);
 
 	let picker = $state<{
@@ -106,44 +108,6 @@
 
 	const sideLabel = (side: string | null) => (side === 'unsupported' ? 'no' : (side ?? '?'));
 
-	let folder = $state('config');
-	let uploading = $state(false);
-	let fileInput = $state<HTMLInputElement>();
-
-	async function uploadConfig(file: File | undefined) {
-		if (!file) return;
-		uploading = true;
-		try {
-			const body = new FormData();
-			body.set('file', file);
-			body.set('path', folder);
-			const res = await fetch(`/modpacks/${id}/overrides`, { method: 'POST', body });
-			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
-			await pack.refresh();
-			toast.success(`Added ${file.name}`);
-		} catch (e) {
-			toast.error(e instanceof Error && e.message ? e.message : 'Could not add the file');
-		} finally {
-			uploading = false;
-			if (fileInput) fileInput.value = '';
-		}
-	}
-
-	async function removeConfig(path: string) {
-		try {
-			await removePackOverride({ id, path });
-		} catch (e) {
-			toast.error(message(e, 'Could not remove the file'));
-		}
-	}
-
-	const size = (bytes: number) =>
-		bytes < 1024
-			? `${bytes} B`
-			: bytes < 1024 * 1024
-				? `${(bytes / 1024).toFixed(1)} KB`
-				: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-
 	let iconInput = $state<HTMLInputElement>();
 	let iconBusy = $state(false);
 
@@ -155,7 +119,7 @@
 			body.set('file', file);
 			const res = await fetch(`/modpacks/${id}/icon`, { method: 'POST', body });
 			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
-			await pack.refresh();
+			await loadedPack.refresh();
 			toast.success('Icon changed');
 		} catch (e) {
 			toast.error(e instanceof Error && e.message ? e.message : 'Could not save the image');
@@ -180,14 +144,12 @@
 	let description = $state('');
 	// load the saved values when the pack arrives or changes
 	$effect(() => {
-		const p = pack.current;
+		const p = pack;
 		if (!p) return;
 		name = p.name;
 		description = p.description;
 	});
-	const dirty = $derived(
-		!!pack.current && (name !== pack.current.name || description !== pack.current.description)
-	);
+	const dirty = $derived(!!pack && (name !== pack.name || description !== pack.description));
 
 	async function saveSettings() {
 		try {
@@ -199,10 +161,10 @@
 	}
 
 	let nextMc = $state('');
-	const versions = $derived(pack.current ? packMinecraftVersions(pack.current.loader) : null);
+	const versions = $derived(pack ? packMinecraftVersions(pack.loader) : null);
 	const mcOptions = $derived((versions?.current ?? []).map((v) => ({ value: v, label: v })));
 	const change = $derived(
-		nextMc && pack.current && nextMc !== pack.current.mcVersion
+		nextMc && pack && nextMc !== pack.mcVersion
 			? previewPackVersionChange({ id, mcVersion: nextMc })
 			: null
 	);
@@ -224,7 +186,7 @@
 	}
 
 	let nextBuild = $state('');
-	const builds = $derived(pack.current ? packLoaderBuilds({ id }) : null);
+	const builds = $derived(pack ? packLoaderBuilds({ id }) : null);
 	const buildOptions = $derived(
 		(builds?.current ?? []).map((b, i) => ({
 			value: b,
@@ -237,7 +199,7 @@
 		savingBuild = true;
 		try {
 			await setPackLoaderVersion({ id, loaderVersion: nextBuild });
-			toast.success(`Now on ${pack.current?.loader} ${nextBuild}`);
+			toast.success(`Now on ${pack.loader} ${nextBuild}`);
 			nextBuild = '';
 		} catch (e) {
 			toast.error(message(e, 'Could not change the loader version'));
@@ -258,7 +220,7 @@
 	}
 </script>
 
-<svelte:head><title>{pack.current?.name ?? 'Modpack'} · Minecrafty</title></svelte:head>
+<svelte:head><title>{pack.name ?? 'Modpack'} · Minecrafty</title></svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
 	<div class="flex items-start gap-2">
@@ -271,23 +233,16 @@
 		>
 			<ArrowLeftIcon />
 		</Button>
-		{#if pack.current}
-			<InstanceIcon
-				loader={pack.current.loader}
-				packIconUrl={pack.current.iconUrl}
-				class="mt-0.5 size-10"
-			/>
+		{#if pack}
+			<InstanceIcon loader={pack.loader} packIconUrl={pack.iconUrl} class="mt-0.5 size-10" />
 		{/if}
 		<div class="min-w-0 flex-1">
-			<PageHeader
-				title={pack.current?.name ?? ''}
-				description={pack.current?.description || undefined}
-			>
+			<PageHeader title={pack.name ?? ''} description={pack.description || undefined}>
 				{#snippet badge()}
-					{#if pack.current}
-						<LoaderBadge loader={pack.current.loader} version={pack.current.loaderVersion} />
-						<Badge variant="muted">Minecraft {pack.current.mcVersion}</Badge>
-						<Badge variant="muted">revision {pack.current.revision}</Badge>
+					{#if pack}
+						<LoaderBadge loader={pack.loader} version={pack.loaderVersion} />
+						<Badge variant="muted">Minecraft {pack.mcVersion}</Badge>
+						<Badge variant="muted">revision {pack.revision}</Badge>
 					{/if}
 				{/snippet}
 				{#snippet actions()}
@@ -302,11 +257,11 @@
 		</div>
 	</div>
 
-	{#if pack.current}
+	{#if pack}
 		<Tabs.Root bind:value={tab}>
 			<Tabs.List>
-				<Tabs.Trigger value="mods">Mods ({pack.current.files.length})</Tabs.Trigger>
-				<Tabs.Trigger value="configs">Configs ({pack.current.overrides.length})</Tabs.Trigger>
+				<Tabs.Trigger value="mods">Mods ({pack.files.length})</Tabs.Trigger>
+				<Tabs.Trigger value="configs">Configs ({pack.overrides.length})</Tabs.Trigger>
 				{#if canWrite}<Tabs.Trigger value="settings">Settings</Tabs.Trigger>{/if}
 			</Tabs.List>
 		</Tabs.Root>
@@ -314,11 +269,17 @@
 		<!-- the header and tabs stay put; the active tab scrolls inside this. Rows are max-content: cards clip their own overflow, so with auto
 		     rows they would shrink to fit this box instead of letting it scroll. The padding and matching
 		     negative margin leave room for a card's ring, which a scroll container would clip. -->
-		<div class="-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1">
+		<div
+			class={cn(
+				'-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1',
+				// the only row is the config editor, which fills the height
+				tab === 'configs' && 'grid-rows-1'
+			)}
+		>
 			{#if tab === 'mods'}
 				<Card.Root>
 					<Card.Content class="px-0">
-						{#if pack.current.files.length}
+						{#if pack.files.length}
 							<Table.Root>
 								<Table.Header>
 									<Table.Row>
@@ -330,7 +291,7 @@
 									</Table.Row>
 								</Table.Header>
 								<Table.Body>
-									{#each pack.current.files as file (file.id)}
+									{#each pack.files as file (file.id)}
 										<Table.Row>
 											<Table.Cell class="ps-6">
 												<div class="flex min-w-0 items-center gap-3">
@@ -418,64 +379,12 @@
 						kind="pack"
 						instanceId={id}
 						noun="mod"
-						description="Mods for {pack.current.loader} on Minecraft {pack.current
-							.mcVersion}. Required dependencies come with them, each pinned to one version."
+						description="Mods for {pack.loader} on Minecraft {pack.mcVersion}. Required dependencies come with them, each pinned to one version."
 						actionLabel="Add"
 						installedIds={inPack}
 						onInstall={add}
 					/>
 				{/if}
-			{:else if tab === 'configs'}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title>Config files</Card.Title>
-						<Card.Description>
-							Copied into every server made from this pack, and into the .mrpack under overrides/.
-						</Card.Description>
-					</Card.Header>
-					<Card.Content class="grid gap-4">
-						{#each pack.current.overrides as file (file.path)}
-							<div class="flex items-center gap-3 border-b pb-2 last:border-b-0">
-								<span class="min-w-0 flex-1 truncate font-mono text-sm">{file.path}</span>
-								<span class="text-xs text-muted-foreground">{size(file.size)}</span>
-								{#if canWrite}
-									<Button
-										variant="ghost"
-										size="icon"
-										aria-label="Remove {file.path}"
-										onClickPromise={() => removeConfig(file.path)}
-									>
-										<TrashIcon />
-									</Button>
-								{/if}
-							</div>
-						{:else}
-							<p class="text-sm text-muted-foreground">No config files.</p>
-						{/each}
-						{#if canWrite}
-							<div class="flex flex-wrap items-end gap-3">
-								<Field.Field class="w-56">
-									<Field.Label for="config-folder">Folder in the server</Field.Label>
-									<Input
-										id="config-folder"
-										bind:value={folder}
-										class="font-mono"
-										autocomplete="off"
-									/>
-								</Field.Field>
-								<input
-									bind:this={fileInput}
-									type="file"
-									class="hidden"
-									onchange={(e) => uploadConfig(e.currentTarget.files?.[0])}
-								/>
-								<Button variant="outline" loading={uploading} onclick={() => fileInput?.click()}>
-									<UploadIcon />Add a file
-								</Button>
-							</div>
-						{/if}
-					</Card.Content>
-				</Card.Root>
 			{:else if tab === 'settings' && canWrite}
 				<Card.Root>
 					<Card.Header>
@@ -510,11 +419,7 @@
 						</Card.Description>
 					</Card.Header>
 					<Card.Content class="flex flex-wrap items-center gap-4">
-						<InstanceIcon
-							loader={pack.current.loader}
-							packIconUrl={pack.current.iconUrl}
-							class="size-16"
-						/>
+						<InstanceIcon loader={pack.loader} packIconUrl={pack.iconUrl} class="size-16" />
 						<input
 							bind:this={iconInput}
 							type="file"
@@ -524,9 +429,9 @@
 						/>
 						<div class="flex gap-2">
 							<Button variant="outline" loading={iconBusy} onclick={() => iconInput?.click()}>
-								<UploadIcon />{pack.current.iconUrl ? 'Change image' : 'Upload image'}
+								<UploadIcon />{pack.iconUrl ? 'Change image' : 'Upload image'}
 							</Button>
-							{#if pack.current.iconUrl}
+							{#if pack.iconUrl}
 								<Button variant="ghost" disabled={iconBusy} onclick={dropIcon}>Remove</Button>
 							{/if}
 						</div>
@@ -544,7 +449,7 @@
 						<Combobox
 							options={mcOptions}
 							bind:value={nextMc}
-							placeholder="Currently {pack.current.mcVersion}"
+							placeholder="Currently {pack.mcVersion}"
 						/>
 						{#if change}
 							{#if change.loading && !change.current}
@@ -554,8 +459,7 @@
 							{:else if change.current}
 								<div class="grid gap-2 text-sm">
 									<p>
-										{change.current.compatible.length} of {pack.current.files.length} mods have a version
-										for
+										{change.current.compatible.length} of {pack.files.length} mods have a version for
 										{nextMc}.
 									</p>
 									{#if change.current.unchecked}
@@ -599,8 +503,8 @@
 					<Card.Header>
 						<Card.Title>Loader version</Card.Title>
 						<Card.Description>
-							The {pack.current.loader} build servers made from this pack install. Changing the Minecraft
-							version moves it to that version's newest build.
+							The {pack.loader} build servers made from this pack install. Changing the Minecraft version
+							moves it to that version's newest build.
 						</Card.Description>
 					</Card.Header>
 					<Card.Content class="grid max-w-xl gap-4">
@@ -610,10 +514,10 @@
 							<Combobox
 								options={buildOptions}
 								bind:value={nextBuild}
-								placeholder="Currently {pack.current.loaderVersion ?? 'none'}"
+								placeholder="Currently {pack.loaderVersion ?? 'none'}"
 							/>
 						{/if}
-						{#if nextBuild && nextBuild !== pack.current.loaderVersion}
+						{#if nextBuild && nextBuild !== pack.loaderVersion}
 							<div class="flex flex-wrap gap-2">
 								<Button loading={savingBuild} onclick={saveBuild}>Use {nextBuild}</Button>
 								<Button variant="ghost" onclick={() => (nextBuild = '')}>Cancel</Button>
@@ -634,6 +538,12 @@
 					</Card.Footer>
 				</Card.Root>
 			{/if}
+			<PackConfigs
+				{id}
+				files={pack.overrides}
+				{canWrite}
+				class={cn('h-full', tab === 'configs' ? '' : 'hidden')}
+			/>
 		</div>
 	{/if}
 </div>
@@ -651,14 +561,14 @@
 	/>
 {/if}
 
-{#if pack.current}
-	<MakeServerDialog bind:open={makingServer} packId={id} packName={pack.current.name} />
+{#if pack}
+	<MakeServerDialog bind:open={makingServer} packId={id} packName={pack.name} />
 {/if}
 
 <AlertDialog.Root bind:open={deleting}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {pack.current?.name}?</AlertDialog.Title>
+			<AlertDialog.Title>Delete {pack.name}?</AlertDialog.Title>
 			<AlertDialog.Description>This cannot be undone.</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>

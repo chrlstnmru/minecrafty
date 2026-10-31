@@ -3,34 +3,46 @@ import { error, json } from '@sveltejs/kit';
 import { record } from '#lib/server/audit.js';
 import { requirePanel } from '#lib/server/auth.js';
 import { assertMayWriteCode } from '#lib/server/host-code.js';
-import { getPack, saveOverride } from '#lib/server/local-packs.js';
+import { getPack, saveOverrides } from '#lib/server/local-packs.js';
+import { BATCH_FILES } from '#lib/upload-limits.js';
 
 import type { RequestHandler } from './$types';
 
 const MAX_BYTES = 20 * 1024 * 1024;
 
-// Adds one config file to a pack, at `path` (a folder inside the server, such as `config`), under
-// the uploaded file's own name unless `name` says otherwise.
+// Adds config files to a pack as one revision. `file` and `path` repeat in step: each path is where
+// that file goes inside the server folder, its own name included (`config/sodium/options.json`).
 export const POST: RequestHandler = async ({ params, request }) => {
 	const user = requirePanel('modpacks.write');
 
 	const form = await request.formData();
-	const file = form.get('file');
-	if (!(file instanceof File)) error(400, 'Choose a file');
-	if (file.size > MAX_BYTES)
-		error(400, `The file is too large (limit ${MAX_BYTES / 1024 / 1024} MB)`);
-	const folder = String(form.get('path') ?? '').replace(/^\/+|\/+$/g, '');
-	const rel = folder ? `${folder}/${file.name}` : file.name;
+	const files = form.getAll('file');
+	const paths = form.getAll('path').map((path) => String(path).replace(/^\/+/, ''));
+	if (!files.length || files.length !== paths.length || !files.every((f) => f instanceof File))
+		error(400, 'Choose a file');
+	if (files.length > BATCH_FILES) error(400, `Add at most ${BATCH_FILES} files at a time`);
+	const tooLarge = (files as File[]).find((file) => file.size > MAX_BYTES);
+	if (tooLarge) error(400, `${tooLarge.name} is too large (limit ${MAX_BYTES / 1024 / 1024} MB)`);
 
 	try {
-		assertMayWriteCode(user, rel);
-		await saveOverride(Number(params.id), rel, new Uint8Array(await file.arrayBuffer()));
+		for (const rel of paths) assertMayWriteCode(user, rel);
+		const entries = await Promise.all(
+			(files as File[]).map(async (file, index) => ({
+				rel: paths[index],
+				bytes: new Uint8Array(await file.arrayBuffer())
+			}))
+		);
+		await saveOverrides(Number(params.id), entries);
+		const pack = getPack(Number(params.id)).name;
 		record({
 			action: 'pack.config',
-			summary: `Added the config file ${rel} to the modpack ${getPack(Number(params.id)).name}`
+			summary:
+				paths.length === 1
+					? `Added the config file ${paths[0]} to the modpack ${pack}`
+					: `Added ${paths.length} config files to the modpack ${pack}`
 		});
-		return json({ path: rel });
+		return json({ paths });
 	} catch (e) {
-		error(400, e instanceof Error ? e.message : 'Could not save the file');
+		error(400, e instanceof Error ? e.message : 'Could not save the files');
 	}
 };

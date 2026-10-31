@@ -14,6 +14,7 @@ import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import type { Actor } from './access';
 
+import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '../editable';
 import { SMALL_FILE_BYTES } from '../upload-limits';
 import { assertMayWriteCode } from './host-code';
 import { getInstance, serverDir } from './instances';
@@ -45,13 +46,7 @@ export type FileEntry = {
 	rewritten: boolean;
 };
 
-export const MAX_EDIT_BYTES = 2 * 1024 * 1024;
-
-// the text formats a server's configuration comes in
-const EDITABLE =
-	/\.(properties|json|json5|jsonc|toml|ya?ml|cfg|conf|ini|txt|mcmeta|xml|md|snbt|log)$/i;
-
-export const isEditable = (name: string) => EDITABLE.test(name);
+export { isEditable, MAX_EDIT_BYTES };
 
 function root(instanceId: number) {
 	if (!getInstance(instanceId)) throw new Error('Instance not found');
@@ -130,11 +125,8 @@ export function readTextFile(instanceId: number, rel: string) {
 	const { absolute } = resolveSafe(instanceId, rel);
 	const stat = statSync(absolute);
 	if (!stat.isFile()) throw new Error('Not a file');
-	if (stat.size > MAX_EDIT_BYTES)
-		throw new Error('This file is too large to edit here (2 MB limit)');
-	const bytes = readFileSync(absolute);
-	if (bytes.includes(0)) throw new Error('This looks like a binary file');
-	return { content: bytes.toString('utf8'), size: stat.size, modified: stat.mtimeMs };
+	assertEditableSize(stat.size);
+	return { content: decodeText(readFileSync(absolute)), size: stat.size, modified: stat.mtimeMs };
 }
 
 export function writeTextFile(instanceId: number, rel: string, content: string) {
