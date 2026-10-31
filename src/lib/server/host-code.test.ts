@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { assertMayWriteCode, isHostCode } from './host-code';
 
 const owner = { id: 1, role: 'owner' as const };

@@ -1,7 +1,10 @@
 <script lang="ts" generics="TData extends RowData">
 	import type { Row, RowData } from '@tanstack/svelte-table';
+
 	import { FlexRender } from '@tanstack/svelte-table';
+
 	import * as Table from '#lib/components/ui/table/index.js';
+
 	import type { Features } from './hook.js';
 
 	let { row }: { row: Row<Features, TData> } = $props();

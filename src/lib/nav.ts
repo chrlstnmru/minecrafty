@@ -1,11 +1,13 @@
-import HistoryIcon from '@tabler/icons-svelte/icons/history';
+import type { Icon } from '@tabler/icons-svelte';
+
 import DashboardIcon from '@tabler/icons-svelte/icons/dashboard';
+import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
 import ServerIcon from '@tabler/icons-svelte/icons/server';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
 import UsersIcon from '@tabler/icons-svelte/icons/users';
-import type { Icon } from '@tabler/icons-svelte';
+
 import { rules, type NavRule } from './nav-access.js';
 
 /** `rule` says who sees the item; without one, everyone does. */

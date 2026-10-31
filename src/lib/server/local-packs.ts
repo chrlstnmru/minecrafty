@@ -1,13 +1,14 @@
-import { basename, dirname, join } from 'node:path';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { and, count, desc, eq } from 'drizzle-orm';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import { basename, dirname, join } from 'node:path';
+
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
+
 import { dataDir } from './config';
-import { isHostCode } from './host-code';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
+import { isHostCode } from './host-code';
 import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
-import * as modrinth from './modrinth';
 import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
 	LOADER_KEYS,
@@ -18,6 +19,7 @@ import {
 	type IndexFile,
 	type LoadedPack
 } from './modpacks';
+import * as modrinth from './modrinth';
 import { Zip } from './zip';
 import { zipChunks, type ZipEntry } from './zip-writer';
 

@@ -1,8 +1,10 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
+
 	import AlertOctagonIcon from '@tabler/icons-svelte/icons/alert-octagon';
 	import AlertTriangleIcon from '@tabler/icons-svelte/icons/alert-triangle';
 	import CircleCheckIcon from '@tabler/icons-svelte/icons/circle-check';
-	import type { Snippet } from 'svelte';
+
 	import * as Alert from '#lib/components/ui/alert/index.js';
 	import { cn } from '#lib/utils.js';
 

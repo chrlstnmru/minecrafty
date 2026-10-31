@@ -3,9 +3,11 @@
 	import ChevronRightIcon from '@tabler/icons-svelte/icons/chevron-right';
 	import ChevronsLeftIcon from '@tabler/icons-svelte/icons/chevrons-left';
 	import ChevronsRightIcon from '@tabler/icons-svelte/icons/chevrons-right';
+
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import { PAGE_SIZES } from './create-data-table.svelte.js';
 	import { useTableContext } from './hook.js';
 

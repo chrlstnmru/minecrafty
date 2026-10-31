@@ -1,4 +1,5 @@
 import { and, eq, isNull } from 'drizzle-orm';
+
 import {
 	PERMISSIONS,
 	INSTANCE_PERMISSIONS,
@@ -10,6 +11,7 @@ import {
 	type PanelPermission,
 	type Permission
 } from '#lib/permissions.js';
+
 import { db } from './db';
 import { instances, roleAssignments, roles } from './db/schema';
 

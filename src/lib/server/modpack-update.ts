@@ -1,15 +1,18 @@
+import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { and, eq, inArray } from 'drizzle-orm';
+
 import { originOf } from '#lib/instance-origin.js';
+
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { runUpdate } from './instance-job';
-import { isRunning } from './live-server';
-import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, serverDir } from './instances';
+import { ensureJava, requiredJavaMajor } from './java';
+import { isRunning } from './live-server';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
+import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import {
 	downloadFiles,
@@ -25,7 +28,6 @@ import {
 	type LoadedPack,
 	type ModpackVersion
 } from './modpacks';
-import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
 import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from './mods';
 import { mergeStaged, removeStale } from './staged-install';
 import { lastOutcome } from './update-outcome';

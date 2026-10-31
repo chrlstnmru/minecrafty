@@ -1,24 +1,27 @@
 <script lang="ts">
 	import { pushState } from '$app/navigation';
 	import { page } from '$app/state';
+	import { isHttpError } from '@sveltejs/kit';
 	import ChevronLeftIcon from '@tabler/icons-svelte/icons/chevron-left';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
-	import { isHttpError } from '@sveltejs/kit';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 	import { cubicOut } from 'svelte/easing';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { MediaQuery } from 'svelte/reactivity';
 	import { fly } from 'svelte/transition';
+
 	import * as Form from '#lib/components/form/index.js';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { newRoleSchema } from '#lib/schemas/roles.js';
 	import { addRole, getRoleAccess, listRoles, removeRole, saveRoles } from '#lib/roles.remote.js';
+	import { newRoleSchema } from '#lib/schemas/roles.js';
+
 	import type { RoleDraft } from './role-details.svelte';
+
 	import RoleDetails from './role-details.svelte';
 	import RoleList from './role-list.svelte';
 	import SaveBar from './save-bar.svelte';

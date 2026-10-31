@@ -1,5 +1,6 @@
 import { isIP } from 'node:net';
 import { describe, expect, it } from 'vitest';
+
 import { isIpAddress } from './players';
 
 describe('isIpAddress', () => {

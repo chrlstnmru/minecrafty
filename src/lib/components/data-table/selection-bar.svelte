@@ -1,11 +1,15 @@
 <script lang="ts" generics="TData extends RowData">
 	import type { Row, RowData } from '@tanstack/svelte-table';
 	import type { Snippet } from 'svelte';
+
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
+
 	import { Button } from '#lib/components/ui/button/index.js';
+
 	import type { DataTable } from './create-data-table.svelte.js';
 	import type { Features } from './hook.js';
+
 	import { useTableContext } from './hook.js';
 
 	let {

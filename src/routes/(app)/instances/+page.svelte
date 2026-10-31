@@ -1,12 +1,21 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
+	import PlusIcon from '@tabler/icons-svelte/icons/plus';
+	import ServerIcon from '@tabler/icons-svelte/icons/server';
+	import { toast } from 'svelte-sonner';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { SvelteSet } from 'svelte/reactivity';
+
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
+	import NewInstanceSheet from '#lib/components/new-instance/new-instance-sheet.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
+	import StatusPill from '#lib/components/status-pill.svelte';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Progress } from '#lib/components/ui/progress/index.js';
+	import { formatBytes } from '#lib/format.js';
 	import { canRetryInstall } from '#lib/instance-origin.js';
-	import { toast } from 'svelte-sonner';
-	import ServerIcon from '@tabler/icons-svelte/icons/server';
-	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import {
 		deleteInstance,
 		killInstance,
@@ -16,15 +25,8 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import { formatBytes } from '#lib/format.js';
-	import InstanceIcon from '#lib/components/instance-icon.svelte';
-	import NewInstanceSheet from '#lib/components/new-instance/new-instance-sheet.svelte';
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import StatusPill from '#lib/components/status-pill.svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Progress } from '#lib/components/ui/progress/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
+
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const canCreate = $derived(data.panel.includes('instances.create'));

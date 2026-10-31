@@ -1,10 +1,13 @@
 <script lang="ts">
-	import { cn } from '#lib/utils.js';
-	import { useFileDropZoneDragOverlay } from './file-drop-zone.svelte.js';
-	import type { FileDropZoneDragOverlayProps } from './types.js';
 	import UploadIcon from '@lucide/svelte/icons/upload';
 	import { Portal } from 'bits-ui';
 	import { box, mergeProps } from 'svelte-toolbelt';
+
+	import { cn } from '#lib/utils.js';
+
+	import type { FileDropZoneDragOverlayProps } from './types.js';
+
+	import { useFileDropZoneDragOverlay } from './file-drop-zone.svelte.js';
 
 	let {
 		ref = $bindable(null),

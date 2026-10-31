@@ -1,12 +1,13 @@
-import Root from './file-drop-zone.svelte';
-import Trigger from './file-drop-zone-trigger.svelte';
-import Textarea from './file-drop-zone-textarea.svelte';
-import DragOverlay from './file-drop-zone-drag-overlay.svelte';
 import type {
 	FileDropZoneDragOverlayProps,
 	FileDropZoneRootProps,
 	FileRejectedReason
 } from './types';
+
+import DragOverlay from './file-drop-zone-drag-overlay.svelte';
+import Textarea from './file-drop-zone-textarea.svelte';
+import Trigger from './file-drop-zone-trigger.svelte';
+import Root from './file-drop-zone.svelte';
 
 export function displaySize(bytes: number): string {
 	if (bytes < KILOBYTE) return `${bytes.toFixed(0)} B`;

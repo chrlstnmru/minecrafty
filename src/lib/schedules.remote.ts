@@ -1,6 +1,9 @@
+import { command, query } from '$app/server';
 import { error } from '@sveltejs/kit';
 import * as v from 'valibot';
-import { command, query } from '$app/server';
+
+import type { Actor } from '#lib/server/access.js';
+
 import { idSchema } from '#lib/schemas/common.js';
 import {
 	scheduleRefSchema,
@@ -8,9 +11,8 @@ import {
 	scheduleToggleSchema,
 	type ScheduleAction
 } from '#lib/schemas/schedules.js';
-import type { Actor } from '#lib/server/access.js';
-import { requirePermission, requireUser } from '#lib/server/auth.js';
 import { record } from '#lib/server/audit.js';
+import { requirePermission, requireUser } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import * as schedules from '#lib/server/schedules.js';
 

@@ -1,5 +1,6 @@
-import { invalid, redirect } from '@sveltejs/kit';
 import { form, getRequestEvent } from '$app/server';
+import { invalid, redirect } from '@sveltejs/kit';
+
 import { loginSchema, setupSchema } from '#lib/schemas/auth.js';
 import { record } from '#lib/server/audit.js';
 import { createUser, endSession, hasUsers, startSession, verifyLogin } from '#lib/server/auth.js';

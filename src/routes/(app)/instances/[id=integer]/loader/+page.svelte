@@ -1,17 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { getInstance, listInstances } from '#lib/instances.remote.js';
-	import { isFromPack } from '#lib/instance-origin.js';
-	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
+
+	import Combobox from '#lib/components/combobox.svelte';
 	import Notice from '#lib/components/notice.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import Combobox from '#lib/components/combobox.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { isFromPack } from '#lib/instance-origin.js';
+	import { getInstance, listInstances } from '#lib/instances.remote.js';
+	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
 	import { updateKind } from '#lib/versions.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number

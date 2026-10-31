@@ -1,5 +1,7 @@
 import { command, query } from '$app/server';
 import * as v from 'valibot';
+
+import { PACK_LOADERS } from '#lib/pack-loaders.js';
 import {
 	addPackModSchema,
 	installFromPackSchema,
@@ -14,13 +16,12 @@ import {
 	packSearchSchema,
 	updatePackSchema
 } from '#lib/schemas/builder.js';
-import { PACK_LOADERS } from '#lib/pack-loaders.js';
-import { requirePanel } from '#lib/server/auth.js';
 import { record } from '#lib/server/audit.js';
+import { requirePanel } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import { portConflict } from '#lib/server/instances.js';
-import * as packs from '#lib/server/local-packs.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
+import * as packs from '#lib/server/local-packs.js';
 
 const packName = (id: number) => packs.getPack(id).name;
 

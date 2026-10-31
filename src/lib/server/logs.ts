@@ -1,4 +1,5 @@
 import { lstatSync, readdirSync, type Stats } from 'node:fs';
+
 import { LOG_NAME } from '../log-files';
 import { resolveSafe } from './files';
 

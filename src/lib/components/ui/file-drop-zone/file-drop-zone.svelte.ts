@@ -1,7 +1,9 @@
 import type { ReadableBoxedValues } from 'svelte-toolbelt';
-import type { FileRejectedReason } from './types';
-import { Context } from 'runed';
 import type { HTMLAttributes } from 'svelte/elements';
+
+import { Context } from 'runed';
+
+import type { FileRejectedReason } from './types';
 
 function getFiles(dataTransfer: DataTransfer | null): File[] {
 	return Array.from(dataTransfer?.files ?? []);

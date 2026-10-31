@@ -1,6 +1,7 @@
+import { eq } from 'drizzle-orm';
 import { mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { eq } from 'drizzle-orm';
+
 import { currentActor, record } from './audit';
 import { writeBackup } from './backups';
 import { db } from './db';

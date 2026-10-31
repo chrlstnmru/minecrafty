@@ -4,6 +4,7 @@
 	import SunIcon from '@lucide/svelte/icons/sun';
 	import { setMode, userPrefersMode } from 'mode-watcher';
 	import { onMount } from 'svelte';
+
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 
 	// The stored preference only exists in the browser; wait for mount so the

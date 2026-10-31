@@ -1,8 +1,10 @@
 import { error } from '@sveltejs/kit';
+import { existsSync } from 'node:fs';
+
 import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
-import { existsSync } from 'node:fs';
 import { backupPath, getBackup } from '#lib/server/backups.js';
+
 import type { RequestHandler } from './$types';
 
 // A real download needs a plain GET the browser can follow, which a remote function is not.

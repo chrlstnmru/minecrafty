@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { MAX_RANK, planRanks, type RankEntry } from './rank-plan';
 
 const entry = (id: number, rank: number | null, locked = false): RankEntry => ({

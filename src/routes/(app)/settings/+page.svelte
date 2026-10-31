@@ -1,17 +1,18 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import {
-		checkForUpdates,
-		installUpdate,
-		setUpdateChannel,
-		updateInfo
-	} from '#lib/updates.remote.js';
+
 	import PageHeader from '#lib/components/page-header.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import {
+		checkForUpdates,
+		installUpdate,
+		setUpdateChannel,
+		updateInfo
+	} from '#lib/updates.remote.js';
 
 	const info = updateInfo();
 	const upd = $derived(info.current);

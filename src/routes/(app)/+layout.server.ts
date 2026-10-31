@@ -1,6 +1,7 @@
+import { SIDEBAR_COOKIE_NAME } from '#lib/components/ui/sidebar/constants.js';
 import { panelPermissionsFor, permissionsAnywhere } from '#lib/server/access.js';
 import { availableUpdate } from '#lib/server/self-update.js';
-import { SIDEBAR_COOKIE_NAME } from '#lib/components/ui/sidebar/constants.js';
+
 import type { LayoutServerLoad } from './$types';
 
 // the panel permissions are read on every load, so a changed role shows on the next navigation

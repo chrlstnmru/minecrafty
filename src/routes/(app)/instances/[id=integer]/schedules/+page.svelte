@@ -4,15 +4,8 @@
 	import PlayerPlayIcon from '@tabler/icons-svelte/icons/player-play';
 	import { toast } from 'svelte-sonner';
 	import * as v from 'valibot';
-	import {
-		cronPreview,
-		deleteSchedule,
-		instanceSchedules,
-		runScheduleNow,
-		saveSchedule,
-		toggleSchedule
-	} from '#lib/schedules.remote.js';
-	import { scheduleSchema, type ScheduleAction } from '#lib/schemas/schedules.js';
+
+	import SelectMenu from '#lib/components/select-menu.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -22,9 +15,17 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import {
+		cronPreview,
+		deleteSchedule,
+		instanceSchedules,
+		runScheduleNow,
+		saveSchedule,
+		toggleSchedule
+	} from '#lib/schedules.remote.js';
+	import { scheduleSchema, type ScheduleAction } from '#lib/schemas/schedules.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);

@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import { uploadFiles } from '#lib/files.remote.js';
+
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import Uploader from '#lib/components/uploader/uploader.svelte';
+	import { uploadFiles } from '#lib/files.remote.js';
 	import { discardLarge, uploadLarge } from '#lib/upload-large.js';
 	import { MAX_FILE_BYTES } from '#lib/upload-limits.js';
 

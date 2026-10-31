@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { type Permission } from '#lib/permissions.js';
+import { makeInstance } from '#test/instance.js';
 import { makeRole } from '#test/roles.js';
+
 import * as A from './access';
 import { db } from './db';
 import { instances, roles, users } from './db/schema';
 import * as G from './grants';
 import * as R from './roles';
 import * as U from './user-admin';
-import { makeInstance } from '#test/instance.js';
 
 let owner: A.Actor;
 let boss: A.Actor; // rank 70, holds roles.write, roles.assign, users.write panel-wide

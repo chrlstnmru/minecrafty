@@ -1,5 +1,4 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
 	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
 	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
 	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
@@ -7,13 +6,7 @@
 	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import { toast } from 'svelte-sonner';
-	import {
-		listInstances,
-		restartInstance,
-		startInstance,
-		stopInstance
-	} from '#lib/instances.remote.js';
-	import { liveStats, overviewNow } from '#lib/stats.remote.js';
+
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import Sparkline from '#lib/components/sparkline.svelte';
@@ -28,6 +21,15 @@
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
+	import {
+		listInstances,
+		restartInstance,
+		startInstance,
+		stopInstance
+	} from '#lib/instances.remote.js';
+	import { liveStats, overviewNow } from '#lib/stats.remote.js';
+
+	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const canCreate = $derived(data.panel.includes('instances.create'));

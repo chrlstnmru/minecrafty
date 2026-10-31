@@ -1,8 +1,11 @@
 <script lang="ts" generics="TData extends RowData">
 	import type { Row, RowData } from '@tanstack/svelte-table';
+
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { Features } from './hook.js';
+
 	import Cells from './cells.svelte';
 	import { getLayout } from './layout.js';
 	import StackedCells from './stacked-cells.svelte';

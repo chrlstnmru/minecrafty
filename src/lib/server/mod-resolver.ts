@@ -1,4 +1,5 @@
 import { basename } from 'node:path';
+
 import * as modrinth from './modrinth';
 
 /** Where versions come from: Modrinth, or a fake in a test. */

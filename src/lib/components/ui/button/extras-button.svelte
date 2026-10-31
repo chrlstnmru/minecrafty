@@ -38,9 +38,10 @@
 </script>
 
 <script lang="ts">
-	import Button, { type ButtonProps as ButtonPrimitiveProps } from './button.svelte';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { cn } from '#lib/utils.js';
+
+	import Button, { type ButtonProps as ButtonPrimitiveProps } from './button.svelte';
 
 	let {
 		ref = $bindable(null),

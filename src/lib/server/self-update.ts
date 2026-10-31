@@ -3,15 +3,16 @@
 // leaves a request for the root update service (see self-update-apply.ts). Nothing is installed
 // unasked.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
+
 import { compareReleases, isReleaseTag, isStableTag } from '../release-version';
 import { compiled } from './config';
-import { getSetting, setSetting } from './settings';
 import {
 	updateRequestFile,
 	updateStatusFile,
 	type Fetch,
 	type UpdateStatus
 } from './self-update-apply';
+import { getSetting, setSetting } from './settings';
 
 /** The release this build came from; `dev` for anything not built by the release workflow. */
 export const currentVersion =

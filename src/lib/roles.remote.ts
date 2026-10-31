@@ -1,8 +1,10 @@
-import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
+import { error, invalid } from '@sveltejs/kit';
+
 import { idSchema } from '#lib/schemas/common.js';
 import { newRoleSchema, saveRolesSchema } from '#lib/schemas/roles.js';
 import { can, type Actor } from '#lib/server/access.js';
+import { record } from '#lib/server/audit.js';
 import { requirePanel } from '#lib/server/auth.js';
 import {
 	canDeleteRole,
@@ -11,7 +13,6 @@ import {
 	roleAssignable,
 	roleLock
 } from '#lib/server/grants.js';
-import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as roles from '#lib/server/roles.js';
 

@@ -1,13 +1,16 @@
 <script lang="ts">
 	import type { FlexiWidgetController } from '@flexiboards/svelte';
+
 	import CrownIcon from '@tabler/icons-svelte/icons/crown';
 	import LockIcon from '@tabler/icons-svelte/icons/lock';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+
+	import type { RoleLock } from '#lib/role-lock.js';
+
 	import * as SortableList from '#lib/components/flexi-sortable-list/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import type { RoleLock } from '#lib/role-lock.js';
 	import { cn } from '#lib/utils.js';
 
 	interface Role {

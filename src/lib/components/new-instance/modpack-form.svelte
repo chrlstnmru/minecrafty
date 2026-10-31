@@ -1,28 +1,30 @@
 <script lang="ts">
-	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
+
+	import Combobox from '#lib/components/combobox.svelte';
+	import * as Form from '#lib/components/form/index.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { LOADERS, type Loader } from '#lib/loader-list.js';
 	import {
 		importModpack,
 		modpackPreview,
 		modpackVersions,
 		searchModpacks
 	} from '#lib/modpacks.remote.js';
-	import * as Form from '#lib/components/form/index.js';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import Combobox from '#lib/components/combobox.svelte';
-	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { importModpackSchema } from '#lib/schemas/modpack.js';
+
 	import EulaCheckbox from './eula-checkbox.svelte';
-	import InstanceIcon from '#lib/components/instance-icon.svelte';
-	import { LOADERS, type Loader } from '#lib/loader-list.js';
 
 	let { onDone }: { onDone: () => void } = $props();
 

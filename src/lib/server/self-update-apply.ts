@@ -9,6 +9,7 @@
 // downgrade to an older, weaker build.
 import { lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+
 import { compareReleases, isReleaseTag, isStableTag } from '../release-version';
 import { dataDir } from './config';
 

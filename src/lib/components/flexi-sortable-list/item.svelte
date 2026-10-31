@@ -1,7 +1,9 @@
 <script lang="ts">
 	import type { FlexiWidgetController } from '@flexiboards/svelte';
 	import type { ComponentProps } from 'svelte';
+
 	import { FlexiWidget } from '@flexiboards/svelte';
+
 	import { cn } from '#lib/utils.js';
 	let {
 		class: className,

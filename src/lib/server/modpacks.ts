@@ -1,17 +1,20 @@
+import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
-import { and, eq, isNotNull, isNull } from 'drizzle-orm';
+
+import { safeEntryName } from '#lib/safe-entry-name.js';
+
+import type { Loader } from './loaders';
+
 import { dataDir } from './config';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
 import { downloadFile } from './download';
 import { runInstall, setProgress } from './install-progress';
 import { installBase, insertInstance, serverDir, type NewInstance } from './instances';
-import type { Loader } from './loaders';
-import * as modrinth from './modrinth';
-import { safeEntryName } from '#lib/safe-entry-name.js';
-import { Zip, type ZipEntry } from './zip';
 import { writeManifest } from './modpack-manifest';
+import * as modrinth from './modrinth';
+import { Zip, type ZipEntry } from './zip';
 
 // Modrinth modpacks (.mrpack): a zip with modrinth.index.json (what to download), plus
 // overrides/ and server-overrides/ folders that are copied into the server as they are.

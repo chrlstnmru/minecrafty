@@ -2,13 +2,8 @@
 	import { page } from '$app/state';
 	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
 	import { toast } from 'svelte-sonner';
-	import { getInstance, listInstances } from '#lib/instances.remote.js';
-	import { installedMods } from '#lib/mods.remote.js';
-	import {
-		modpackStatus,
-		modpackUpdatePreview,
-		updateModpack
-	} from '#lib/modpack-update.remote.js';
+
+	import Combobox from '#lib/components/combobox.svelte';
 	import Notice from '#lib/components/notice.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -17,10 +12,16 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
-	import Combobox from '#lib/components/combobox.svelte';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { formatBytes } from '#lib/format.js';
+	import { getInstance, listInstances } from '#lib/instances.remote.js';
+	import {
+		modpackStatus,
+		modpackUpdatePreview,
+		updateModpack
+	} from '#lib/modpack-update.remote.js';
+	import { installedMods } from '#lib/mods.remote.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);

@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { matches, nextRun, parseCron } from './cron';
 
 const spec = (expression: string) => {

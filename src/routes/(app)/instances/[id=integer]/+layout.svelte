@@ -1,12 +1,22 @@
 <script lang="ts">
+	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
+	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
+	import PlayerStopFilledIcon from '@tabler/icons-svelte/icons/player-stop-filled';
+	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
-	import { isFromPack } from '#lib/instance-origin.js';
-	import { goto } from '$app/navigation';
+
+	import PageHeader from '#lib/components/page-header.svelte';
+	import StatusPill from '#lib/components/status-pill.svelte';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
 	import { instanceModules, type InstanceModule } from '#lib/instance-modules.js';
-	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
+	import { isFromPack } from '#lib/instance-origin.js';
 	import {
 		getInstance,
 		killInstance,
@@ -15,18 +25,10 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import PageHeader from '#lib/components/page-header.svelte';
+	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
 	import { liveStats } from '#lib/stats.remote.js';
-	import { formatBytes, formatDuration, formatPercent } from '#lib/format.js';
-	import StatusPill from '#lib/components/status-pill.svelte';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+
 	import type { LayoutProps } from './$types';
-	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
-	import PlayerStopFilledIcon from '@tabler/icons-svelte/icons/player-stop-filled';
-	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
-	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 
 	let { children }: LayoutProps = $props();
 

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest';
+
 import { fakeRcon as fakeServer, stopFakeRcon } from '#test/fake-rcon.js';
+
 import { RconError, withRcon } from './rcon';
 
 afterEach(stopFakeRcon);

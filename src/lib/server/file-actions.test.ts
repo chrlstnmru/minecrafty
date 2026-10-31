@@ -1,8 +1,11 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { makeInstance } from '#test/instance.js';
+
 import type { Actor } from './access';
+
 import { claim } from './operations';
 
 // Whether the server runs is decided per test; the runner itself is replaced.

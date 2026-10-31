@@ -1,16 +1,19 @@
+import { and, eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { and, eq } from 'drizzle-orm';
-import { canRetryInstall } from '#lib/instance-origin.js';
+
 import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
+
+import { canRetryInstall } from '#lib/instance-origin.js';
+
 import { backupsDir, instanceDir, javaOverride, runnerCommand, serverDir } from './config';
-import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import { db } from './db';
 import { instances } from './db/schema';
-import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import { getProgress, runInstall, setProgress } from './install-progress';
-import { busyWith } from './operations';
+import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import * as live from './live-server';
+import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
+import { busyWith } from './operations';
 import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;

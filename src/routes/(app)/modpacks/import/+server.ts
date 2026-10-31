@@ -1,7 +1,9 @@
 import { error, json } from '@sveltejs/kit';
+
 import { record } from '#lib/server/audit.js';
 import { requirePanel } from '#lib/server/auth.js';
 import { importMrpack } from '#lib/server/local-packs.js';
+
 import type { RequestHandler } from './$types';
 
 // A pack of the builder's own size: the server accepts bodies up to 64 MB.

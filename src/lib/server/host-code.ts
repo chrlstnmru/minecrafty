@@ -2,6 +2,7 @@
 // in a server folder can run anything on the host as the panel's user, which is more than any
 // per-server permission is meant to give, so only the owner may add or change them.
 import type { Actor } from './access';
+
 import { fold } from './protected-files';
 
 const CODE_EXTENSIONS = /\.(jar|class|sh|bat|cmd|ps1|exe|dll|so|dylib)$/;

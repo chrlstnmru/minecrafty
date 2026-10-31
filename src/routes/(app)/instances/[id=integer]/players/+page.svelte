@@ -5,8 +5,7 @@
 	import UsersIcon from '@tabler/icons-svelte/icons/users';
 	import { toast } from 'svelte-sonner';
 	import * as v from 'valibot';
-	import { playerActionSchema, type PlayerAction } from '#lib/schemas/players.js';
-	import { onlineNow, playerAction, playerLists, setWhitelist } from '#lib/players.remote.js';
+
 	import Notice from '#lib/components/notice.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -18,6 +17,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { onlineNow, playerAction, playerLists, setWhitelist } from '#lib/players.remote.js';
+	import { playerActionSchema, type PlayerAction } from '#lib/schemas/players.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);

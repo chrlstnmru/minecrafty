@@ -1,5 +1,6 @@
 import { existsSync, readFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import * as S from './setup-token';
 
 beforeEach(() => S.clearSetupToken());

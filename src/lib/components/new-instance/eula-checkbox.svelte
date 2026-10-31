@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { RemoteFormField } from '$app/server';
+
 	import ExternalLink from '@tabler/icons-svelte/icons/external-link';
+
 	import * as Form from '#lib/components/form/index.js';
 
 	let { field }: { field: RemoteFormField<boolean> } = $props();

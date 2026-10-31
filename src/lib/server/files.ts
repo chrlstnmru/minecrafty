@@ -11,8 +11,10 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
-import { SMALL_FILE_BYTES } from '../upload-limits';
+
 import type { Actor } from './access';
+
+import { SMALL_FILE_BYTES } from '../upload-limits';
 import { assertMayWriteCode } from './host-code';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';

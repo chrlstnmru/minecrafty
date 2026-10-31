@@ -2,6 +2,7 @@ import { existsSync, mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { applyUpdate, releaseAsset, type ApplyOptions, type Fetch } from './self-update-apply';
 
 const NEW = new TextEncoder().encode('new program');

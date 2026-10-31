@@ -1,11 +1,21 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import PackageOffIcon from '@tabler/icons-svelte/icons/package-off';
-	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
+	import { toast } from 'svelte-sonner';
+
+	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import { Switch } from '#lib/components/ui/switch/index.js';
 	import { getInstance } from '#lib/instances.remote.js';
 	import { modSupport } from '#lib/mod-support.js';
-	import { toast } from 'svelte-sonner';
 	import {
 		installMod,
 		disableClientOnlyMods,
@@ -17,15 +27,6 @@
 		searchMods,
 		updateMod
 	} from '#lib/mods.remote.js';
-	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
-	import { Badge } from '#lib/components/ui/badge/index.js';
-	import { Switch } from '#lib/components/ui/switch/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import { Spinner } from '#lib/components/ui/spinner/index.js';
 
 	const PAGE_SIZE = 20;
 

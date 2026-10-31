@@ -1,4 +1,5 @@
 import type { FlexiBoardConfiguration } from '@flexiboards/svelte';
+
 import { cssTransitionConfig } from '@flexiboards/svelte';
 import { MediaQuery } from 'svelte/reactivity';
 

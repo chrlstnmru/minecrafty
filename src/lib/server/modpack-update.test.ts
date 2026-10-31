@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import {
 	existsSync,
@@ -11,9 +12,10 @@ import {
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+
 import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
+
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
 import { Zip } from './zip';

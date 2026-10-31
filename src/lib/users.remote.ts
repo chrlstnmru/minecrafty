@@ -1,5 +1,6 @@
-import { error, invalid } from '@sveltejs/kit';
 import { command, form, query } from '$app/server';
+import { error, invalid } from '@sveltejs/kit';
+
 import { idSchema } from '#lib/schemas/common.js';
 import {
 	addUserSchema,
@@ -9,9 +10,9 @@ import {
 	userPasswordSchema
 } from '#lib/schemas/users.js';
 import { listAssignments, setAssignments } from '#lib/server/access.js';
+import { record } from '#lib/server/audit.js';
 import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { canActOnRecord, canAddUser, canAssignRole, type GrantCheck } from '#lib/server/grants.js';
-import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import * as rolesStore from '#lib/server/roles.js';
 import * as admin from '#lib/server/user-admin.js';

@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+
 import { safeEntryName } from '../safe-entry-name.js';
 import { idSchema } from './common.js';
 

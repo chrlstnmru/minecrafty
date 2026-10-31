@@ -1,6 +1,9 @@
 import type { CellContext, DisplayColumnDef, RowData } from '@tanstack/svelte-table';
+
 import { renderComponent } from '@tanstack/svelte-table';
+
 import type { Features } from './hook.js';
+
 import DateCell from './cells/date-cell.svelte';
 import SelectAll from './cells/select-all.svelte';
 import SelectRow from './cells/select-row.svelte';

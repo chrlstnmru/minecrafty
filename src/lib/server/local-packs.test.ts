@@ -1,6 +1,6 @@
+import { eq } from 'drizzle-orm';
 import { existsSync, readdirSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
 
 type Version = {
 	id: string;

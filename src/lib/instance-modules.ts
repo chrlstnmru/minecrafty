@@ -1,9 +1,11 @@
+import type { Icon } from '@tabler/icons-svelte';
+
 import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
 import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
 import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
-import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import FolderIcon from '@tabler/icons-svelte/icons/folder';
+import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
 import PackageImportIcon from '@tabler/icons-svelte/icons/package-import';
 import PaletteIcon from '@tabler/icons-svelte/icons/palette';
@@ -11,7 +13,6 @@ import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import TerminalIcon from '@tabler/icons-svelte/icons/terminal-2';
 import UsersGroupIcon from '@tabler/icons-svelte/icons/users-group';
-import type { Icon } from '@tabler/icons-svelte';
 
 export type InstanceModule = {
 	slug: string;

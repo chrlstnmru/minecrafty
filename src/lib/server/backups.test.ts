@@ -1,9 +1,12 @@
+import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ClientMessage, ServerMessage } from '#runner/protocol.js';
+
 import { makeInstance } from '#test/instance.js';
-import { eq } from 'drizzle-orm';
+
 import { db } from './db';
 import { instances } from './db/schema';
 

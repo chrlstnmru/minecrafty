@@ -1,6 +1,7 @@
+import { sum } from 'drizzle-orm';
 import { statfsSync } from 'node:fs';
 import os from 'node:os';
-import { sum } from 'drizzle-orm';
+
 import { dataDir } from './config';
 import { db } from './db';
 import { backups } from './db/schema';

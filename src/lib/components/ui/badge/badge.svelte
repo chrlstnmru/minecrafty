@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import type { VariantProps } from 'tailwind-variants';
+
 	import { tv } from 'tailwind-variants';
 
 	export const badgeVariants = tv({
@@ -37,7 +38,9 @@
 
 <script lang="ts">
 	import type { HTMLAnchorAttributes } from 'svelte/elements';
+
 	import type { WithElementRef } from '#lib/utils.js';
+
 	import { cn } from '#lib/utils.js';
 
 	let {

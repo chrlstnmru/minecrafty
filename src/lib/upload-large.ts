@@ -5,7 +5,9 @@ import {
 	uploadPiece,
 	uploadProgress
 } from '#lib/files.remote.js';
+
 import type { UploadItem } from './upload-entries.js';
+
 import { CHUNK_BYTES } from './upload-limits.js';
 
 // Sends one large file as numbered pieces, a few at a time. A piece that fails is retried, and a

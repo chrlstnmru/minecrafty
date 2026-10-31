@@ -9,9 +9,10 @@
 
 <script lang="ts">
 	import LockIcon from '@tabler/icons-svelte/icons/lock';
+
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { PERMISSIONS, permissionGroup, registry, type Permission } from '#lib/permissions.js';

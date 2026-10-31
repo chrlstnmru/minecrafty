@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { compareReleases, isReleaseTag, isStableTag } from './release-version';
 
 describe('release tags', () => {

@@ -1,6 +1,8 @@
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import type { ClientMessage, RunnerStatus } from '#runner/protocol.js';
+
 import { makeInstance } from '#test/instance.js';
 
 // The runner is replaced: a test lists the states it reports, one per status check, the last repeating.

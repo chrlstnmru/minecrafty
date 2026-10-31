@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { createSampler, type RunningInstance, type SamplerDeps } from './stats';
 
 // The sampler is fed numbers by hand: a clock that moves when told to, CPU counters, instances.

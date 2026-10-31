@@ -2,11 +2,12 @@ import { randomBytes } from 'node:crypto';
 import { existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
+
 import { makeInstance } from './../test/instance';
 import { serverDir } from './server/instances';
 import * as uploads from './server/uploads';
-import { CHUNK_BYTES } from './upload-limits';
 import { discardLarge, uploadLarge, type LargeTarget } from './upload-large';
+import { CHUNK_BYTES } from './upload-limits';
 
 // The browser-side sender runs against the real upload sessions, with the network replaced by
 // direct calls that can fail on demand.

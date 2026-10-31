@@ -1,11 +1,11 @@
+import js from '@eslint/js';
 import { plugin as shadcn } from '@shadcn/lint';
 import prettier from 'eslint-config-prettier';
 import oxlint from 'eslint-plugin-oxlint';
-import path from 'node:path';
-import js from '@eslint/js';
 import svelte from 'eslint-plugin-svelte';
 import { defineConfig, includeIgnoreFile } from 'eslint/config';
 import globals from 'globals';
+import path from 'node:path';
 import ts from 'typescript-eslint';
 
 const gitignorePath = path.resolve(import.meta.dirname, '.gitignore');

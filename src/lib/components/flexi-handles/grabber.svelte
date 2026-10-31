@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { FlexiWidgetClasses } from '@flexiboards/svelte';
 	import type { ComponentProps } from 'svelte';
+
 	import { getFlexiwidgetCtx, FlexiGrab } from '@flexiboards/svelte';
 	import GripVertical from '@tabler/icons-svelte/icons/grip-vertical';
+
 	import { cn } from '#lib/utils.js';
 	let {
 		class: className,

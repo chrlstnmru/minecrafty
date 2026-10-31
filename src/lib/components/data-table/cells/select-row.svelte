@@ -1,6 +1,8 @@
 <script lang="ts">
 	import type { Row, RowData } from '@tanstack/svelte-table';
+
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+
 	import type { Features } from '../hook.js';
 
 	type SelectableRow = Pick<

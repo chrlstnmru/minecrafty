@@ -1,6 +1,7 @@
 <script lang="ts">
-	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
 	import LogoutIcon from '@tabler/icons-svelte/icons/logout';
+	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
+
 	import { logout } from '#lib/auth.remote.js';
 	import * as Avatar from '#lib/components/ui/avatar/index.js';
 	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';

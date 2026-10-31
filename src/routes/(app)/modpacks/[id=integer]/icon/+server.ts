@@ -1,7 +1,9 @@
 import { error, json } from '@sveltejs/kit';
+
 import { record } from '#lib/server/audit.js';
 import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { getPack, iconFile, saveIcon } from '#lib/server/local-packs.js';
+
 import type { RequestHandler } from './$types';
 
 // An icon is a picture, so anyone signed in may load it: it is also the icon of the servers made

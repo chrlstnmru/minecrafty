@@ -1,7 +1,9 @@
 <script lang="ts">
-	import { useFileDropZone } from './file-drop-zone.svelte.js';
-	import type { FileDropZoneRootProps } from './types.js';
 	import { box } from 'svelte-toolbelt';
+
+	import type { FileDropZoneRootProps } from './types.js';
+
+	import { useFileDropZone } from './file-drop-zone.svelte.js';
 
 	const uid = $props.id();
 	let {

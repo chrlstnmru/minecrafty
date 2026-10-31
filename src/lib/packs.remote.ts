@@ -1,8 +1,6 @@
 import { command, form, query } from '$app/server';
 import * as v from 'valibot';
-import { requirePermission } from '#lib/server/auth.js';
-import { record } from '#lib/server/audit.js';
-import { userFacing } from '#lib/server/http.js';
+
 import {
 	idSchema,
 	projectIdSchema,
@@ -10,6 +8,9 @@ import {
 	versionIdSchema
 } from '#lib/schemas/common.js';
 import { packOptionsSchema } from '#lib/schemas/packs.js';
+import { record } from '#lib/server/audit.js';
+import { requirePermission } from '#lib/server/auth.js';
+import { userFacing } from '#lib/server/http.js';
 import * as packs from '#lib/server/packs.js';
 
 const id = idSchema;

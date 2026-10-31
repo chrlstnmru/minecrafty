@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { fly } from 'svelte/transition';
+
 	import { Button } from '#lib/components/ui/button/index.js';
 
 	let {

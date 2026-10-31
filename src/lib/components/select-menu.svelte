@@ -1,6 +1,7 @@
 <script lang="ts" generics="T extends Option">
 	import * as Select from '#lib/components/ui/select/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { Option, OptionSnippet, SelectionSnippet } from './option.js';
 
 	let {
