@@ -59,7 +59,7 @@
 {#snippet dot(mark: Status | undefined)}
 	{#if mark}
 		<span
-			class="size-2 shrink-0 rounded-full {mark.tone === 'info' ? 'bg-info' : 'bg-warning'}"
+			class="me-2 size-2 shrink-0 rounded-full {mark.tone === 'info' ? 'bg-info' : 'bg-warning'}"
 			title={mark.label}
 		></span>
 		<span class="sr-only">{mark.label}</span>

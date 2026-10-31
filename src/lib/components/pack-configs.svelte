@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
+	import FileSearchIcon from '@tabler/icons-svelte/icons/file-search';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
 	import FolderUpIcon from '@tabler/icons-svelte/icons/folder-up';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
@@ -25,6 +26,7 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
@@ -38,6 +40,7 @@
 		type FsEntry,
 		type UploadItem
 	} from '#lib/upload-entries.js';
+	import { cn } from '#lib/utils.js';
 
 	let {
 		id,
@@ -484,9 +487,14 @@
 			</div>
 		</div>
 
-		<div class="grid h-full min-h-0 min-w-0 grid-rows-[auto_minmax(0,1fr)] content-start gap-3">
+		<div
+			class={cn(
+				'grid h-full min-h-0 min-w-0 content-start gap-3',
+				open !== null ? 'grid-rows-[auto_minmax(0,1fr)]' : 'grid-rows-1'
+			)}
+		>
 			{#if open === null}
-				<Empty.Root class="p-8">
+				<Empty.Root class="border border-dotted p-8">
 					<Empty.Header>
 						<Empty.Title>Choose a file</Empty.Title>
 						<Empty.Description>
@@ -507,6 +515,7 @@
 							<Button variant="outline" onclick={format} disabled={file?.loading}>
 								<WandIcon />Format
 							</Button>
+							<Separator orientation="vertical" />
 						{/if}
 						<Button variant="ghost" onclick={discardEdits} disabled={!unsaved}>Discard</Button>
 						<Button onClickPromise={save} disabled={!unsaved}>Save</Button>
