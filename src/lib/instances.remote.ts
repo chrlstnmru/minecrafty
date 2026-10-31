@@ -76,8 +76,8 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 			instanceId: made.row.id
 		});
 	} catch (e) {
-		if (String(e).includes('UNIQUE'))
-			invalid(issue.port('Port is already used by another instance'));
+		const port = instances.portConflict(e);
+		if (port) invalid(issue.port(port));
 		invalid(e instanceof Error ? e.message : 'Could not create the instance');
 	}
 });
@@ -115,8 +115,8 @@ export const updateInstance = form(
 					instanceId
 				});
 		} catch (e) {
-			if (String(e).includes('UNIQUE'))
-				invalid(issue.port('Port is already used by another instance'));
+			const port = instances.portConflict(e);
+			if (port) invalid(issue.port(port));
 			throw e;
 		}
 		await getInstance(instanceId).refresh();

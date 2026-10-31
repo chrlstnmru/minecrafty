@@ -45,23 +45,57 @@ export function ensureRcon(id: number) {
 	return { port, password };
 }
 
+/** The first port from 25565 up that no server and no RCON listener uses. */
 export function nextFreePort() {
 	const used = new Set(
 		db
-			.select({ port: instances.port })
+			.select({ port: instances.port, rcon: instances.rconPort })
 			.from(instances)
 			.all()
-			.map((r) => r.port)
+			.flatMap((r) => [r.port, r.rcon])
 	);
 	let port = PORT_START;
 	while (used.has(port)) port++;
 	return port;
 }
 
+/** A game port that another server, or an RCON listener, already uses. */
+export class PortTakenError extends Error {}
+
+/** The column only keeps game ports unique, so RCON ports are checked here. */
+function assertPortFree(port: number, selfId?: number) {
+	const rows = db
+		.select({
+			id: instances.id,
+			name: instances.name,
+			port: instances.port,
+			rcon: instances.rconPort
+		})
+		.from(instances)
+		.all();
+	const game = rows.find((r) => r.id !== selfId && r.port === port);
+	if (game) throw new PortTakenError(`Port ${port} is used by ${game.name}`);
+	const rcon = rows.find((r) => r.rcon === port);
+	if (rcon)
+		throw new PortTakenError(
+			rcon.id === selfId
+				? `Port ${port} is this server's RCON port`
+				: `Port ${port} is the RCON port of ${rcon.name}`
+		);
+}
+
+/** What to tell the user when `e` is a port clash (a race can still reach the column's check); null otherwise. */
+export function portConflict(e: unknown) {
+	if (e instanceof PortTakenError) return e.message;
+	if (String(e).includes('UNIQUE')) return 'Port is already used by another instance';
+	return null;
+}
+
 export type NewInstance = Omit<typeof instances.$inferInsert, 'id' | 'createdAt'>;
 
 /** Adds the database row and the folder; the server itself is installed by `installBase`. */
 export function insertInstance(input: NewInstance) {
+	assertPortFree(input.port);
 	const row = db.insert(instances).values(input).returning().get();
 	mkdirSync(serverDir(row.id), { recursive: true });
 	return row;
@@ -325,6 +359,7 @@ export type InstanceSettings = Pick<
 
 /** Changes apply on the next start; a running server keeps the values it launched with. */
 export function updateSettings(id: number, settings: InstanceSettings) {
+	assertPortFree(settings.port, id);
 	return db.update(instances).set(settings).where(eq(instances.id, id)).returning().get();
 }
 
