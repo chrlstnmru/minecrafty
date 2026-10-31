@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { compareReleases, isStableTag } from './release-version';
+import { compareReleases, isReleaseTag, isStableTag } from './release-version';
 
 describe('release tags', () => {
 	it('orders releases, with a release after its own pre-releases', () => {
@@ -16,5 +16,12 @@ describe('release tags', () => {
 		expect(isStableTag('v0.2.0-rc.1')).toBe(false);
 		expect(isStableTag('0.2.0')).toBe(false);
 		expect(isStableTag('v0.2.0; rm x')).toBe(false);
+	});
+
+	it('takes full releases and pre-releases as release tags, and nothing else', () => {
+		expect(isReleaseTag('v0.2.0')).toBe(true);
+		expect(isReleaseTag('v0.2.0-rc.1')).toBe(true);
+		expect(isReleaseTag('nightly')).toBe(false);
+		expect(isReleaseTag('v0.2.0-rc.1/../x')).toBe(false);
 	});
 });

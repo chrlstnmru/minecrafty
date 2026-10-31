@@ -1,11 +1,17 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { checkForUpdates, installUpdate, updateInfo } from '#lib/updates.remote.js';
+	import {
+		checkForUpdates,
+		installUpdate,
+		setUpdateChannel,
+		updateInfo
+	} from '#lib/updates.remote.js';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
 
 	const info = updateInfo();
 	const upd = $derived(info.current);
@@ -51,6 +57,16 @@
 		}
 	}
 
+	async function switchChannel(channel: string) {
+		// a single toggle group lets the owner untoggle the current item; keep the channel instead
+		if ((channel !== 'release' && channel !== 'prerelease') || channel === upd?.channel) return;
+		try {
+			await setUpdateChannel(channel);
+		} catch (e) {
+			toast.error(message(e, 'Could not change the update channel'));
+		}
+	}
+
 	const when = (ms: number) => new Date(ms).toLocaleString();
 	const command = $derived(
 		`curl -fsSL https://raw.githubusercontent.com/${upd?.repo ?? 'chrlstnmru/minecrafty'}/main/scripts/install.sh | sudo bash`
@@ -74,10 +90,36 @@
 			{#if !upd}
 				<p class="flex items-center gap-2 text-sm text-muted-foreground"><Spinner />Loading…</p>
 			{:else}
+				<div class="grid gap-2">
+					<span class="text-sm font-medium" id="update-channel">Update channel</span>
+					<ToggleGroup.Root
+						type="single"
+						variant="outline"
+						size="sm"
+						class="w-fit"
+						value={upd.channel}
+						disabled={updating}
+						aria-labelledby="update-channel"
+						onValueChange={switchChannel}
+					>
+						<ToggleGroup.Item value="release" class="data-[state=on]:bg-primary/15">
+							Releases
+						</ToggleGroup.Item>
+						<ToggleGroup.Item value="prerelease" class="data-[state=on]:bg-primary/15">
+							Pre-releases
+						</ToggleGroup.Item>
+					</ToggleGroup.Root>
+					<p class="text-xs text-muted-foreground">
+						{upd.channel === 'prerelease'
+							? 'Also offers test builds before they become a release. They can have bugs; switching back to Releases waits for the next release rather than going back.'
+							: 'Only finished releases are offered.'}
+					</p>
+				</div>
+
 				<dl class="grid grid-cols-[8rem_1fr] gap-y-2 text-sm">
 					<dt class="text-muted-foreground">Running</dt>
 					<dd>{upd.current === 'dev' ? 'a development build' : upd.current}</dd>
-					<dt class="text-muted-foreground">Latest release</dt>
+					<dt class="text-muted-foreground">Latest</dt>
 					<dd>
 						{#if upd.latest}
 							<a
@@ -86,6 +128,8 @@
 								target="_blank"
 								rel="noreferrer">{upd.latest.version}</a
 							>
+							{#if upd.latest.prerelease}<Badge variant="warning" class="ms-2">Pre-release</Badge
+								>{/if}
 							{#if upd.available}<Badge class="ms-2">New</Badge>{/if}
 						{:else if upd.checkedAt}
 							none published yet

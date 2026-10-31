@@ -1,9 +1,11 @@
-// The panel's side of updating Minecrafty: it checks GitHub once a day for a newer full release
-// (pre-releases are skipped, as releases/latest skips them) and, when the owner asks, leaves a
-// request for the root update service (see self-update-apply.ts). Nothing is installed unasked.
+// The panel's side of updating Minecrafty: it checks GitHub once a day for a newer release on the
+// owner's channel (full releases only, unless they chose pre-releases) and, when the owner asks,
+// leaves a request for the root update service (see self-update-apply.ts). Nothing is installed
+// unasked.
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { compareReleases, isStableTag } from '../release-version';
+import { compareReleases, isReleaseTag, isStableTag } from '../release-version';
 import { compiled } from './config';
+import { getSetting, setSetting } from './settings';
 import {
 	updateRequestFile,
 	updateStatusFile,
@@ -19,52 +21,103 @@ export const currentVersion =
 
 const repo = () => process.env.MINECRAFTY_REPO ?? 'chrlstnmru/minecrafty';
 
-export type Release = { version: string; url: string; publishedAt: string | null; notes: string };
+export type Release = {
+	version: string;
+	url: string;
+	publishedAt: string | null;
+	notes: string;
+	prerelease: boolean;
+};
 
-let last: { checkedAt: number; latest: Release | null; error: string | null } | null = null;
+export type UpdateChannel = 'release' | 'prerelease';
 
-/** Asks GitHub for the latest full release and remembers the answer. */
-export async function checkForUpdate(get: Fetch = fetch) {
-	try {
-		const res = await get(`https://api.github.com/repos/${repo()}/releases/latest`, {
-			headers: { accept: 'application/vnd.github+json', 'user-agent': 'minecrafty' },
-			signal: AbortSignal.timeout(15_000)
-		});
-		if (res.status === 404) {
-			last = { checkedAt: Date.now(), latest: null, error: null };
-			return last;
-		}
-		if (!res.ok) throw new Error(`GitHub responded ${res.status}`);
-		const body = (await res.json()) as {
-			tag_name: string;
-			html_url: string;
-			published_at: string | null;
-			body: string | null;
-		};
+const CHANNEL_KEY = 'update.channel';
+
+/** Which releases are offered: full releases (the default), or pre-releases too. */
+export const updateChannel = (): UpdateChannel =>
+	getSetting(CHANNEL_KEY) === 'prerelease' ? 'prerelease' : 'release';
+
+let last: {
+	checkedAt: number;
+	channel: UpdateChannel;
+	latest: Release | null;
+	error: string | null;
+} | null = null;
+
+type GithubRelease = {
+	tag_name: string;
+	html_url: string;
+	published_at: string | null;
+	body: string | null;
+	draft?: boolean;
+};
+
+const toRelease = (body: GithubRelease): Release => ({
+	version: body.tag_name,
+	url: body.html_url,
+	publishedAt: body.published_at,
+	notes: (body.body ?? '').slice(0, 4000),
+	prerelease: !isStableTag(body.tag_name)
+});
+
+/** The newest release on the channel, or null when there is none yet. */
+async function newestRelease(get: Fetch, channel: UpdateChannel): Promise<Release | null> {
+	const headers = { accept: 'application/vnd.github+json', 'user-agent': 'minecrafty' };
+	const signal = AbortSignal.timeout(15_000);
+	// releases/latest skips pre-releases, so the pre-release channel looks through the recent ones
+	const url =
+		channel === 'release'
+			? `https://api.github.com/repos/${repo()}/releases/latest`
+			: `https://api.github.com/repos/${repo()}/releases?per_page=30`;
+	const res = await get(url, { headers, signal });
+	if (res.status === 404) return null;
+	if (!res.ok) throw new Error(`GitHub responded ${res.status}`);
+	if (channel === 'release') {
+		const body = (await res.json()) as GithubRelease;
 		if (!isStableTag(body.tag_name)) throw new Error(`Unexpected release tag ${body.tag_name}`);
+		return toRelease(body);
+	}
+	const list = ((await res.json()) as GithubRelease[]).filter(
+		(r) => !r.draft && isReleaseTag(r.tag_name)
+	);
+	const newest = list.reduce<GithubRelease | null>(
+		(best, r) => (!best || (compareReleases(r.tag_name, best.tag_name) ?? 0) > 0 ? r : best),
+		null
+	);
+	return newest && toRelease(newest);
+}
+
+/** Asks GitHub for the newest release on the owner's channel and remembers the answer. */
+export async function checkForUpdate(get: Fetch = fetch) {
+	const channel = updateChannel();
+	try {
 		last = {
 			checkedAt: Date.now(),
-			latest: {
-				version: body.tag_name,
-				url: body.html_url,
-				publishedAt: body.published_at,
-				notes: (body.body ?? '').slice(0, 4000)
-			},
+			channel,
+			latest: await newestRelease(get, channel),
 			error: null
 		};
 	} catch (e) {
 		last = {
 			checkedAt: Date.now(),
-			latest: last?.latest ?? null,
+			channel,
+			// what the other channel found is not on offer on this one
+			latest: last?.channel === channel ? last.latest : null,
 			error: e instanceof Error ? e.message : 'Could not reach GitHub'
 		};
 	}
 	return last;
 }
 
+/** Switches the channel and checks it straight away, so Settings shows what it offers. */
+export async function setUpdateChannel(channel: UpdateChannel, get: Fetch = fetch) {
+	setSetting(CHANNEL_KEY, channel);
+	return checkForUpdate(get);
+}
+
 /** The newer release, if the last check found one. */
 export function availableUpdate(current = currentVersion) {
-	const latest = last?.latest;
+	const latest = last?.channel === updateChannel() ? last.latest : null;
 	if (!latest || current === 'dev') return null;
 	return (compareReleases(latest.version, current) ?? 0) > 0 ? latest : null;
 }
@@ -89,6 +142,7 @@ export function updateState() {
 	return {
 		current: currentVersion,
 		repo: repo(),
+		channel: updateChannel(),
 		checkedAt: last?.checkedAt ?? null,
 		error: last?.error ?? null,
 		latest: last?.latest ?? null,
@@ -106,7 +160,10 @@ export function requestUpdate(version: string) {
 	const available = availableUpdate();
 	if (!available || available.version !== version)
 		throw new Error(`${version} is not the update on offer; check again`);
-	writeFileSync(updateRequestFile(), JSON.stringify({ version }));
+	writeFileSync(
+		updateRequestFile(),
+		JSON.stringify({ version, channel: available.prerelease ? 'prerelease' : 'release' })
+	);
 }
 
 /** Checks a minute after start, then once a day. */

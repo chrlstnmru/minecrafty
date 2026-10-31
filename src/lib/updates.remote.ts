@@ -17,6 +17,20 @@ export const checkForUpdates = command(async () => {
 	await updateInfo().refresh();
 });
 
+/** Full releases only, or pre-releases too; checks the new channel straight away. */
+export const setUpdateChannel = command(v.picklist(['release', 'prerelease']), async (channel) => {
+	requireOwner();
+	await updates.setUpdateChannel(channel);
+	record({
+		action: 'panel.update-channel',
+		summary:
+			channel === 'prerelease'
+				? 'Switched app updates to pre-releases'
+				: 'Switched app updates to full releases only'
+	});
+	await updateInfo().refresh();
+});
+
 /** Asks the root update service to install the release on offer; the panel restarts once it is in. */
 export const installUpdate = command(
 	v.object({ version: v.pipe(v.string(), v.maxLength(40)) }),
