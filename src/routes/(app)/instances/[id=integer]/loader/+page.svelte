@@ -2,6 +2,7 @@
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import { getInstance, listInstances } from '#lib/instances.remote.js';
+	import { isFromPack } from '#lib/instance-origin.js';
 	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
 	import Notice from '#lib/components/notice.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -155,7 +156,7 @@
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
-			{#if row?.packProjectId}
+			{#if row && isFromPack(row)}
 				<Notice tone="warning" class="mb-4">
 					This server follows the modpack {row.packName}, which decides its Minecraft version and
 					loader build. Update it from the Modpack tab; changing the loader here can break the pack.

@@ -1,6 +1,7 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
+import { canRetryInstall } from '#lib/instance-origin.js';
 import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
 import { backupsDir, instanceDir, javaOverride, runnerCommand, serverDir } from './config';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
@@ -180,7 +181,7 @@ export function retryInstall(id: number) {
 	const row = getInstance(id);
 	if (!row) throw new Error('Instance not found');
 	if (row.installState !== 'failed') throw new Error('Nothing failed here');
-	if (row.packProjectId)
+	if (!canRetryInstall(row))
 		throw new Error('A modpack server cannot be retried; create it again from the pack');
 	if (wasInstalled(id))
 		throw new Error(

@@ -1,6 +1,7 @@
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { and, eq, inArray } from 'drizzle-orm';
+import { originOf } from '#lib/instance-origin.js';
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
@@ -70,13 +71,14 @@ type Instance = NonNullable<ReturnType<typeof getInstance>>;
  * `local:<id>` for a pack from the builder. Null when it was not made from a pack.
  */
 function sourceOf(inst: Instance) {
-	if (inst.packProjectId) return inst.packProjectId;
-	return inst.fromPackId != null ? localPackSource(inst.fromPackId) : null;
+	const origin = originOf(inst);
+	if (origin === 'modrinth-pack') return inst.packProjectId;
+	return origin === 'builder-pack' ? localPackSource(inst.fromPackId!) : null;
 }
 
 /** The version the instance runs: a Modrinth version id, or `rev:<n>` for a builder pack. */
 function versionOf(inst: Instance) {
-	if (inst.packProjectId) return inst.packVersionId;
+	if (originOf(inst) === 'modrinth-pack') return inst.packVersionId;
 	return inst.fromPackRevision != null ? localRevisionId(inst.fromPackRevision) : null;
 }
 
@@ -85,12 +87,13 @@ function versionOf(inst: Instance) {
  * that is the one version it can be updated to.
  */
 async function loadPackFor(inst: Instance, versionId: string) {
-	if (inst.packProjectId) return loadModpack(versionId);
-	if (inst.fromPackId == null) throw new Error('This instance was not created from a modpack');
-	const pack = getPack(inst.fromPackId);
+	const origin = originOf(inst);
+	if (origin === 'modrinth-pack') return loadModpack(versionId);
+	if (origin === 'loader') throw new Error('This instance was not created from a modpack');
+	const pack = getPack(inst.fromPackId!);
 	if (versionId !== localRevisionId(pack.revision))
 		throw new Error('The pack has changed since this page loaded; reload it');
-	return loadLocalPack(inst.fromPackId);
+	return loadLocalPack(inst.fromPackId!);
 }
 
 /** The current copy of a pack file: where it is on disk (it may have been disabled), or null. */

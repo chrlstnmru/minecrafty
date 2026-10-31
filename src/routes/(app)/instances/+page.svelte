@@ -3,6 +3,7 @@
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { SvelteSet } from 'svelte/reactivity';
 	import PageHeader from '#lib/components/page-header.svelte';
+	import { canRetryInstall } from '#lib/instance-origin.js';
 	import { toast } from 'svelte-sonner';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
@@ -162,7 +163,7 @@
 							{settled ? 'Ready to start.' : 'You can leave this page; the install keeps going.'}
 						</p>
 					{:else if failed}
-						{#if !inst.packProjectId && inst.permissions.includes('settings')}
+						{#if canRetryInstall(inst) && inst.permissions.includes('settings')}
 							<Button variant="outline" size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
 								Retry
 							</Button>
