@@ -321,6 +321,36 @@ describe('config files', () => {
 		expect(() => P.readOverrideText(pack.id, 'missing.json')).toThrow('not found');
 	});
 
+	it('moves a folder with its files as one revision, and refuses a missing folder, an existing target, itself or a path that leaves the folder', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'config/sodium/a.json', bytes },
+			{ rel: 'config/sodium/deep/b.json', bytes },
+			{ rel: 'config/other/c.json', bytes }
+		]);
+		const before = P.getPack(pack.id).revision;
+
+		P.moveOverrideFolder(pack.id, 'config/sodium', 'mods-config/sodium');
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual([
+			'config/other/c.json',
+			'mods-config/sodium/a.json',
+			'mods-config/sodium/deep/b.json'
+		]);
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+
+		expect(() => P.moveOverrideFolder(pack.id, 'config/nope', 'x')).toThrow('not found');
+		expect(() => P.moveOverrideFolder(pack.id, 'config/other/c.json', 'x')).toThrow('not found');
+		expect(() => P.moveOverrideFolder(pack.id, 'config/other', 'mods-config')).toThrow(
+			'already exists'
+		);
+		expect(() => P.moveOverrideFolder(pack.id, 'mods-config', 'mods-config/sodium/inside')).toThrow(
+			'into itself'
+		);
+		expect(() => P.moveOverrideFolder(pack.id, 'config/other', '../x')).toThrow('unsafe');
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+	});
+
 	it('deletes a folder with everything in it as one revision, and refuses a missing folder, a file, the root or a path that leaves it', async () => {
 		const pack = await make();
 		const bytes = new TextEncoder().encode('x');

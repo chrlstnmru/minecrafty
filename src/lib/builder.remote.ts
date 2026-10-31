@@ -225,6 +225,21 @@ export const removePackConfigFolder = command(overridePathSchema, async ({ id, p
 	await refreshed(id);
 });
 
+export const movePackConfigFolder = command(movePackConfigSchema, async ({ id, from, to }) => {
+	const user = requirePanel('modpacks.write');
+	await userFacing(async () => {
+		// a folder move carries its files along, so the owner-only rule holds for each of them
+		for (const file of packs.listOverrides(id))
+			if (file.path.startsWith(`${from}/`)) assertMayWriteCode(user, file.path);
+		packs.moveOverrideFolder(id, from, to);
+	});
+	record({
+		action: 'pack.config',
+		summary: `Moved the config folder ${from} to ${to} in the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
 export const movePackConfig = command(movePackConfigSchema, async ({ id, from, to }) => {
 	const user = requirePanel('modpacks.write');
 	await userFacing(async () => {

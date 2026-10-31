@@ -10,7 +10,7 @@ import {
 	rmSync,
 	statSync
 } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, join, sep } from 'node:path';
 
 import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
@@ -558,6 +558,20 @@ export function moveOverride(packId: number, from: string, to: string) {
 	if (target.stat) throw new Error(`${to} already exists`);
 	mkdirSync(dirname(target.dest), { recursive: true });
 	renameSync(source.dest, target.dest);
+	bump(packId);
+}
+
+/** Moves a folder of config files, with everything in it, to another path as one revision. */
+export function moveOverrideFolder(packId: number, from: string, to: string) {
+	requirePack(packId);
+	const source = safeJoin(overridesDir(packId), from);
+	const target = safeJoin(overridesDir(packId), to);
+	if (!existsSync(source) || !statSync(source).isDirectory()) throw new Error('Folder not found');
+	if (source === target) return;
+	if (target.startsWith(`${source}${sep}`)) throw new Error('A folder cannot be moved into itself');
+	if (existsSync(target)) throw new Error(`${to} already exists`);
+	mkdirSync(dirname(target), { recursive: true });
+	renameSync(source, target);
 	bump(packId);
 }
 

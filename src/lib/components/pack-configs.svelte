@@ -13,6 +13,7 @@
 	import {
 		getLocalPack,
 		movePackConfig,
+		movePackConfigFolder,
 		readPackConfig,
 		removePackConfigFolder,
 		removePackOverride,
@@ -200,6 +201,10 @@
 
 	const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
 
+	/** `path` as it reads once the folder `from` has been renamed to `to`. */
+	const rebase = (path: string, from: string, to: string) =>
+		under(path, from) ? `${to}${path.slice(from.length)}` : path;
+
 	let deletingFolder = $state<{ path: string; count: number } | null>(null);
 	let deletingOpen = $state(false);
 
@@ -241,7 +246,11 @@
 	let namingOpen = $state(false);
 
 	const namedPath = $derived(
-		naming ? (naming.from ? naming.value.trim() : joinPath(naming.dir, naming.value.trim())) : ''
+		naming
+			? naming.from
+				? naming.value.trim().replace(/\/+$/, '')
+				: joinPath(naming.dir, naming.value.trim())
+			: ''
 	);
 
 	const nameError = $derived.by(() => {
@@ -249,7 +258,7 @@
 		const name = naming.value.trim();
 		if (!name)
 			return naming.from
-				? 'Enter a path, such as config/mod.toml'
+				? `Enter a path, such as ${naming.kind === 'folder' ? 'config/sodium' : 'config/mod.toml'}`
 				: naming.kind === 'folder'
 					? 'Enter a folder name, such as sodium'
 					: 'Enter a file name, such as mod.toml';
@@ -259,6 +268,8 @@
 		if (path.startsWith('/') || path.split('/').includes('..'))
 			return 'Use a path inside the server folder, without a leading slash or ..';
 		if (path === naming.from) return undefined;
+		if (naming.kind === 'folder' && naming.from && path.startsWith(`${naming.from}/`))
+			return 'A folder cannot be moved into itself';
 		const asFile = files.find((f) => f.path === path || path.startsWith(`${f.path}/`));
 		if (asFile) return `${asFile.path} is a file`;
 		if (naming.kind === 'folder') {
@@ -276,7 +287,7 @@
 
 	const nameHint = $derived(
 		naming?.from
-			? 'The path inside the server folder, such as config/mod.toml.'
+			? `The path inside the server folder, such as ${naming.kind === 'folder' ? 'config/sodium' : 'config/mod.toml'}.`
 			: naming?.kind === 'folder'
 				? 'A folder name such as sodium. It cannot contain slashes.'
 				: 'A text file such as mod.toml, options.json or config.yml.'
@@ -293,8 +304,22 @@
 		const to = namedPath;
 		namingOpen = false;
 		if (kind === 'folder') {
-			emptyFolders = [...emptyFolders, to];
-			targetDir = to;
+			if (!from) {
+				emptyFolders = [...emptyFolders, to];
+				targetDir = to;
+				return;
+			}
+			if (from === to) return;
+			try {
+				// a folder made here that is still empty is not on the server
+				if (files.some((f) => under(f.path, from))) await movePackConfigFolder({ id, from, to });
+				emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
+				targetDir = rebase(targetDir, from, to);
+				if (open) open = rebase(open, from, to);
+				toast.success(`Moved ${from} to ${to}`);
+			} catch (e) {
+				toast.error(message(e, 'Could not move the folder'));
+			}
 			return;
 		}
 		if (!from) {
@@ -497,6 +522,14 @@
 					>
 						{#snippet folderTrailing(folder)}
 							{#if canWrite}
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label="Rename {folder.path}"
+									onclick={() => startNaming('folder', folder.path)}
+								>
+									<PencilIcon />
+								</Button>
 								<Button
 									variant="ghost"
 									size="icon"
