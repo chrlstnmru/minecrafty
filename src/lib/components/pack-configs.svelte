@@ -76,7 +76,8 @@
 			? [...files, { path: open, size: 0, pending: true }]
 			: files
 	);
-	// folders made here hold no file yet, so the server has no trace of them
+	// folders that are new here or lost their last file: the pack cannot keep an empty folder, so the
+	// server has no trace of them, but they stay in the tree until the page is reloaded or they are deleted
 	let emptyFolders = $state<string[]>([]);
 	const tree = $derived(buildFileTree(listed, emptyFolders));
 
@@ -92,12 +93,6 @@
 	);
 	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
 	const where = $derived(target || 'overrides');
-
-	// a folder that has gained a file is on the server now
-	$effect(() => {
-		const kept = emptyFolders.filter((path) => !files.some((f) => f.path.startsWith(`${path}/`)));
-		if (kept.length !== emptyFolders.length) emptyFolders = kept;
-	});
 
 	const file = $derived(open && !isNew ? readPackConfig({ id, path: open }) : null);
 	const dirty = $derived(open !== null && draft !== loaded);
@@ -190,9 +185,15 @@
 		}
 	}
 
+	/** A folder that lost its last file stays in the tree, empty, rather than vanishing under the cursor. */
+	function keepFolder(dir: string) {
+		if (dir && !emptyFolders.includes(dir)) emptyFolders = [...emptyFolders, dir];
+	}
+
 	async function remove(path: string) {
 		try {
 			await removePackOverride({ id, path });
+			keepFolder(dirOf(path));
 			if (open === path) show(null);
 		} catch (e) {
 			toast.error(message(e, 'Could not remove the file'));
@@ -230,6 +231,7 @@
 		try {
 			await removePackConfigFolder({ id, path: folder.path });
 			forgetFolder(folder.path);
+			keepFolder(dirOf(folder.path));
 			toast.success(`Deleted ${folder.path}`);
 		} catch (e) {
 			toast.error(message(e, 'Could not delete the folder'));
@@ -307,6 +309,7 @@
 		}
 		try {
 			await movePackConfig({ id, from, to });
+			keepFolder(dirOf(from));
 			if (open === from) open = to;
 			toast.success(`Moved ${from} to ${to}`);
 		} catch (e) {
@@ -319,6 +322,7 @@
 		try {
 			// a folder made here that is still empty is not on the server
 			if (files.some((f) => under(f.path, from))) await movePackConfigFolder({ id, from, to });
+			keepFolder(dirOf(from));
 			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
 			targetDir = rebase(targetDir, from, to);
 			if (open) open = rebase(open, from, to);
@@ -548,8 +552,8 @@
 									? { tone: 'warning', label: 'Unsaved changes' }
 									: undefined}
 						folderStatus={(folder) =>
-							emptyFolders.includes(folder.path)
-								? { tone: 'info', label: 'New folder, kept once it holds a file' }
+							emptyFolders.includes(folder.path) && !listed.some((f) => under(f.path, folder.path))
+								? { tone: 'info', label: 'Empty folder, not kept in the pack' }
 								: undefined}
 						onselect={(file) =>
 							unlessDirty(() => {
