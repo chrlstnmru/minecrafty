@@ -54,13 +54,18 @@
 	const canWrite = $derived(data.panel.includes('modpacks.write'));
 	const canMakeServer = $derived(data.panel.includes('instances.create'));
 
-	// the selected tab lives in the URL (?tab=configs), so a reload or a shared link opens the same one
+	// The selected tab lives in the URL (?tab=configs), so a reload or a shared link opens the same
+	// one. It is read from the page URL, which the server has, so the right tab is in the HTML; runed
+	// only reads the URL in the browser, so it is used to write it.
 	const TABS = ['mods', 'configs', 'settings'] as const;
 	const params = useSearchParams(
 		v.object({ tab: v.optional(v.fallback(v.picklist(TABS), 'mods'), 'mods') }),
 		{ pushHistory: false, noScroll: true }
 	);
-	const tab = $derived(params.tab === 'settings' && !canWrite ? 'mods' : params.tab);
+	const wanted = $derived(page.url.searchParams.get('tab'));
+	const tab = $derived(
+		TABS.find((name) => name === wanted && (name !== 'settings' || canWrite)) ?? 'mods'
+	);
 	let makingServer = $state(false);
 	let deleting = $state(false);
 
