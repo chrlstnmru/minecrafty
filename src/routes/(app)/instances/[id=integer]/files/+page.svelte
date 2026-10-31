@@ -17,6 +17,7 @@
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
+	import WandIcon from '@tabler/icons-svelte/icons/wand';
 	import {
 		createSortedRowModel,
 		createTable,
@@ -32,6 +33,7 @@
 
 	import type { FileEntry } from '#lib/server/files.js';
 
+	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
 	import Notice from '#lib/components/notice.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
@@ -46,7 +48,8 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { formatConfig, formatKind } from '#lib/config-format.js';
+	import { isEditable } from '#lib/editable.js';
 	import {
 		listFiles,
 		newFile,
@@ -72,8 +75,6 @@
 	const downloadUrl = (to: string) =>
 		`/instances/${id}/files/download?path=${encodeURIComponent(to)}`;
 
-	const EDITABLE =
-		/\.(properties|json|json5|jsonc|toml|ya?ml|cfg|conf|ini|txt|mcmeta|xml|md|snbt|log)$/i;
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
@@ -152,12 +153,21 @@
 	}
 
 	async function save() {
-		if (!editing) return;
+		if (!editing || !dirty) return;
 		try {
 			await saveFile({ id, path: editing, content: draft });
 			toast.success('Saved');
 		} catch (e) {
 			toast.error(message(e, 'Save failed'));
+		}
+	}
+
+	async function format() {
+		if (!editing) return;
+		try {
+			draft = await formatConfig(editing, draft);
+		} catch (e) {
+			toast.error(e instanceof Error ? e.message : 'Could not format this file');
 		}
 	}
 
@@ -250,7 +260,7 @@
 
 	function activate(entry: { name: string; kind: string }) {
 		if (entry.kind === 'dir') void open(join(entry.name));
-		else if (entry.kind === 'file' && EDITABLE.test(entry.name)) openEditor(join(entry.name));
+		else if (entry.kind === 'file' && isEditable(entry.name)) openEditor(join(entry.name));
 	}
 </script>
 
@@ -376,7 +386,7 @@
 				{#each rows as row (row.id)}
 					{@const entry = row.original}
 					{@const to = join(entry.name)}
-					{@const editable = entry.kind === 'file' && EDITABLE.test(entry.name)}
+					{@const editable = entry.kind === 'file' && isEditable(entry.name)}
 					<Table.Row data-state={row.getIsSelected() ? 'selected' : undefined}>
 						<Table.Cell class="ps-6">
 							<Checkbox
@@ -566,7 +576,7 @@
 </AlertDialog.Root>
 
 <Sheet.Root open={editorOpen} onOpenChange={(o) => !o && closeEditor()}>
-	<Sheet.Content class="flex w-full flex-col overflow-hidden sm:max-w-3xl">
+	<Sheet.Content class="flex w-full flex-col overflow-hidden sm:max-w-xl!">
 		<Sheet.Header>
 			<Sheet.Title class="truncate">{editing}</Sheet.Title>
 			<Sheet.Description>
@@ -584,17 +594,26 @@
 				<p class="text-sm text-destructive" role="alert">
 					{message(file.error, 'Could not open this file.')}
 				</p>
+			{:else if file?.current}
+				{#key editing}
+					<CodeEditor
+						bind:value={draft}
+						filename={editing ?? ''}
+						onsave={save}
+						onformat={format}
+						class="min-h-0 flex-1"
+					/>
+				{/key}
 			{:else}
-				<Textarea
-					bind:value={draft}
-					class="min-h-0 flex-1 resize-none font-mono text-xs whitespace-pre"
-					wrap="off"
-					spellcheck={false}
-					disabled={!file?.current}
-				/>
+				<Skeleton class="min-h-0 flex-1" />
 			{/if}
 			<div class="flex items-center justify-end gap-2">
 				{#if dirty}<span class="me-auto text-xs text-muted-foreground">Unsaved changes</span>{/if}
+				{#if editing && formatKind(editing)}
+					<Button variant="outline" onclick={format} disabled={!file?.current}>
+						<WandIcon />Format
+					</Button>
+				{/if}
 				<Button variant="ghost" onclick={() => closeEditor()}>Close</Button>
 				<Button onClickPromise={save} disabled={!dirty}>Save</Button>
 			</div>
