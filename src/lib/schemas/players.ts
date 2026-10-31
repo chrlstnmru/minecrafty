@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+
 import { idSchema } from './common.js';
 
 /** A Java name (3 to 16 letters, digits and underscores), or a Bedrock one behind the "." prefix Floodgate adds. */

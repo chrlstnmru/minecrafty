@@ -1,8 +1,10 @@
 <script lang="ts">
-	import type { HTMLAttributes } from 'svelte/elements';
-	import { useFileDropZoneTextarea } from './file-drop-zone.svelte.js';
-	import { box, mergeProps } from 'svelte-toolbelt';
 	import type { WithChild } from 'bits-ui';
+	import type { HTMLAttributes } from 'svelte/elements';
+
+	import { box, mergeProps } from 'svelte-toolbelt';
+
+	import { useFileDropZoneTextarea } from './file-drop-zone.svelte.js';
 
 	type Props = HTMLAttributes<HTMLTextAreaElement>;
 

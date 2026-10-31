@@ -1,4 +1,5 @@
 import { query } from '$app/server';
+
 import { idSchema } from '#lib/schemas/common.js';
 import { readLogSchema, searchLogSchema } from '#lib/schemas/logs.js';
 import { requirePermission } from '#lib/server/auth.js';

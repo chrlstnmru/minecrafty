@@ -1,5 +1,6 @@
 <script lang="ts">
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
+
 	import MakeServerForm from './make-server-form.svelte';
 
 	let {

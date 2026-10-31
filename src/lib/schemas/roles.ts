@@ -1,5 +1,7 @@
 import * as v from 'valibot';
+
 import { PERMISSIONS } from '#lib/permissions.js';
+
 import { idSchema } from './common.js';
 
 export const newRoleSchema = v.object({

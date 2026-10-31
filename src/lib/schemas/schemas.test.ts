@@ -1,11 +1,12 @@
 import * as v from 'valibot';
 import { describe, expect, it } from 'vitest';
+
 import { loginSchema, setupSchema } from './auth';
 import { idSchema, searchArgsSchema } from './common';
-import { importModpackSchema } from './modpack';
-import { createInstanceSchema, updateInstanceSchema } from './instance';
-import { packOptionsSchema } from './packs';
 import { uploadBatchSchema } from './files';
+import { createInstanceSchema, updateInstanceSchema } from './instance';
+import { importModpackSchema } from './modpack';
+import { packOptionsSchema } from './packs';
 
 /** The messages and the field each one is attached to. */
 const issues = <T extends v.GenericSchema>(schema: T, input: unknown) => {

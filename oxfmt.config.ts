@@ -5,7 +5,17 @@ export default defineConfig({
 	singleQuote: true,
 	trailingComma: 'none',
 	printWidth: 100,
-	sortPackageJson: false,
+	sortImports: {
+		groups: [
+			'type-import',
+			['value-builtin', 'value-external'],
+			'type-internal',
+			'value-internal',
+			['type-parent', 'type-sibling', 'type-index'],
+			['value-parent', 'value-sibling', 'value-index'],
+			'unknown'
+		]
+	},
 	sortTailwindcss: { stylesheet: './src/routes/layout.css' },
 	svelte: {},
 	associations: [{ files: ['*.svelte'], language: 'svelte' }],

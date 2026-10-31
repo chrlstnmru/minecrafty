@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { addSecurityHeaders } from './security-headers';
 
 describe('security headers', () => {

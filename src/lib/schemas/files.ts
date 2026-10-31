@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+
 import { idSchema } from './common.js';
 
 /** A path relative to the instance's server folder; '' is the folder itself. */

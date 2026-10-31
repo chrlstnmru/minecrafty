@@ -1,15 +1,17 @@
 <script lang="ts">
-	import type { PageProps } from './$types';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
+
+	import * as Form from '#lib/components/form/index.js';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Form from '#lib/components/form/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
 	import { updateInstanceSchema } from '#lib/schemas/instance.js';
+
+	import type { PageProps } from './$types';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);

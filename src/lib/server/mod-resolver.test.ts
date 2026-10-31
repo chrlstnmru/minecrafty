@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
+
 import type { ModrinthVersion } from './modrinth';
+
 import { pickFile, pickVersion, resolveMods, type VersionSource } from './mod-resolver';
 
 type Dep = ModrinthVersion['dependencies'][number];

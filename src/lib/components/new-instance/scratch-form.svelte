@@ -1,11 +1,13 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
-	import { createInstance, minecraftVersions } from '#lib/instances.remote.js';
-	import InstanceIcon from '#lib/components/instance-icon.svelte';
+
 	import * as Form from '#lib/components/form/index.js';
+	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { createInstance, minecraftVersions } from '#lib/instances.remote.js';
 	import { createInstanceSchema } from '#lib/schemas/instance.js';
+
 	import EulaCheckbox from './eula-checkbox.svelte';
 
 	let { onDone }: { onDone: () => void } = $props();

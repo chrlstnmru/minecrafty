@@ -1,9 +1,12 @@
 <script lang="ts" generics="T extends Option">
 	import type { RemoteFormField } from '$app/server';
+
+	import type { Option, OptionSnippet, SelectionSnippet } from '#lib/components/option.js';
+
 	import Combobox from '#lib/components/combobox.svelte';
 	import SelectMenu from '#lib/components/select-menu.svelte';
-	import type { Option, OptionSnippet, SelectionSnippet } from '#lib/components/option.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+
 	import { tryGetFieldRevalidateContext } from './context.js';
 
 	type Props = {

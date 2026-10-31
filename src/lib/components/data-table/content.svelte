@@ -1,14 +1,18 @@
 <script lang="ts" generics="TData extends RowData">
 	import type { Row, RowData } from '@tanstack/svelte-table';
 	import type { Snippet } from 'svelte';
+
 	import { FlexRender } from '@tanstack/svelte-table';
+
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { DataTable } from './create-data-table.svelte.js';
 	import type { Features } from './hook.js';
+
 	import { useTableContext } from './hook.js';
 	import LayoutProvider from './layout-provider.svelte';
 	import DataTableRow from './row.svelte';

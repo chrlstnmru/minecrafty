@@ -1,14 +1,15 @@
-import { redirect } from '@sveltejs/kit';
-import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
 import { getRequestEvent } from '$app/server';
+import { redirect } from '@sveltejs/kit';
+import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
+
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
-import { announceSetupToken } from '#lib/server/setup-token.js';
-import { addSecurityHeaders } from '#lib/server/security-headers.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
+import { addSecurityHeaders } from '#lib/server/security-headers.js';
 import { startUpdateChecks } from '#lib/server/self-update.js';
+import { announceSetupToken } from '#lib/server/setup-token.js';
 import { startStats } from '#lib/server/stats.js';
 import { sweepUploads } from '#lib/server/uploads.js';
 

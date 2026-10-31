@@ -1,9 +1,10 @@
 import { spawnSync } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import { mkdirSync, mkdtempSync, readFileSync, symlinkSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { randomBytes } from 'node:crypto';
 import { describe, expect, it } from 'vitest';
+
 import { Zip } from './zip';
 import { zipStream, type ZipEntry } from './zip-writer';
 

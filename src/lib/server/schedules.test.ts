@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
-import * as v from 'valibot';
 import { eq } from 'drizzle-orm';
-import { makeInstance } from '#test/instance.js';
+import * as v from 'valibot';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { scheduleSchema } from '#lib/schemas/schedules.js';
+import { makeInstance } from '#test/instance.js';
+
 import { db } from './db';
 import { schedules } from './db/schema';
 import * as S from './schedules';

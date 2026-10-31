@@ -1,15 +1,17 @@
+import { and, eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { and, eq } from 'drizzle-orm';
+
+import { modSupport } from '#lib/mod-support.js';
+
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { downloadFile } from './download';
 import { getInstance, serverDir, type Instance } from './instances';
-import { assertWritable } from './operations';
-import * as modrinth from './modrinth';
 import { pickFile, resolveMods } from './mod-resolver';
-import { modSupport } from '#lib/mod-support.js';
 import { projectSides } from './mod-sides';
+import * as modrinth from './modrinth';
+import { assertWritable } from './operations';
 
 export type InstalledMod = typeof installedMods.$inferSelect;
 

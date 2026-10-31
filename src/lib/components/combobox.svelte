@@ -1,15 +1,18 @@
 <script lang="ts" generics="T extends Option">
-	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import CheckIcon from '@tabler/icons-svelte/icons/check';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import SelectorIcon from '@tabler/icons-svelte/icons/selector';
+	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { untrack } from 'svelte';
 	import { get } from 'svelte/store';
+
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import * as Popover from '#lib/components/ui/popover/index.js';
 	import { cn } from '#lib/utils.js';
-	import { filterOptions, moveHighlight } from './combobox-search.js';
+
 	import type { Option, OptionSnippet, SelectionSnippet } from './option.js';
+
+	import { filterOptions, moveHighlight } from './combobox-search.js';
 
 	/**
 	 * A select with a search box, for lists too long to scroll (Minecraft and modpack versions).

@@ -1,6 +1,7 @@
 <script lang="ts">
-	import ChevronRightIcon from '@tabler/icons-svelte/icons/chevron-right';
 	import { page } from '$app/state';
+	import ChevronRightIcon from '@tabler/icons-svelte/icons/chevron-right';
+
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import { listInstances } from '#lib/instances.remote.js';

@@ -1,5 +1,6 @@
 import { lstatSync, readdirSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+
 import type { ZipEntry } from './zip-writer';
 
 /**

@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
-	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
+
+	import * as Form from '#lib/components/form/index.js';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Form from '#lib/components/form/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
 	import { packOptionsSchema } from '#lib/schemas/packs.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number

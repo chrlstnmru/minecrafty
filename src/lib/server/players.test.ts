@@ -1,15 +1,17 @@
+import { eq } from 'drizzle-orm';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as v from 'valibot';
-import { eq } from 'drizzle-orm';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { playerActionSchema } from '#lib/schemas/players.js';
+import { fakeRcon, stopFakeRcon } from '#test/fake-rcon.js';
 import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
-import { fakeRcon, stopFakeRcon } from '#test/fake-rcon.js';
-import { closeAllRcon } from './rcon-sessions';
-import { playerActionSchema } from '#lib/schemas/players.js';
+
 import { db } from './db';
 import { instances } from './db/schema';
+import { closeAllRcon } from './rcon-sessions';
 
 vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
 

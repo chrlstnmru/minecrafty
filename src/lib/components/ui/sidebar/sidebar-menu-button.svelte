@@ -1,5 +1,6 @@
 <script lang="ts" module>
 	import type { VariantProps } from 'tailwind-variants';
+
 	import { tv } from 'tailwind-variants';
 
 	export const sidebarMenuButtonVariants = tv({
@@ -29,10 +30,14 @@
 <script lang="ts">
 	import type { ComponentProps, Snippet } from 'svelte';
 	import type { HTMLAttributes } from 'svelte/elements';
+
 	import { mergeProps } from 'bits-ui';
+
 	import type { WithElementRef, WithoutChildrenOrChild } from '#lib/utils.js';
+
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import { useSidebar } from './context.svelte.js';
 
 	let {

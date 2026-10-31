@@ -1,7 +1,8 @@
 import { command, query } from '$app/server';
 import * as v from 'valibot';
-import { requireOwner } from '#lib/server/auth.js';
+
 import { record } from '#lib/server/audit.js';
+import { requireOwner } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
 import * as updates from '#lib/server/self-update.js';
 

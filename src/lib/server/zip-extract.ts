@@ -11,6 +11,7 @@ import { dirname, resolve, sep } from 'node:path';
 import { Transform } from 'node:stream';
 import { finished, pipeline } from 'node:stream/promises';
 import { crc32, createInflateRaw } from 'node:zlib';
+
 import { safeEntryName } from '#lib/safe-entry-name.js';
 
 // Extracts a zip straight from disk, one entry at a time, so restoring a large backup never

@@ -1,11 +1,14 @@
 <script lang="ts">
 	import type { Header } from '@tanstack/svelte-table';
+
 	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
 	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
 	import ChevronsUpDownIcon from '@tabler/icons-svelte/icons/selector';
 	import { FlexRender } from '@tanstack/svelte-table';
+
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import type { Features } from './hook.js';
 
 	// eslint-disable-next-line @typescript-eslint/no-explicit-any

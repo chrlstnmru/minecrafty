@@ -1,12 +1,14 @@
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
 import { makeInstance } from '#test/instance.js';
+
+import { listAudit, setActorProvider } from './audit';
 import { getProgress, runInstall, setProgress } from './install-progress';
 import { runUpdate } from './instance-job';
 import { getInstance, instanceDir } from './instances';
 import { assertWritable, busyWith, claim } from './operations';
-import { listAudit, setActorProvider } from './audit';
 import { lastOutcome } from './update-outcome';
 
 const opts = { kind: 'loader', backup: null } as const;

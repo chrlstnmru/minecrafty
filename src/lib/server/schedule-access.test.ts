@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest';
-import { makeInstance } from '#test/instance.js';
-import { makeRole } from '#test/roles.js';
+
 import type { Permission } from '#lib/permissions.js';
 import type { ScheduleAction } from '#lib/schemas/schedules.js';
+
+import { makeInstance } from '#test/instance.js';
+import { makeRole } from '#test/roles.js';
+
 import * as A from './access';
 import { db } from './db';
 import { instances, roles, users } from './db/schema';

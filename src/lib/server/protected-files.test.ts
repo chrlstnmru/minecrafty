@@ -1,10 +1,12 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { makeInstance } from '#test/instance.js';
+
 import * as F from './files';
-import { isRunning } from './live-server';
 import { serverDir } from './instances';
+import { isRunning } from './live-server';
 import { assertWorldIdle, isProtected, isRewrittenOnStop, isWorldPath } from './protected-files';
 import * as uploads from './uploads';
 

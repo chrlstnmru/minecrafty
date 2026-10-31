@@ -1,7 +1,8 @@
 <script lang="ts">
-	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
 	import AppSidebar from '#lib/components/app-sidebar.svelte';
 	import SiteHeader from '#lib/components/site-header.svelte';
+	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
+
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();

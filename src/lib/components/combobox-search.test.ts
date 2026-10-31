@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { filterOptions, moveHighlight } from './combobox-search';
 
 const versions = ['1.21.10', '1.21.4', '1.20.6', '1.20', '1.8.9'].map((v) => ({

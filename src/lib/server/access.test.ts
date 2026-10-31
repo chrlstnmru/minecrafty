@@ -1,8 +1,10 @@
-import { beforeEach, describe, expect, it } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { makeInstance } from '#test/instance.js';
+import { beforeEach, describe, expect, it } from 'vitest';
+
 import { INSTANCE_PERMISSIONS, PERMISSIONS, type Permission } from '#lib/permissions.js';
+import { makeInstance } from '#test/instance.js';
 import { makeRole } from '#test/roles.js';
+
 import * as A from './access';
 import { db } from './db';
 import { instances, roleAssignments, roles, sessions, users } from './db/schema';

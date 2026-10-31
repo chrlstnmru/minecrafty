@@ -1,4 +1,5 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import * as T from './login-throttle';
 
 const MINUTE = 60_000;

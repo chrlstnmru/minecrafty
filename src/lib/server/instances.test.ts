@@ -1,12 +1,14 @@
+import { eq } from 'drizzle-orm';
 import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
-import { eq } from 'drizzle-orm';
+
 import { makeInstance } from '#test/instance.js';
+
+import { db } from './db';
+import { instances } from './db/schema';
 import { setProgress, clearProgress } from './install-progress';
 import * as I from './instances';
 import { claim } from './operations';
-import { db } from './db';
-import { instances } from './db/schema';
 
 describe('ports', () => {
 	it('suggests the first free port from 25565 upward', () => {

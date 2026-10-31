@@ -1,7 +1,9 @@
 <script lang="ts" generics="TData extends RowData">
 	import type { RowData } from '@tanstack/svelte-table';
 	import type { Snippet } from 'svelte';
+
 	import { cn } from '#lib/utils.js';
+
 	import type { DataTable } from './create-data-table.svelte.js';
 
 	let {

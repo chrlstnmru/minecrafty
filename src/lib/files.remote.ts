@@ -1,13 +1,14 @@
 import { command, query } from '$app/server';
 import * as v from 'valibot';
+
 import { idSchema } from '#lib/schemas/common.js';
 import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/files.js';
+import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
-import * as uploads from '#lib/server/uploads.js';
-import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
 import { isRunning } from '#lib/server/live-server.js';
+import * as uploads from '#lib/server/uploads.js';
 
 const id = idSchema;
 const location = v.object({ id, path: filePathSchema });

@@ -1,6 +1,8 @@
 import { and, countDistinct, eq, isNull } from 'drizzle-orm';
+
 import { grantedBy, parseRules, type Permission } from '#lib/permissions.js';
 import { planRanks, type RankEntry } from '#lib/rank-plan.js';
+
 import { db } from './db';
 import { roleAssignments, roles } from './db/schema';
 

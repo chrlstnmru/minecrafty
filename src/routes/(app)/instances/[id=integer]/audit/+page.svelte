@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/state';
+
 	import { instanceAudit } from '#lib/audit.remote.js';
 	import AuditTable from '#lib/components/audit-table.svelte';
 

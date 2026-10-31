@@ -4,6 +4,7 @@
 	import ShieldIcon from '@tabler/icons-svelte/icons/shield-lock';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import { toast } from 'svelte-sonner';
+
 	import * as DataTable from '#lib/components/data-table/index.js';
 	import {
 		createColumns,
@@ -33,7 +34,9 @@
 		grantRoleToUsers,
 		setUserPassword
 	} from '#lib/users.remote.js';
+
 	import type { PageProps } from './$types';
+
 	import AccessSheet from './access-sheet.svelte';
 
 	type Row = {

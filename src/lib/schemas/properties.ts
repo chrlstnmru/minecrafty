@@ -1,4 +1,5 @@
 import * as v from 'valibot';
+
 import { MAX_VALUE_CHARS, PROPERTY_KEY } from '../server-properties-catalog.js';
 import { idSchema } from './common.js';
 

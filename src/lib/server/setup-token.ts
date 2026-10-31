@@ -1,9 +1,10 @@
+import { timingSafeEqual } from 'node:crypto';
 // A one-time code that first-run setup asks for, so the first visitor to reach a fresh panel cannot
 // make themselves the owner. It is printed to the log and kept in the data folder, where the
 // install scripts read it back, and it is deleted once the owner exists.
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { timingSafeEqual } from 'node:crypto';
+
 import { dataDir } from './config';
 
 export const setupTokenFile = () => join(dataDir, 'setup-token.txt');

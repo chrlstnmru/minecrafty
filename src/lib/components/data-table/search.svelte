@@ -1,7 +1,9 @@
 <script lang="ts">
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
+
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { cn } from '#lib/utils.js';
+
 	import { useTableContext } from './hook.js';
 
 	let {

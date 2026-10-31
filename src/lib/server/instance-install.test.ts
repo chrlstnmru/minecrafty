@@ -1,8 +1,10 @@
+import { eq } from 'drizzle-orm';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { eq } from 'drizzle-orm';
+
 import { makeInstance } from '#test/instance.js';
+
 import { db } from './db';
 import { instances } from './db/schema';
 

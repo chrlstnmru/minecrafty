@@ -1,13 +1,14 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
+
 	import { installPack } from '#lib/builder.remote.js';
-	import { nextPort } from '#lib/instances.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Label } from '#lib/components/ui/label/index.js';
+	import { nextPort } from '#lib/instances.remote.js';
 
 	/** The name, port, memory and EULA a server made from a builder pack needs, and the button that makes it. */
 	let { packId, packName, onDone }: { packId: number; packName: string; onDone?: () => void } =

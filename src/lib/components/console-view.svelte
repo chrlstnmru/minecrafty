@@ -1,12 +1,13 @@
 <script lang="ts">
+	import MathGreaterIcon from '@tabler/icons-svelte/icons/math-greater';
+	import SendIcon from '@tabler/icons-svelte/icons/send';
 	import { tick } from 'svelte';
 	import { toast } from 'svelte-sonner';
-	import SendIcon from '@tabler/icons-svelte/icons/send';
-	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
+
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import MathGreaterIcon from '@tabler/icons-svelte/icons/math-greater';
+	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
 
 	let { id, status = $bindable('stopped') }: { id: number; status?: string } = $props();
 

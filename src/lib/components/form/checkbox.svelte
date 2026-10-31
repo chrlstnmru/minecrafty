@@ -1,8 +1,10 @@
 <script lang="ts">
 	import type { RemoteFormField } from '$app/server';
 	import type { Snippet } from 'svelte';
+
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+
 	import { tryGetFieldRevalidateContext } from './context.js';
 
 	type Props = {

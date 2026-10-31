@@ -7,12 +7,12 @@
 	import XIcon from '@tabler/icons-svelte/icons/x';
 	import { onDestroy } from 'svelte';
 	import { toast } from 'svelte-sonner';
+
 	import * as Attachment from '#lib/components/ui/attachment/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as FileDropZone from '#lib/components/ui/file-drop-zone/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
-	import { SMALL_FILE_BYTES } from '#lib/upload-limits.js';
 	import {
 		batches,
 		collectEntries,
@@ -21,6 +21,7 @@
 		type FsEntry,
 		type UploadItem
 	} from '#lib/upload-entries.js';
+	import { SMALL_FILE_BYTES } from '#lib/upload-limits.js';
 
 	/**
 	 * Pick or drop files (or a whole folder), review them as attachments, then send them. How they

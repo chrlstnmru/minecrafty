@@ -1,24 +1,26 @@
 <script lang="ts">
+	import { page } from '$app/state';
+	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
+	import DownloadIcon from '@tabler/icons-svelte/icons/download';
+	import FileOffIcon from '@tabler/icons-svelte/icons/file-off';
+	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
+	import SearchIcon from '@tabler/icons-svelte/icons/search';
+	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
+	import TextWrapIcon from '@tabler/icons-svelte/icons/text-wrap';
 	import { createVirtualizer } from '@tanstack/svelte-virtual';
 	import { tick, untrack } from 'svelte';
 	import { get } from 'svelte/store';
-	import { page } from '$app/state';
-	import DownloadIcon from '@tabler/icons-svelte/icons/download';
-	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
-	import TextWrapIcon from '@tabler/icons-svelte/icons/text-wrap';
-	import FileOffIcon from '@tabler/icons-svelte/icons/file-off';
-	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
-	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
-	import SearchIcon from '@tabler/icons-svelte/icons/search';
-	import { TAIL_LINES } from '#lib/log-files.js';
+
 	import type { LogLine } from '#lib/server/logs.js';
-	import { followLog, listLogs, readLog, searchLog } from '#lib/logs.remote.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as InputGroup from '#lib/components/ui/input-group/index.js';
+
 	import Combobox from '#lib/components/combobox.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
+	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
+	import { TAIL_LINES } from '#lib/log-files.js';
+	import { followLog, listLogs, readLog, searchLog } from '#lib/logs.remote.js';
 
 	const id = $derived(Number(page.params.id));
 	const number = new Intl.NumberFormat('en');

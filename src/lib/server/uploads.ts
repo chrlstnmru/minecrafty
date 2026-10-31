@@ -12,9 +12,10 @@ import {
 	writeSync
 } from 'node:fs';
 import { join } from 'node:path';
+
+import { CHUNK_BYTES, MAX_FILE_BYTES } from '../upload-limits';
 import { dataDir } from './config';
 import { prepareTarget, uploadTarget } from './files';
-import { CHUNK_BYTES, MAX_FILE_BYTES } from '../upload-limits';
 
 // Chunked uploads. A large file arrives as numbered pieces, each written at its own offset in a
 // temporary file that lives outside the instance (so a half-sent file never shows up in the file

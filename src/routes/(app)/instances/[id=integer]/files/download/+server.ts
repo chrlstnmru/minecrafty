@@ -1,8 +1,10 @@
 import { error } from '@sveltejs/kit';
+
 import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import { describeDownload } from '#lib/server/files.js';
 import { zipStream } from '#lib/server/zip-writer.js';
+
 import type { RequestHandler } from './$types';
 
 // A real download needs a plain GET the browser can follow, which a remote function is not.

@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm';
+
+import { updateKind } from '../versions';
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { runUpdate } from './instance-job';
-import { isRunning } from './live-server';
-import { updateKind } from '../versions';
-import { mergeStaged, removeStale } from './staged-install';
-import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, serverDir } from './instances';
+import { ensureJava, requiredJavaMajor } from './java';
+import { isRunning } from './live-server';
 import {
 	getMinecraftVersions,
 	installServer,
@@ -18,6 +18,7 @@ import {
 	needsJavaToInstall,
 	type Loader
 } from './loaders';
+import { mergeStaged, removeStale } from './staged-install';
 
 export type LoaderInfo = {
 	loader: Loader;

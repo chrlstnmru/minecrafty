@@ -1,5 +1,7 @@
 import * as v from 'valibot';
+
 import { PACK_LOADERS } from '#lib/pack-loaders.js';
+
 import { idSchema, projectIdSchema, versionIdSchema } from './common.js';
 
 const mcVersion = v.pipe(v.string(), v.regex(/^\d+(\.\d+)*$/, 'Not a release version'));

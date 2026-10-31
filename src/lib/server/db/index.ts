@@ -1,7 +1,8 @@
 import { Database } from 'bun:sqlite';
+import { drizzle } from 'drizzle-orm/bun-sqlite';
 import { mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { drizzle } from 'drizzle-orm/bun-sqlite';
+
 import { dataDir } from '../config';
 import { embeddedMigrations } from './migrations';
 import * as schema from './schema';

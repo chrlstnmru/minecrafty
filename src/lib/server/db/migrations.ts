@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+
 import journal from '../../../../drizzle/meta/_journal.json';
 
 // The migrations are bundled into the server rather than read from a ./drizzle folder at run

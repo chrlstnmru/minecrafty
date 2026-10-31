@@ -1,6 +1,20 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import GamepadIcon from '@tabler/icons-svelte/icons/device-gamepad-2';
+	import GaugeIcon from '@tabler/icons-svelte/icons/gauge';
+	import SettingsIcon from '@tabler/icons-svelte/icons/settings';
+	import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
+	import WorldIcon from '@tabler/icons-svelte/icons/world';
 	import { toast } from 'svelte-sonner';
+
+	import SaveBar from '#lib/components/save-bar.svelte';
+	import SelectMenu from '#lib/components/select-menu.svelte';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as Field from '#lib/components/ui/field/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { saveServerProperties, serverProperties } from '#lib/properties.remote.js';
 	import {
 		MANAGED_KEYS,
@@ -9,19 +23,6 @@
 		validateProperty,
 		type PropertyField
 	} from '#lib/server-properties-catalog.js';
-	import SaveBar from '#lib/components/save-bar.svelte';
-	import SettingsIcon from '@tabler/icons-svelte/icons/settings';
-	import GaugeIcon from '@tabler/icons-svelte/icons/gauge';
-	import WorldIcon from '@tabler/icons-svelte/icons/world';
-	import ShieldLockIcon from '@tabler/icons-svelte/icons/shield-lock';
-	import GamepadIcon from '@tabler/icons-svelte/icons/device-gamepad-2';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import * as Field from '#lib/components/ui/field/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import SelectMenu from '#lib/components/select-menu.svelte';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 
 	const id = $derived(Number(page.params.id));
 	const properties = $derived(serverProperties(id));

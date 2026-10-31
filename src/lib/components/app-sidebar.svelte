@@ -1,12 +1,15 @@
 <script lang="ts">
+	import type { ComponentProps } from 'svelte';
+
 	import CubeIcon from '@tabler/icons-svelte/icons/cube';
+
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { navMain, navSecondary } from '#lib/nav.js';
 	import { visibleItems } from '#lib/nav-access.js';
+	import { navMain, navSecondary } from '#lib/nav.js';
+
 	import NavMain from './nav-main.svelte';
 	import NavSecondary from './nav-secondary.svelte';
 	import NavUser from './nav-user.svelte';
-	import type { ComponentProps } from 'svelte';
 
 	let {
 		user,

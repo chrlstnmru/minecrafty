@@ -1,10 +1,13 @@
+import type { Socket } from 'bun';
+
 // Detached per-instance runner: owns the server process, buffers recent console
 // output and serves a local socket so the panel can (re)attach at any time.
 // Usage: bun runner/main.ts <instanceDir> <instanceId>
 import { existsSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { Socket } from 'bun';
+
 import type { ClientMessage, LaunchSpec, RunnerStatus, ServerMessage } from './protocol';
+
 import { socketPath } from './protocol';
 
 // the compiled binary is started as `minecrafty runner <dir> <id>`; a script as `main.ts <dir> <id>`

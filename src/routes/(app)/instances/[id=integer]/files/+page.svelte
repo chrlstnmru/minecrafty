@@ -1,23 +1,22 @@
 <script lang="ts">
-	import { untrack } from 'svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
+	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
+	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
 	import DotsIcon from '@tabler/icons-svelte/icons/dots';
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import FileIcon from '@tabler/icons-svelte/icons/file';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
 	import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
 	import FileZipIcon from '@tabler/icons-svelte/icons/file-zip';
-	import FolderOpenIcon from '@tabler/icons-svelte/icons/folder-open';
 	import FolderIcon from '@tabler/icons-svelte/icons/folder';
+	import FolderOpenIcon from '@tabler/icons-svelte/icons/folder-open';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
 	import LockIcon from '@tabler/icons-svelte/icons/lock';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
-	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
-	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
-	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
 	import {
 		createSortedRowModel,
 		createTable,
@@ -28,8 +27,26 @@
 		tableFeatures,
 		type SortingState
 	} from '@tanstack/svelte-table';
-	import { formatBytes } from '#lib/format.js';
+	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
+
+	import type { FileEntry } from '#lib/server/files.js';
+
+	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
+	import Notice from '#lib/components/notice.svelte';
+	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
+	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
+	import { Button } from '#lib/components/ui/button/index.js';
+	import * as Card from '#lib/components/ui/card/index.js';
+	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
+	import * as Dialog from '#lib/components/ui/dialog/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
+	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Sheet from '#lib/components/ui/sheet/index.js';
+	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import * as Table from '#lib/components/ui/table/index.js';
+	import { Textarea } from '#lib/components/ui/textarea/index.js';
 	import {
 		listFiles,
 		newFile,
@@ -39,22 +56,7 @@
 		renameFile,
 		saveFile
 	} from '#lib/files.remote.js';
-	import type { FileEntry } from '#lib/server/files.js';
-	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
-	import Notice from '#lib/components/notice.svelte';
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
-	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
-	import { Button } from '#lib/components/ui/button/index.js';
-	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
-	import * as Card from '#lib/components/ui/card/index.js';
-	import * as Dialog from '#lib/components/ui/dialog/index.js';
-	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
-	import { Input } from '#lib/components/ui/input/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
-	import * as Sheet from '#lib/components/ui/sheet/index.js';
-	import * as Table from '#lib/components/ui/table/index.js';
-	import { Textarea } from '#lib/components/ui/textarea/index.js';
+	import { formatBytes } from '#lib/format.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
+
 	import { listLocalPacks } from '#lib/builder.remote.js';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';

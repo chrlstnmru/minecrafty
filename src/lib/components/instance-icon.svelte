@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Picture } from 'vite-imagetools';
+
 	import { cn } from '#lib/utils.js';
 
 	// the loaders' icons live in the repo; the plugin resizes them and serves them with hashed names

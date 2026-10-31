@@ -1,7 +1,9 @@
 import { createHash } from 'node:crypto';
 import { existsSync, readFileSync, renameSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
+
 import type { PlayerAction } from '#lib/schemas/players.js';
+
 import { getInstance, serverDir } from './instances';
 import { isRunning, LiveServerError, rcon } from './live-server';
 import { readProperties, setProperties } from './server-properties';

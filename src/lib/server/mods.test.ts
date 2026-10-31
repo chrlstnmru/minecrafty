@@ -1,7 +1,9 @@
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import { makeInstance } from '#test/instance.js';
+
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { serverDir } from './instances';

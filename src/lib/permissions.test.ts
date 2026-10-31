@@ -1,4 +1,8 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
+
+import { validateRegistry, type Permission as PermissionDef } from './permission-define';
 import {
 	MODULE_PERMISSION,
 	PERMISSIONS,
@@ -13,9 +17,6 @@ import {
 	isInstancePermission,
 	registry
 } from './permissions';
-import { validateRegistry, type Permission as PermissionDef } from './permission-define';
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
 
 // the tab list imports icon components, which the test runner cannot load; its slugs are read as text
 const slugs = [

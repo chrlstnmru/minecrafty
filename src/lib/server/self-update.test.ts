@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it } from 'vitest';
+
 import type { Fetch } from './self-update-apply';
+
 import * as U from './self-update';
 import { deleteSetting } from './settings';
 

@@ -1,8 +1,11 @@
 <script lang="ts">
 	import type { FlexiBoardConfiguration } from '@flexiboards/svelte';
 	import type { ComponentProps } from 'svelte';
+
 	import { FlexiSortable } from '@flexiboards/svelte';
+
 	import { cn } from '#lib/utils.js';
+
 	import { reducedMotion, withMotion } from '../flexi-motion/index.js';
 	let {
 		class: className,

@@ -1,5 +1,6 @@
 import { deflateRawSync } from 'node:zlib';
 import { describe, expect, it } from 'vitest';
+
 import { Zip } from './zip';
 
 /** A one-entry zip assembled by hand, so the reader can be fed odd or hostile values. */

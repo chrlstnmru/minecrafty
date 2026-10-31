@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+
 import { canRetryInstall, isFromPack, originOf } from './instance-origin';
 
 const loader = { packProjectId: null, fromPackId: null };

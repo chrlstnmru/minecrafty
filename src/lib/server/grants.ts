@@ -1,6 +1,8 @@
 import { eq } from 'drizzle-orm';
+
 import { MAX_RANK, closure, registry, type Permission } from '#lib/permissions.js';
 import { LOCK_MESSAGES, type RoleLock } from '#lib/role-lock.js';
+
 import { can, entriesFor, grantingRank, holdsRole, rankOf, resolve, type Actor } from './access';
 import { db } from './db';
 import { roles, users } from './db/schema';

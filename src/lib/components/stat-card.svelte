@@ -1,5 +1,6 @@
 <script lang="ts">
 	import type { Snippet } from 'svelte';
+
 	import * as Card from '#lib/components/ui/card/index.js';
 
 	/** One figure with a title, a line under it, and room for a trend or a bar. */

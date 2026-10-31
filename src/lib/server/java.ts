@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
+
 import { dataDir } from './config';
 
 // Temurin LTS releases; Mojang also asks for 16 (1.17), which 17 runs fine
