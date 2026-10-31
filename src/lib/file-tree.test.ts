@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFileTree } from './file-tree';
+import { buildFileTree, movedPath } from './file-tree';
 
 describe('buildFileTree', () => {
 	it('nests files in their folders, folders first, then by name', () => {
@@ -65,5 +65,29 @@ describe('buildFileTree', () => {
 
 	it('is empty for no files', () => {
 		expect(buildFileTree([])).toEqual([]);
+	});
+});
+
+describe('movedPath', () => {
+	it('puts a file or folder into the folder it is dropped on, keeping its name', () => {
+		expect(movedPath('config/a.toml', 'defaults')).toBe('defaults/a.toml');
+		expect(movedPath('config/a.toml', 'config/sub')).toBe('config/sub/a.toml');
+		expect(movedPath('config/sodium', 'other')).toBe('other/sodium');
+	});
+
+	it('moves to the root when dropped there', () => {
+		expect(movedPath('config/a.toml', '')).toBe('a.toml');
+		expect(movedPath('config/sodium', '')).toBe('sodium');
+	});
+
+	it('does nothing when the item is already in that folder, or the root', () => {
+		expect(movedPath('config/a.toml', 'config')).toBeNull();
+		expect(movedPath('a.toml', '')).toBeNull();
+	});
+
+	it('refuses a folder dropped into itself or something inside it, but not a folder that only shares a name prefix', () => {
+		expect(movedPath('config', 'config')).toBeNull();
+		expect(movedPath('config', 'config/sodium')).toBeNull();
+		expect(movedPath('config', 'config2')).toBe('config2/config');
 	});
 });
