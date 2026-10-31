@@ -18,7 +18,6 @@
 		previewPackVersionChange,
 		removePackFile,
 		removePackIcon,
-		removePackOverride,
 		setPackFileVersion,
 		setPackLoaderVersion,
 		updateLocalPack
@@ -29,6 +28,7 @@
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
+	import PackConfigs from '#lib/components/pack-configs.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Badge } from '#lib/components/ui/badge/index.js';
@@ -105,44 +105,6 @@
 	}
 
 	const sideLabel = (side: string | null) => (side === 'unsupported' ? 'no' : (side ?? '?'));
-
-	let folder = $state('config');
-	let uploading = $state(false);
-	let fileInput = $state<HTMLInputElement>();
-
-	async function uploadConfig(file: File | undefined) {
-		if (!file) return;
-		uploading = true;
-		try {
-			const body = new FormData();
-			body.set('file', file);
-			body.set('path', folder);
-			const res = await fetch(`/modpacks/${id}/overrides`, { method: 'POST', body });
-			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
-			await pack.refresh();
-			toast.success(`Added ${file.name}`);
-		} catch (e) {
-			toast.error(e instanceof Error && e.message ? e.message : 'Could not add the file');
-		} finally {
-			uploading = false;
-			if (fileInput) fileInput.value = '';
-		}
-	}
-
-	async function removeConfig(path: string) {
-		try {
-			await removePackOverride({ id, path });
-		} catch (e) {
-			toast.error(message(e, 'Could not remove the file'));
-		}
-	}
-
-	const size = (bytes: number) =>
-		bytes < 1024
-			? `${bytes} B`
-			: bytes < 1024 * 1024
-				? `${(bytes / 1024).toFixed(1)} KB`
-				: `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 
 	let iconInput = $state<HTMLInputElement>();
 	let iconBusy = $state(false);
@@ -425,57 +387,6 @@
 						onInstall={add}
 					/>
 				{/if}
-			{:else if tab === 'configs'}
-				<Card.Root>
-					<Card.Header>
-						<Card.Title>Config files</Card.Title>
-						<Card.Description>
-							Copied into every server made from this pack, and into the .mrpack under overrides/.
-						</Card.Description>
-					</Card.Header>
-					<Card.Content class="grid gap-4">
-						{#each pack.current.overrides as file (file.path)}
-							<div class="flex items-center gap-3 border-b pb-2 last:border-b-0">
-								<span class="min-w-0 flex-1 truncate font-mono text-sm">{file.path}</span>
-								<span class="text-xs text-muted-foreground">{size(file.size)}</span>
-								{#if canWrite}
-									<Button
-										variant="ghost"
-										size="icon"
-										aria-label="Remove {file.path}"
-										onClickPromise={() => removeConfig(file.path)}
-									>
-										<TrashIcon />
-									</Button>
-								{/if}
-							</div>
-						{:else}
-							<p class="text-sm text-muted-foreground">No config files.</p>
-						{/each}
-						{#if canWrite}
-							<div class="flex flex-wrap items-end gap-3">
-								<Field.Field class="w-56">
-									<Field.Label for="config-folder">Folder in the server</Field.Label>
-									<Input
-										id="config-folder"
-										bind:value={folder}
-										class="font-mono"
-										autocomplete="off"
-									/>
-								</Field.Field>
-								<input
-									bind:this={fileInput}
-									type="file"
-									class="hidden"
-									onchange={(e) => uploadConfig(e.currentTarget.files?.[0])}
-								/>
-								<Button variant="outline" loading={uploading} onclick={() => fileInput?.click()}>
-									<UploadIcon />Add a file
-								</Button>
-							</div>
-						{/if}
-					</Card.Content>
-				</Card.Root>
 			{:else if tab === 'settings' && canWrite}
 				<Card.Root>
 					<Card.Header>
@@ -634,6 +545,12 @@
 					</Card.Footer>
 				</Card.Root>
 			{/if}
+			<PackConfigs
+				{id}
+				files={pack.current.overrides}
+				{canWrite}
+				class={tab === 'configs' ? '' : 'hidden'}
+			/>
 		</div>
 	{/if}
 </div>
