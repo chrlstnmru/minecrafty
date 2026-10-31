@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import { page } from '$app/state';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
 	import FileSearchIcon from '@tabler/icons-svelte/icons/file-search';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
@@ -136,6 +137,8 @@
 
 	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
 	beforeNavigate((navigation) => {
+		// changing the tab only changes the query; this panel stays mounted, so nothing is lost
+		if (navigation.to?.url.pathname === page.url.pathname) return;
 		if (!unsaved) return;
 		navigation.cancel();
 		if (navigation.type === 'leave' || !navigation.to) return;
