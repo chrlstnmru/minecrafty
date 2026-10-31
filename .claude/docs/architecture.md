@@ -14,7 +14,7 @@
 - Anything touching a running server (state, console, RCON, stop and wait, pausing saves): `server/live-server.ts`.
 - Updates of server files: `runUpdate` in `server/instance-job.ts`. Background installs: `runInstall` in `server/install-progress.ts`.
 - "May this instance's files change now?": `assertWritable` in `server/operations.ts`.
-- File manager actions with all their rules (protected files, host code, world, busy): the action functions in `server/files.ts` (`saveFile`, `moveEntry`, `uploadFiles`…).
+- File manager actions with all their rules (protected files, host code, world, busy): the action functions in `server/files.ts` (`saveFile`, `moveEntry`, `uploadFiles`…). Several at once are all-or-nothing and check each item as the single action does: `saveFiles` (by the hash each file was opened with), `removeEntries`, `moveEntries`, `describeSelection`. The page keeps one draft per opened file and the editor keeps each file's undo history by `modelKey` (`disposeModels` frees them).
 - Where an instance came from: `src/lib/instance-origin.ts`.
 - Modrinth dependency resolution and file picking: `server/mod-resolver.ts`.
 - Showing Markdown (release notes): `components/markdown.svelte`. It draws tokens and never uses `{@html}`; keep it that way.
