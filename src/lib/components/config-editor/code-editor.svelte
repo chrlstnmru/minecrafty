@@ -11,6 +11,7 @@
 	let {
 		value = $bindable(''),
 		filename,
+		modelKey,
 		readonly = false,
 		onsave,
 		onformat,
@@ -19,6 +20,11 @@
 		value?: string;
 		/** Picks the language; give the editor a new key when the file changes, so undo stays per file. */
 		filename: string;
+		/**
+		 * Keeps the file's text and undo history under this key when the editor goes away, so another
+		 * editor for the same key picks them up. `disposeModels` in monaco.ts frees them.
+		 */
+		modelKey?: string;
 		readonly?: boolean;
 		onsave?: () => void;
 		onformat?: () => void;
@@ -37,10 +43,16 @@
 
 		let gone = false;
 		let model: ReturnType<Monaco['editor']['createModel']> | undefined;
+		let watching: { dispose: () => void } | undefined;
 		void import('./monaco.js').then((mod) => {
 			if (gone || !host) return;
 			const m = mod.loadMonaco();
-			model = m.editor.createModel(value, mod.languageFor(filename));
+			const uri = modelKey
+				? m.Uri.from({ scheme: mod.MODEL_SCHEME, path: `/${modelKey}` })
+				: undefined;
+			model =
+				(uri && m.editor.getModel(uri)) ||
+				m.editor.createModel(value, mod.languageFor(filename), uri);
 			const created = m.editor.create(host, {
 				model,
 				readOnly: readonly,
@@ -58,7 +70,7 @@
 				fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace'
 			});
 			const text = model;
-			text.onDidChangeContent(() => (value = text.getValue()));
+			watching = text.onDidChangeContent(() => (value = text.getValue()));
 			created.addCommand(m.KeyMod.CtrlCmd | m.KeyCode.KeyS, () => onsave?.());
 			created.addAction({
 				id: 'config.format',
@@ -73,8 +85,9 @@
 
 		return () => {
 			gone = true;
+			watching?.dispose();
 			editor?.dispose();
-			model?.dispose();
+			if (!modelKey) model?.dispose();
 		};
 	});
 

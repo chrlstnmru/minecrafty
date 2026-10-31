@@ -519,17 +519,8 @@ export function readOverrideText(packId: number, rel: string) {
 	return { content: decodeText(bytes), size: stat.size, hash: sha1(bytes) };
 }
 
-/**
- * Saves edited text. `baseHash` is the hash of the text that was opened; without it the file must
- * not exist yet. A file that changed since (or is gone) is refused, so two editors never overwrite
- * each other. Text equal to what is on disk adds no revision.
- */
-export async function writeOverrideText(
-	packId: number,
-	rel: string,
-	content: string,
-	baseHash?: string
-) {
+/** Checks one edited text against the disk. `changed` is false when it is the text already there. */
+function prepareText(packId: number, rel: string, content: string, baseHash?: string) {
 	const { dest, stat } = overrideFile(packId, rel);
 	if (!isEditable(basename(dest))) throw new Error('This file type cannot be edited here');
 	const bytes = new TextEncoder().encode(content);
@@ -544,9 +535,152 @@ export async function writeOverrideText(
 		if (!stat || stat.size > MAX_EDIT_BYTES) throw changed;
 		const current = readFileSync(dest);
 		if (sha1(current) !== baseHash) throw changed;
-		if (Buffer.compare(current, bytes) === 0) return;
+		if (Buffer.compare(current, bytes) === 0) return { rel, bytes, changed: false, hash: baseHash };
 	}
-	await saveOverride(packId, rel, bytes);
+	return { rel, bytes, changed: true, hash: sha1(bytes) };
+}
+
+/**
+ * Saves edited text. `baseHash` is the hash of the text that was opened; without it the file must
+ * not exist yet. A file that changed since (or is gone) is refused, so two editors never overwrite
+ * each other. Text equal to what is on disk adds no revision.
+ */
+export async function writeOverrideText(
+	packId: number,
+	rel: string,
+	content: string,
+	baseHash?: string
+) {
+	const prepared = prepareText(packId, rel, content, baseHash);
+	if (prepared.changed) await saveOverride(packId, rel, prepared.bytes);
+}
+
+/**
+ * Saves several edited texts as one revision, all or none: each is checked as in
+ * `writeOverrideText` before the first is written, and the error names the file that failed.
+ * Returns how many files changed, and the hash of every file's text as it is now, to save over next.
+ */
+export async function writeOverrideTexts(
+	packId: number,
+	files: { rel: string; content: string; baseHash?: string }[]
+) {
+	const prepared: { rel: string; bytes: Uint8Array; changed: boolean; hash: string }[] = [];
+	const seen = new Set<string>();
+	for (const { rel, content, baseHash } of files) {
+		if (seen.has(rel)) throw new Error(`${rel} is in the list twice`);
+		seen.add(rel);
+		try {
+			prepared.push(prepareText(packId, rel, content, baseHash));
+		} catch (e) {
+			throw new Error(`${rel}: ${e instanceof Error ? e.message : 'could not be saved'}`);
+		}
+	}
+	const changed = prepared.filter((text) => text.changed);
+	await saveOverrides(packId, changed);
+	return {
+		changed: changed.length,
+		hashes: Object.fromEntries(prepared.map((text) => [text.rel, text.hash]))
+	};
+}
+
+const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+
+/** Slashes tidied, repeats dropped, and an item inside another chosen folder left to that folder. */
+function topLevel(paths: string[]) {
+	const clean = [
+		...new Set(paths.map((p) => p.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')).filter(Boolean))
+	];
+	return clean.filter((p) => !clean.some((q) => q !== p && within(p, q)));
+}
+
+/**
+ * Deletes files and folders (a folder with everything in it) as one revision. Every path must
+ * exist, or nothing is deleted. Returns how many files and folders were chosen.
+ */
+export function removeOverrides(packId: number, paths: string[]) {
+	requirePack(packId);
+	const chosen = topLevel(paths);
+	if (!chosen.length) throw new Error('Choose a file or folder');
+	const items = chosen.map((rel) => {
+		const dest = safeJoin(overridesDir(packId), rel);
+		if (!existsSync(dest)) throw new Error(`${rel} not found`);
+		return { rel, dest, folder: statSync(dest).isDirectory() };
+	});
+	const files = listOverrides(packId).filter((f) => chosen.some((rel) => within(f.path, rel)));
+	for (const { dest } of items) rmSync(dest, { recursive: true, force: true });
+	bump(packId);
+	return { files: files.length, folders: items.filter((i) => i.folder).length };
+}
+
+/**
+ * Moves files and folders into `folder` ('' is the server folder), each keeping its name, as one
+ * revision. Everything is checked first: a missing item, a name that is taken (or given twice) or a
+ * folder going into itself refuses the lot. `check` sees each file that will move, before it does.
+ * Items already in `folder` are left alone. Returns how many items moved.
+ */
+export function moveOverrides(
+	packId: number,
+	paths: string[],
+	folder: string,
+	check?: (from: string, to: string) => void
+) {
+	requirePack(packId);
+	const root = overridesDir(packId);
+	const target = folder.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
+	const targetDir = target ? safeJoin(root, target) : root;
+	const all = listOverrides(packId);
+	const asFile = all.find((f) => within(target, f.path));
+	if (target && asFile) throw new Error(`${asFile.path} is a file`);
+
+	const moves: { from: string; to: string; source: string; dest: string }[] = [];
+	const names = new Set<string>();
+	for (const from of topLevel(paths)) {
+		const source = safeJoin(root, from);
+		if (!existsSync(source)) throw new Error(`${from} not found`);
+		const name = basename(from);
+		const to = target ? `${target}/${name}` : name;
+		if (to === from) continue;
+		if (within(target, from)) throw new Error(`${from} cannot be moved into itself`);
+		if (names.has(name)) throw new Error(`Two of the items are called ${name}`);
+		names.add(name);
+		const dest = safeJoin(root, to);
+		if (existsSync(dest)) throw new Error(`${to} already exists`);
+		moves.push({ from, to, source, dest });
+	}
+	if (check)
+		for (const move of moves)
+			for (const file of all)
+				if (within(file.path, move.from))
+					check(file.path, `${move.to}${file.path.slice(move.from.length)}`);
+	if (!moves.length) return 0;
+	mkdirSync(targetDir, { recursive: true });
+	for (const move of moves) renameSync(move.source, move.dest);
+	bump(packId);
+	return moves.length;
+}
+
+/** The entries of a zip of the chosen files and folders, folders kept as they are in the pack. */
+export function exportOverridesZip(packId: number, paths: string[]) {
+	const pack = requirePack(packId);
+	const chosen = topLevel(paths);
+	if (!chosen.length) throw new Error('Choose a file or folder');
+	const all = listOverrides(packId);
+	const modified = new Date();
+	const entries: ZipEntry[] = [];
+	for (const rel of chosen) {
+		safeJoin(overridesDir(packId), rel);
+		const found = all.filter((f) => within(f.path, rel));
+		if (!found.length) throw new Error(`There is nothing to download in ${rel}`);
+		for (const file of found)
+			entries.push({
+				kind: 'file',
+				name: file.path,
+				path: join(overridesDir(packId), file.path),
+				modified
+			});
+	}
+	const safe = pack.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'modpack';
+	return { filename: `${safe}-configs.zip`, entries };
 }
 
 /** Moves a config file to another path inside the server folder. */

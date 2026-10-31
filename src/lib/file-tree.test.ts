@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFileTree, movedPath } from './file-tree';
+import { buildFileTree, movedPath, nodeState, toggleNode, topLevelPaths } from './file-tree';
 
 describe('buildFileTree', () => {
 	it('nests files in their folders, folders first, then by name', () => {
@@ -89,5 +89,57 @@ describe('movedPath', () => {
 		expect(movedPath('config', 'config')).toBeNull();
 		expect(movedPath('config', 'config/sodium')).toBeNull();
 		expect(movedPath('config', 'config2')).toBe('config2/config');
+	});
+});
+
+describe('selection', () => {
+	const tree = buildFileTree([
+		{ path: 'config/sodium/a.json' },
+		{ path: 'config/b.toml' },
+		{ path: 'options.txt' }
+	]);
+	const config = tree[0];
+	const sodium = config.kind === 'folder' ? config.children[0] : undefined;
+	const bToml = config.kind === 'folder' ? config.children[1] : undefined;
+
+	it('chooses a folder with everything in it, and clears it the same way', () => {
+		const on = toggleNode(new Set(), config, true);
+		expect([...on].sort()).toEqual([
+			'config',
+			'config/b.toml',
+			'config/sodium',
+			'config/sodium/a.json'
+		]);
+		expect(toggleNode(on, config, false).size).toBe(0);
+	});
+
+	it('takes the folders around a file off when the file is cleared', () => {
+		const on = toggleNode(new Set(), config, true);
+		const off = toggleNode(on, sodium!.kind === 'folder' ? sodium!.children[0] : sodium!, false);
+		// the file's own folders (config and config/sodium) are no longer wholly chosen
+		expect([...off]).toEqual(['config/b.toml']);
+	});
+
+	it('reads a folder as chosen, mixed or not chosen from its files', () => {
+		expect(nodeState(config, new Set())).toBe(false);
+		expect(nodeState(config, new Set(['config/b.toml']))).toBe('mixed');
+		expect(nodeState(config, new Set(['config/b.toml', 'config/sodium/a.json']))).toBe(true);
+		expect(nodeState(bToml!, new Set(['config/b.toml']))).toBe(true);
+	});
+
+	it('reads a folder with no files by its own path', () => {
+		const empty = buildFileTree([], ['kept'])[0];
+		expect(nodeState(empty, new Set())).toBe(false);
+		expect(nodeState(empty, new Set(['kept']))).toBe(true);
+	});
+});
+
+describe('topLevelPaths', () => {
+	it('drops what a chosen folder already covers, and repeats', () => {
+		expect(
+			topLevelPaths(['config', 'config/a.toml', 'config/sodium/b.json', 'options.txt', 'config'])
+		).toEqual(['config', 'options.txt']);
+		expect(topLevelPaths(['config2', 'config'])).toEqual(['config2', 'config']);
+		expect(topLevelPaths([])).toEqual([]);
 	});
 });

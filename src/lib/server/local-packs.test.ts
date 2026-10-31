@@ -372,6 +372,162 @@ describe('config files', () => {
 		expect(P.getPack(pack.id).revision).toBe(before + 1);
 	});
 
+	it('saves several texts as one revision, all or none, and names the file that fails', async () => {
+		const pack = await make();
+		await P.writeOverrideText(pack.id, 'a.txt', 'one');
+		await P.writeOverrideText(pack.id, 'b.txt', 'two');
+		const a = P.readOverrideText(pack.id, 'a.txt').hash;
+		const b = P.readOverrideText(pack.id, 'b.txt').hash;
+		const before = P.getPack(pack.id).revision;
+
+		const saved = await P.writeOverrideTexts(pack.id, [
+			{ rel: 'a.txt', content: 'one!', baseHash: a },
+			{ rel: 'b.txt', content: 'two', baseHash: b },
+			{ rel: 'config/c.toml', content: 'x = 1' }
+		]);
+		expect(saved.changed).toBe(2);
+		// each hash is what a file reads as now, so the next save can build on it
+		expect(saved.hashes).toEqual({
+			'a.txt': P.readOverrideText(pack.id, 'a.txt').hash,
+			'b.txt': b,
+			'config/c.toml': P.readOverrideText(pack.id, 'config/c.toml').hash
+		});
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+		expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('one!');
+		expect(P.readOverrideText(pack.id, 'config/c.toml').content).toBe('x = 1');
+
+		// a is stale now, so nothing is written, not even the new file
+		await expect(
+			P.writeOverrideTexts(pack.id, [
+				{ rel: 'b.txt', content: 'changed', baseHash: b },
+				{ rel: 'a.txt', content: 'again', baseHash: a },
+				{ rel: 'd.txt', content: 'new' }
+			])
+		).rejects.toThrow('a.txt: This file changed since you opened it');
+		expect(P.readOverrideText(pack.id, 'b.txt').content).toBe('two');
+		expect(P.listOverrides(pack.id).map((f) => f.path)).not.toContain('d.txt');
+
+		await expect(
+			P.writeOverrideTexts(pack.id, [
+				{ rel: 'x.txt', content: '1' },
+				{ rel: 'x.txt', content: '2' }
+			])
+		).rejects.toThrow('in the list twice');
+		await expect(
+			P.writeOverrideTexts(pack.id, [{ rel: 'mods/a.jar', content: 'x' }])
+		).rejects.toThrow('mods/a.jar: This file type cannot be edited');
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+	});
+
+	it('writes nothing, and adds no revision, when every text is unchanged', async () => {
+		const pack = await make();
+		await P.writeOverrideText(pack.id, 'a.txt', 'one');
+		const hash = P.readOverrideText(pack.id, 'a.txt').hash;
+		const before = P.getPack(pack.id).revision;
+		expect(
+			(await P.writeOverrideTexts(pack.id, [{ rel: 'a.txt', content: 'one', baseHash: hash }]))
+				.changed
+		).toBe(0);
+		expect(P.getPack(pack.id).revision).toBe(before);
+	});
+
+	it('deletes files and folders together as one revision, and none when one is missing', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'config/sodium/a.json', bytes },
+			{ rel: 'config/sodium/deep/b.json', bytes },
+			{ rel: 'config/keep.toml', bytes },
+			{ rel: 'options.txt', bytes }
+		]);
+		const before = P.getPack(pack.id).revision;
+
+		expect(() => P.removeOverrides(pack.id, ['options.txt', 'nope.txt'])).toThrow(
+			'nope.txt not found'
+		);
+		expect(() => P.removeOverrides(pack.id, ['../x'])).toThrow('unsafe');
+		expect(() => P.removeOverrides(pack.id, [])).toThrow('Choose');
+		expect(P.listOverrides(pack.id)).toHaveLength(4);
+
+		// a file inside a chosen folder is counted once, with the folder
+		expect(
+			P.removeOverrides(pack.id, ['config/sodium', 'config/sodium/a.json', 'options.txt'])
+		).toEqual({ files: 3, folders: 1 });
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual(['config/keep.toml']);
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+	});
+
+	it('moves files and folders into a folder as one revision, and refuses the lot on any problem', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'a.toml', bytes },
+			{ rel: 'config/sodium/b.json', bytes },
+			{ rel: 'config/c.json', bytes },
+			{ rel: 'other/c.json', bytes },
+			{ rel: 'target/a.toml', bytes }
+		]);
+		const before = P.getPack(pack.id).revision;
+		const seen: string[] = [];
+
+		expect(() => P.moveOverrides(pack.id, ['a.toml'], 'target')).toThrow(
+			'target/a.toml already exists'
+		);
+		expect(() => P.moveOverrides(pack.id, ['config/c.json', 'other/c.json'], 'x')).toThrow(
+			'Two of the items are called c.json'
+		);
+		expect(() => P.moveOverrides(pack.id, ['config'], 'config/sodium')).toThrow('into itself');
+		expect(() => P.moveOverrides(pack.id, ['nope'], 'x')).toThrow('nope not found');
+		expect(() => P.moveOverrides(pack.id, ['a.toml'], 'target/a.toml')).toThrow('is a file');
+		expect(P.getPack(pack.id).revision).toBe(before);
+
+		expect(
+			P.moveOverrides(pack.id, ['config/sodium', 'config/c.json'], 'moved', (from, to) =>
+				seen.push(`${from}>${to}`)
+			)
+		).toBe(2);
+		expect(seen.sort()).toEqual([
+			'config/c.json>moved/c.json',
+			'config/sodium/b.json>moved/sodium/b.json'
+		]);
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual([
+			'a.toml',
+			'moved/c.json',
+			'moved/sodium/b.json',
+			'other/c.json',
+			'target/a.toml'
+		]);
+		expect(P.getPack(pack.id).revision).toBe(before + 1);
+
+		// to the root, and an item already there is skipped
+		expect(P.moveOverrides(pack.id, ['moved/c.json', 'a.toml'], '')).toBe(1);
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toContain('c.json');
+		expect(P.moveOverrides(pack.id, ['a.toml'], '')).toBe(0);
+	});
+
+	it('lists the chosen files for a zip, folders kept, and refuses a missing or empty choice', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'config/sodium/a.json', bytes },
+			{ rel: 'config/b.toml', bytes },
+			{ rel: 'options.txt', bytes }
+		]);
+		const { filename, entries } = P.exportOverridesZip(pack.id, [
+			'config',
+			'config/b.toml',
+			'options.txt'
+		]);
+		expect(filename).toBe('My-pack-configs.zip');
+		expect(entries.map((e) => e.name).sort()).toEqual([
+			'config/b.toml',
+			'config/sodium/a.json',
+			'options.txt'
+		]);
+		expect(() => P.exportOverridesZip(pack.id, ['nope'])).toThrow('nothing to download in nope');
+		expect(() => P.exportOverridesZip(pack.id, [])).toThrow('Choose');
+	});
+
 	it('moves a file into another folder in one revision, and refuses a missing source, an existing target or a path that leaves the folder', async () => {
 		const pack = await make();
 		await P.writeOverrideText(pack.id, 'config/a.toml', 'x = 1');
