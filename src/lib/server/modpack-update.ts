@@ -2,8 +2,6 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { originOf } from '#lib/instance-origin.js';
-
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
@@ -12,12 +10,9 @@ import { getInstance, serverDir } from './instances';
 import { ensureJava, requiredJavaMajor } from './java';
 import { isRunning } from './live-server';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
-import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import {
 	downloadFiles,
-	listModpackVersions,
-	loadModpack,
 	overrideEntries,
 	packFileHashes,
 	safeJoin,
@@ -25,11 +20,11 @@ import {
 	trackMods,
 	wantsOnServer,
 	type IndexFile,
-	type LoadedPack,
-	type ModpackVersion
+	type LoadedPack
 } from './modpacks';
 import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from './mods';
 import { decide } from './pack-diff';
+import { packSourceOf, type ModpackInfo } from './pack-source';
 import { mergeStaged, removeStale } from './staged-install';
 import { lastOutcome } from './update-outcome';
 
@@ -65,38 +60,6 @@ export type PackPlan = {
 	downloadBytes: number;
 };
 
-type Instance = NonNullable<ReturnType<typeof getInstance>>;
-
-/**
- * Where an instance's pack comes from, in one form for both kinds: a Modrinth project id, or
- * `local:<id>` for a pack from the builder. Null when it was not made from a pack.
- */
-function sourceOf(inst: Instance) {
-	const origin = originOf(inst);
-	if (origin === 'modrinth-pack') return inst.packProjectId;
-	return origin === 'builder-pack' ? localPackSource(inst.fromPackId!) : null;
-}
-
-/** The version the instance runs: a Modrinth version id, or `rev:<n>` for a builder pack. */
-function versionOf(inst: Instance) {
-	if (originOf(inst) === 'modrinth-pack') return inst.packVersionId;
-	return inst.fromPackRevision != null ? localRevisionId(inst.fromPackRevision) : null;
-}
-
-/**
- * Loads `versionId` of the instance's pack. A builder pack keeps only its current revision, so
- * that is the one version it can be updated to.
- */
-async function loadPackFor(inst: Instance, versionId: string) {
-	const origin = originOf(inst);
-	if (origin === 'modrinth-pack') return loadModpack(versionId);
-	if (origin === 'loader') throw new Error('This instance was not created from a modpack');
-	const pack = getPack(inst.fromPackId!);
-	if (versionId !== localRevisionId(pack.revision))
-		throw new Error('The pack has changed since this page loaded; reload it');
-	return loadLocalPack(inst.fromPackId!);
-}
-
 /** The current copy of a pack file: where it is on disk (it may have been disabled), or null. */
 function onDisk(server: string, rel: string) {
 	if (existsSync(join(server, rel))) return rel;
@@ -110,12 +73,12 @@ export async function planModpackUpdate(
 	options: { replaceConfigs: boolean }
 ): Promise<PackPlan> {
 	const inst = getInstance(instanceId);
-	const source = inst && sourceOf(inst);
+	const source = inst && packSourceOf(inst);
 	if (!inst || !source) throw new Error('This instance was not created from a modpack');
 	const manifest = readManifest(instanceId);
 	if (!manifest) throw new Error('There is no record of what the modpack installed here');
 	const { summary } = pack;
-	if (summary.projectId !== source) throw new Error('That is a different modpack');
+	if (summary.projectId !== source.id) throw new Error('That is a different modpack');
 	if (summary.loader !== inst.loader)
 		throw new Error(
 			`This version uses ${summary.loader} and the instance runs ${inst.loader}; create a new instance for it`
@@ -192,78 +155,14 @@ export async function planModpackUpdate(
 	return plan;
 }
 
-export type ModpackInfo = {
-	pack: { projectId: string; versionId: string; versionNumber: string; name: string } | null;
-	/** `builder` for a pack from the modpack builder, which offers only its current revision */
-	source: 'modrinth' | 'builder';
-	versions: ModpackVersion[];
-	error: string | null;
-};
-
-/** A builder pack's revisions as versions: the one installed and, when it moved on, the current one. */
-function builderInfo(inst: Instance): ModpackInfo {
-	const installed = inst.fromPackRevision ?? 0;
-	const pack = {
-		projectId: localPackSource(inst.fromPackId!),
-		versionId: localRevisionId(installed),
-		versionNumber: `revision ${installed}`,
-		name: inst.packName ?? inst.name
-	};
-	const version = (revision: number, at: Date | null): ModpackVersion => ({
-		id: localRevisionId(revision),
-		versionNumber: `revision ${revision}`,
-		versionType: 'release',
-		publishedAt: (at ?? new Date(0)).toISOString(),
-		gameVersions: [],
-		loaders: []
-	});
-	let current;
-	try {
-		current = getPack(inst.fromPackId!);
-	} catch {
-		return {
-			pack,
-			source: 'builder',
-			versions: [],
-			error: 'The builder pack this server was made from has been deleted'
-		};
-	}
-	const versions =
-		current.revision === installed
-			? [version(installed, current.updatedAt)]
-			: [version(current.revision, current.updatedAt), version(installed, null)];
-	return { pack: { ...pack, name: current.name }, source: 'builder', versions, error: null };
-}
-
 /** The pack an instance came from and every version of it, newest first. */
 export async function modpackInfo(instanceId: number): Promise<ModpackInfo> {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
-	const versionId = versionOf(inst);
-	if (!sourceOf(inst) || !versionId || !readManifest(instanceId))
+	const source = packSourceOf(inst);
+	if (!source?.installedVersionId || !readManifest(instanceId))
 		return { pack: null, source: 'modrinth', versions: [], error: null };
-	if (!inst.packProjectId) return builderInfo(inst);
-	const pack = {
-		projectId: inst.packProjectId,
-		versionId,
-		versionNumber: inst.packVersionNumber ?? '',
-		name: inst.packName ?? inst.name
-	};
-	try {
-		return {
-			pack,
-			source: 'modrinth',
-			versions: await listModpackVersions(inst.packProjectId),
-			error: null
-		};
-	} catch (e) {
-		return {
-			pack,
-			source: 'modrinth',
-			versions: [],
-			error: e instanceof Error ? e.message : 'Could not reach Modrinth'
-		};
-	}
+	return source.describe();
 }
 
 /** What updating to `versionId` would change, with nothing touched. */
@@ -274,7 +173,9 @@ export async function previewModpackUpdate(
 ) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
-	const plan = await planModpackUpdate(instanceId, await loadPackFor(inst, versionId), options);
+	const source = packSourceOf(inst);
+	if (!source) throw new Error('This instance was not created from a modpack');
+	const plan = await planModpackUpdate(instanceId, await source.load(versionId), options);
 	const { download, ...rest } = plan;
 	const old = readManifest(instanceId)?.files ?? {};
 	return {
@@ -296,17 +197,16 @@ export async function startModpackUpdate(
 	opts: { versionId: string; backup: boolean; replaceConfigs: boolean }
 ) {
 	const inst = getInstance(instanceId);
-	if (!inst || !sourceOf(inst)) throw new Error('This instance was not created from a modpack');
+	const source = inst && packSourceOf(inst);
+	if (!inst || !source) throw new Error('This instance was not created from a modpack');
 	if (inst.installState !== 'ready') throw new Error('Wait for the install to finish');
-	if (opts.versionId === versionOf(inst)) throw new Error('Already on that version');
+	if (opts.versionId === source.installedVersionId) throw new Error('Already on that version');
 	if (await isRunning(instanceId)) throw new Error('Stop the server before updating it');
 
-	const pack = await loadPackFor(inst, opts.versionId);
+	const pack = await source.load(opts.versionId);
 	const plan = await planModpackUpdate(instanceId, pack, opts);
 	const server = serverDir(instanceId);
-	const from = inst.packProjectId
-		? (inst.packVersionNumber ?? 'the old version')
-		: `revision ${inst.fromPackRevision}`;
+	const from = source.installedLabel;
 
 	const finished = runUpdate(
 		instanceId,
@@ -395,9 +295,7 @@ export async function startModpackUpdate(
 					mcVersion: plan.mcVersion,
 					loaderVersion: plan.loaderVersion,
 					javaMajor: resetJava ? null : inst.javaMajor,
-					...(inst.packProjectId
-						? { packVersionId: plan.versionId, packVersionNumber: plan.versionNumber }
-						: { fromPackRevision: Number(plan.versionId.slice('rev:'.length)) }),
+					...source.recordVersion(plan),
 					packName: plan.name,
 					packIconUrl: pack.summary.iconUrl
 				},
