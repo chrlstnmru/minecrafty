@@ -1,6 +1,8 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
+	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
+	import FolderUpIcon from '@tabler/icons-svelte/icons/folder-up';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
@@ -23,10 +25,19 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
 	import { buildFileTree } from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
+	import {
+		batches,
+		collectEntries,
+		fromFileList,
+		MAX_ITEMS,
+		type FsEntry,
+		type UploadItem
+	} from '#lib/upload-entries.js';
 
 	let {
 		id,
@@ -44,6 +55,8 @@
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
 	const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
+	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
+	const joinPath = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
 
 	let open = $state<string | null>(null);
 	// a file made here that is not on the server until the first save
@@ -58,7 +71,28 @@
 			? [...files, { path: open, size: 0, pending: true }]
 			: files
 	);
-	const tree = $derived(buildFileTree(listed));
+	// folders made here hold no file yet, so the server has no trace of them
+	let emptyFolders = $state<string[]>([]);
+	const tree = $derived(buildFileTree(listed, emptyFolders));
+
+	// where New file, New folder and Upload put things: the last folder or file picked, else the root
+	let targetDir = $state('');
+	const folderPaths = $derived(
+		new Set(
+			[...listed.map((f) => dirOf(f.path)), ...emptyFolders].flatMap((path) => {
+				const parts = path ? path.split('/') : [];
+				return parts.map((_, index) => parts.slice(0, index + 1).join('/'));
+			})
+		)
+	);
+	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
+	const where = $derived(target || 'overrides');
+
+	// a folder that has gained a file is on the server now
+	$effect(() => {
+		const kept = emptyFolders.filter((path) => !files.some((f) => f.path.startsWith(`${path}/`)));
+		if (kept.length !== emptyFolders.length) emptyFolders = kept;
+	});
 
 	const file = $derived(open && !isNew ? readPackConfig({ id, path: open }) : null);
 	const dirty = $derived(open !== null && draft !== loaded);
@@ -151,32 +185,58 @@
 		}
 	}
 
-	let naming = $state<{ from?: string; value: string } | null>(null);
+	let naming = $state<{ kind: 'file' | 'folder'; from?: string; value: string } | null>(null);
 	let namingOpen = $state(false);
+
+	const namedPath = $derived(
+		naming
+			? naming.kind === 'folder'
+				? naming.value.trim().replace(/\/+$/, '')
+				: naming.value.trim()
+			: ''
+	);
 
 	const nameError = $derived.by(() => {
 		if (!naming) return undefined;
-		const path = naming.value.trim();
-		if (!path) return 'Enter a path, such as config/mod.toml';
+		const path = namedPath;
+		if (!path)
+			return naming.kind === 'folder'
+				? 'Enter a folder path, such as config/sodium'
+				: 'Enter a path, such as config/mod.toml';
 		if (path.startsWith('/') || path.split('/').includes('..'))
 			return 'Use a path inside the server folder, without a leading slash or ..';
-		if (path !== naming.from && files.some((f) => f.path === path)) return `${path} already exists`;
-		if (!naming.from && !isEditable(nameOf(path)))
-			return 'Only text files can be made here: .toml, .json, .yml, .properties, .cfg, .xml, .md and similar';
+		if (path === naming.from) return undefined;
+		const asFile = files.find((f) => f.path === path || path.startsWith(`${f.path}/`));
+		if (asFile) return `${asFile.path} is a file`;
+		if (naming.kind === 'folder') {
+			if (folderPaths.has(path)) return `${path} already exists`;
+		} else {
+			if (folderPaths.has(path)) return `${path} is a folder`;
+			if (!naming.from && !isEditable(nameOf(path)))
+				return 'Only text files can be made here: .toml, .json, .yml, .properties, .cfg, .xml, .md and similar';
+		}
 		return undefined;
 	});
 
-	function startNaming(from?: string) {
-		naming = { from, value: from ?? 'config/' };
+	function startNaming(kind: 'file' | 'folder', from?: string) {
+		naming = { kind, from, value: from ?? (target ? `${target}/` : '') };
 		namingOpen = true;
 	}
 
 	async function confirmName() {
 		if (!naming || nameError) return;
-		const { from } = naming;
-		const to = naming.value.trim();
+		const { kind, from } = naming;
+		const to = namedPath;
 		namingOpen = false;
-		if (!from) return unlessDirty(() => show(to, true));
+		if (kind === 'folder') {
+			emptyFolders = [...emptyFolders, to];
+			targetDir = to;
+			return;
+		}
+		if (!from) {
+			targetDir = dirOf(to);
+			return unlessDirty(() => show(to, true));
+		}
 		if (from === to) return;
 		try {
 			await movePackConfig({ id, from, to });
@@ -187,29 +247,79 @@
 		}
 	}
 
-	let folder = $state('config');
 	let uploading = $state(false);
+	let dragging = $state(false);
 	let fileInput = $state<HTMLInputElement>();
+	let folderInput = $state<HTMLInputElement>();
 
-	async function upload(chosen: File | undefined) {
-		if (!chosen) return;
+	async function upload(items: UploadItem[], dir: string) {
+		if (!items.length) return;
+		if (items.length > MAX_ITEMS) {
+			toast.error(`That is too many files: add at most ${MAX_ITEMS} at a time`);
+			return;
+		}
 		uploading = true;
+		let added = 0;
 		try {
-			const body = new FormData();
-			body.set('file', chosen);
-			body.set('path', folder);
-			const res = await fetch(`/modpacks/${id}/overrides`, { method: 'POST', body });
-			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
-			await getLocalPack({ id }).refresh();
-			toast.success(`Added ${chosen.name}`);
+			for (const batch of batches(items)) {
+				const body = new FormData();
+				for (const { file, path } of batch) {
+					body.append('file', file);
+					body.append('path', joinPath(dir, path));
+				}
+				const res = await fetch(`/modpacks/${id}/overrides`, { method: 'POST', body });
+				if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
+				added += batch.length;
+			}
+			toast.success(added === 1 ? `Added ${items[0].file.name}` : `Added ${added} files`);
 		} catch (e) {
-			toast.error(e instanceof Error && e.message ? e.message : 'Could not add the file');
+			const reason = e instanceof Error && e.message ? e.message : 'Could not add the files';
+			toast.error(added ? `${reason} (${added} of ${items.length} files were added)` : reason);
 		} finally {
+			await getLocalPack({ id }).refresh();
 			uploading = false;
-			if (fileInput) fileInput.value = '';
 		}
 	}
+
+	async function drop(transfer: DataTransfer, dir: string) {
+		// the entries must be taken now: the list is emptied once the event handler returns
+		const entries = Array.from(transfer.items)
+			.map((item) => item.webkitGetAsEntry?.())
+			.filter((entry): entry is FileSystemEntry => !!entry);
+		try {
+			await upload(
+				entries.length
+					? await collectEntries(entries as unknown as FsEntry[])
+					: fromFileList(transfer.files),
+				dir
+			);
+		} catch {
+			toast.error('Could not read what was dropped');
+		}
+	}
+
+	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
 </script>
+
+{#snippet tool(label: string, Icon: typeof FilePlusIcon, run: () => void, busy = false)}
+	<Tooltip.Root>
+		<Tooltip.Trigger>
+			{#snippet child({ props })}
+				<Button
+					{...props}
+					variant="ghost"
+					size="icon"
+					aria-label={label}
+					loading={busy}
+					onclick={run}
+				>
+					<Icon />
+				</Button>
+			{/snippet}
+		</Tooltip.Trigger>
+		<Tooltip.Content>{label}</Tooltip.Content>
+	</Tooltip.Root>
+{/snippet}
 
 <Card.Root class={className}>
 	<Card.Header>
@@ -219,79 +329,145 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="grid flex-1 gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
-		<div class="grid content-start gap-3">
-			{#if tree.length}
-				<FileTree
-					nodes={tree}
-					selected={open}
-					selectable={(file) => isEditable(file.path)}
-					unselectableTitle="Not a text file"
-					status={(file) =>
-						file.pending
-							? { tone: 'info', label: 'New file, not saved yet' }
-							: file.path === open && dirty
-								? { tone: 'warning', label: 'Unsaved changes' }
-								: undefined}
-					onselect={(file) => unlessDirty(() => show(file.path))}
+		<fieldset
+			class="flex min-h-64 min-w-0 flex-col gap-1 rounded-lg border p-2 {dragging
+				? 'bg-accent/30 ring-2 ring-ring/50'
+				: ''}"
+			ondragover={(event) => {
+				if (!canWrite || !hasFiles(event)) return;
+				event.preventDefault();
+				dragging = true;
+			}}
+			ondragleave={(event) => {
+				if (!event.currentTarget.contains(event.relatedTarget as Node)) dragging = false;
+			}}
+			ondrop={(event) => {
+				dragging = false;
+				if (!canWrite || !event.dataTransfer || !hasFiles(event)) return;
+				event.preventDefault();
+				void drop(event.dataTransfer, '');
+			}}
+		>
+			<legend class="px-1.5">
+				<button
+					type="button"
+					class="rounded-sm font-mono text-xs {target === ''
+						? 'text-foreground'
+						: 'text-muted-foreground hover:text-foreground'}"
+					aria-pressed={target === ''}
+					onclick={() => (targetDir = '')}
 				>
-					{#snippet trailing(file)}
-						{#if file.pending}
-							<Button
-								variant="ghost"
-								size="icon"
-								class="ms-auto"
-								aria-label="Discard the new file {file.path}"
-								onclick={() => unlessDirty(() => show(null))}
-							>
-								<TrashIcon />
-							</Button>
-						{:else}
-							<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
-						{/if}
-						{#if canWrite && !file.pending}
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Rename {file.path}"
-								onclick={() => startNaming(file.path)}
-							>
-								<PencilIcon />
-							</Button>
-							<Button
-								variant="ghost"
-								size="icon"
-								aria-label="Remove {file.path}"
-								onClickPromise={() => remove(file.path)}
-							>
-								<TrashIcon />
-							</Button>
-						{/if}
-					{/snippet}
-				</FileTree>
-			{:else}
-				<p class="text-sm text-muted-foreground">No config files.</p>
-			{/if}
+					overrides
+				</button>
+			</legend>
 			{#if canWrite}
-				<div class="grid gap-3 border-t pt-3">
-					<Button variant="outline" onclick={() => startNaming()}>
-						<FilePlusIcon />New file
-					</Button>
-					<Field.Field>
-						<Field.Label for="config-folder">Upload to folder</Field.Label>
-						<Input id="config-folder" bind:value={folder} class="font-mono" autocomplete="off" />
-					</Field.Field>
-					<input
-						bind:this={fileInput}
-						type="file"
-						class="hidden"
-						onchange={(e) => upload(e.currentTarget.files?.[0])}
-					/>
-					<Button variant="outline" loading={uploading} onclick={() => fileInput?.click()}>
-						<UploadIcon />Upload a file
-					</Button>
+				<div class="flex items-center justify-end gap-0.5">
+					{@render tool(`New file in ${where}`, FilePlusIcon, () => startNaming('file'))}
+					{@render tool(`New folder in ${where}`, FolderPlusIcon, () => startNaming('folder'))}
+					{@render tool(
+						`Upload files to ${where}`,
+						UploadIcon,
+						() => fileInput?.click(),
+						uploading
+					)}
+					{@render tool(
+						`Upload a folder to ${where}`,
+						FolderUpIcon,
+						() => folderInput?.click(),
+						uploading
+					)}
 				</div>
+				<input
+					bind:this={fileInput}
+					type="file"
+					multiple
+					class="hidden"
+					onchange={(e) => {
+						void upload(fromFileList(e.currentTarget.files ?? []), target);
+						e.currentTarget.value = '';
+					}}
+				/>
+				<input
+					bind:this={folderInput}
+					type="file"
+					webkitdirectory
+					multiple
+					class="hidden"
+					onchange={(e) => {
+						void upload(fromFileList(e.currentTarget.files ?? []), target);
+						e.currentTarget.value = '';
+					}}
+				/>
 			{/if}
-		</div>
+			<div class="min-h-0 flex-1 overflow-y-auto">
+				{#if tree.length}
+					<FileTree
+						nodes={tree}
+						selected={open}
+						selectedFolder={target || null}
+						selectable={(file) => isEditable(file.path)}
+						unselectableTitle="Not a text file"
+						status={(file) =>
+							file.pending
+								? { tone: 'info', label: 'New file, not saved yet' }
+								: file.path === open && dirty
+									? { tone: 'warning', label: 'Unsaved changes' }
+									: undefined}
+						folderStatus={(folder) =>
+							emptyFolders.includes(folder.path)
+								? { tone: 'info', label: 'New folder, kept once it holds a file' }
+								: undefined}
+						onselect={(file) =>
+							unlessDirty(() => {
+								targetDir = dirOf(file.path);
+								show(file.path);
+							})}
+						onselectfolder={(path) => (targetDir = path)}
+						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
+					>
+						{#snippet trailing(file)}
+							{#if file.pending}
+								<Button
+									variant="ghost"
+									size="icon"
+									class="ms-auto"
+									aria-label="Discard the new file {file.path}"
+									onclick={() => unlessDirty(() => show(null))}
+								>
+									<TrashIcon />
+								</Button>
+							{:else}
+								<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
+							{/if}
+							{#if canWrite && !file.pending}
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label="Rename {file.path}"
+									onclick={() => startNaming('file', file.path)}
+								>
+									<PencilIcon />
+								</Button>
+								<Button
+									variant="ghost"
+									size="icon"
+									aria-label="Remove {file.path}"
+									onClickPromise={() => remove(file.path)}
+								>
+									<TrashIcon />
+								</Button>
+							{/if}
+						{/snippet}
+					</FileTree>
+				{:else}
+					<p class="p-2 text-sm text-muted-foreground">
+						No config files{canWrite
+							? ' yet. Drop files or a folder here, or use the buttons above.'
+							: '.'}
+					</p>
+				{/if}
+			</div>
+		</fieldset>
 
 		<div class="grid h-full min-w-0 grid-rows-[auto_1fr] content-start gap-3">
 			{#if open === null}
@@ -343,9 +519,17 @@
 <Dialog.Root bind:open={namingOpen}>
 	<Dialog.Content>
 		<Dialog.Header>
-			<Dialog.Title>{naming?.from ? 'Rename or move' : 'New config file'}</Dialog.Title>
+			<Dialog.Title>
+				{naming?.from
+					? 'Rename or move'
+					: naming?.kind === 'folder'
+						? 'New folder'
+						: 'New config file'}
+			</Dialog.Title>
 			<Dialog.Description>
-				The path inside the server folder. A new folder in the path is made for you.
+				{naming?.kind === 'folder'
+					? 'The path inside the server folder. The folder is kept once it holds a file.'
+					: 'The path inside the server folder. A new folder in the path is made for you.'}
 			</Dialog.Description>
 		</Dialog.Header>
 		{#if naming}

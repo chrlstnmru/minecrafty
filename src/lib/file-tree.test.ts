@@ -46,6 +46,23 @@ describe('buildFileTree', () => {
 		expect(names).toEqual(['a.txt', 'B2.txt', 'b10.txt']);
 	});
 
+	it('shows a folder named as empty, with the folders above it, and does not double one that has files', () => {
+		const tree = buildFileTree(
+			[{ path: 'config/a.toml' }],
+			['config', 'config/new/deeper', 'logs']
+		);
+		expect(tree.map((node) => node.path)).toEqual(['config', 'logs']);
+		const config = tree[0];
+		expect(config.kind === 'folder' && config.children.map((c) => c.path)).toEqual([
+			'config/new',
+			'config/a.toml'
+		]);
+		const inner = config.kind === 'folder' ? config.children[0] : undefined;
+		expect(inner?.kind === 'folder' && inner.children.map((c) => c.path)).toEqual([
+			'config/new/deeper'
+		]);
+	});
+
 	it('is empty for no files', () => {
 		expect(buildFileTree([])).toEqual([]);
 	});

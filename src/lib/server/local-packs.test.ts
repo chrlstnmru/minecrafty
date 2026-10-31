@@ -247,6 +247,29 @@ describe('config files', () => {
 		expect(P.listOverrides(pack.id)).toEqual([]);
 	});
 
+	it('stores several files as one revision, and writes none when one path leaves the folder', async () => {
+		const pack = await make();
+		const bytes = new TextEncoder().encode('x');
+		await P.saveOverrides(pack.id, [
+			{ rel: 'config/a.toml', bytes },
+			{ rel: 'config/sub/b.toml', bytes }
+		]);
+		expect(P.getPack(pack.id).revision).toBe(pack.revision + 1);
+		expect(P.listOverrides(pack.id).map((f) => f.path)).toEqual([
+			'config/a.toml',
+			'config/sub/b.toml'
+		]);
+
+		await expect(
+			P.saveOverrides(pack.id, [
+				{ rel: 'config/c.toml', bytes },
+				{ rel: '../d.toml', bytes }
+			])
+		).rejects.toThrow('unsafe');
+		expect(P.listOverrides(pack.id)).toHaveLength(2);
+		expect(P.getPack(pack.id).revision).toBe(pack.revision + 1);
+	});
+
 	it('edits text: a new file, then a changed one adds a revision, an identical save adds none', async () => {
 		const pack = await make();
 		const revision = () => P.getPack(pack.id).revision;

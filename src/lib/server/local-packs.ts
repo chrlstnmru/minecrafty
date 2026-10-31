@@ -483,14 +483,22 @@ export async function setLoaderVersion(packId: number, loaderVersion: string) {
 	bump(packId);
 }
 
-/** Stores a config file at a path inside the server folder (a path that leaves it is refused). */
-export async function saveOverride(packId: number, rel: string, bytes: Uint8Array) {
+/**
+ * Stores config files at paths inside the server folder, as one new revision. Every path is checked
+ * before the first is written, so a path that leaves the folder refuses the lot.
+ */
+export async function saveOverrides(packId: number, files: { rel: string; bytes: Uint8Array }[]) {
 	requirePack(packId);
-	const dest = safeJoin(overridesDir(packId), rel);
-	mkdirSync(dirname(dest), { recursive: true });
-	await Bun.write(dest, bytes);
-	bump(packId);
+	const dests = files.map(({ rel }) => safeJoin(overridesDir(packId), rel));
+	for (const [index, { bytes }] of files.entries()) {
+		mkdirSync(dirname(dests[index]), { recursive: true });
+		await Bun.write(dests[index], bytes);
+	}
+	if (files.length) bump(packId);
 }
+
+export const saveOverride = (packId: number, rel: string, bytes: Uint8Array) =>
+	saveOverrides(packId, [{ rel, bytes }]);
 
 const sha1 = (bytes: Uint8Array) => createHash('sha1').update(bytes).digest('hex');
 

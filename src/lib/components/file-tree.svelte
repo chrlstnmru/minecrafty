@@ -9,13 +9,19 @@
 
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 
+	type Status = { tone: 'info' | 'warning'; label: string };
+
 	let {
 		nodes,
 		selected = null,
+		selectedFolder = null,
 		selectable = () => true,
 		unselectableTitle,
 		status,
+		folderStatus,
 		onselect,
+		onselectfolder,
+		ondropfiles,
 		trailing,
 		folderTrailing,
 		open = true
@@ -24,33 +30,77 @@
 		nodes: TreeNode<T>[];
 		/** The path of the file shown as chosen. */
 		selected?: string | null;
+		/** The path of the folder shown as chosen, where new things would go. */
+		selectedFolder?: string | null;
 		/** A file that is not selectable is listed but cannot be picked. */
 		selectable?: (item: T) => boolean;
 		/** Says why, as a tooltip on an unselectable file's name. */
 		unselectableTitle?: string;
-		/** A coloured dot after a file's name, with what it means (also read out to screen readers). */
-		status?: (item: T) => { tone: 'info' | 'warning'; label: string } | undefined;
+		/** A coloured dot after a name, with what it means (also read out to screen readers). */
+		status?: (item: T) => Status | undefined;
+		folderStatus?: (folder: FolderNode<T>) => Status | undefined;
 		onselect?: (item: T) => void;
+		/** A folder was clicked (it also opens or closes). */
+		onselectfolder?: (path: string) => void;
+		/** Files from the desktop were dropped on a folder. Without this, folders are not drop targets. */
+		ondropfiles?: (folder: string, transfer: DataTransfer) => void;
 		/** What follows a file's name: a size, action buttons. */
 		trailing?: Snippet<[T]>;
 		folderTrailing?: Snippet<[FolderNode<T>]>;
 		/** Whether the folders start open. */
 		open?: boolean;
 	} = $props();
+
+	let dropOn = $state<string | null>(null);
+
+	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
 </script>
+
+{#snippet dot(mark: Status | undefined)}
+	{#if mark}
+		<span
+			class="size-2 shrink-0 rounded-full {mark.tone === 'info' ? 'bg-info' : 'bg-warning'}"
+			title={mark.label}
+		></span>
+		<span class="sr-only">{mark.label}</span>
+	{/if}
+{/snippet}
 
 {#snippet branch(list: TreeNode<T>[])}
 	{#each list as node (node.path)}
 		{#if node.kind === 'folder'}
 			<Collapsible.Root {open}>
-				<div class="flex items-center gap-1 rounded-md hover:bg-accent/50">
+				<div
+					role="presentation"
+					class="flex items-center gap-1 rounded-md hover:bg-accent/50 {selectedFolder === node.path
+						? 'bg-accent'
+						: ''} {dropOn === node.path ? 'bg-accent ring-2 ring-ring/50' : ''}"
+					ondragover={(event) => {
+						if (!ondropfiles || !hasFiles(event)) return;
+						event.preventDefault();
+						event.stopPropagation();
+						dropOn = node.path;
+					}}
+					ondragleave={(event) => {
+						if (!event.currentTarget.contains(event.relatedTarget as Node)) dropOn = null;
+					}}
+					ondrop={(event) => {
+						if (!ondropfiles || !event.dataTransfer || !hasFiles(event)) return;
+						event.preventDefault();
+						event.stopPropagation();
+						dropOn = null;
+						ondropfiles(node.path, event.dataTransfer);
+					}}
+				>
 					<Collapsible.Trigger
 						class="flex min-w-0 flex-1 items-center gap-1.5 px-2 py-1.5 text-start text-sm [&[data-state=open]>svg:first-child]:rotate-90"
+						onclick={() => onselectfolder?.(node.path)}
 					>
 						<ChevronRightIcon class="size-3.5 shrink-0 transition-transform" />
 						<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
 						<span class="truncate font-mono">{node.name}</span>
 					</Collapsible.Trigger>
+					{@render dot(folderStatus?.(node))}
 					{@render folderTrailing?.(node)}
 				</div>
 				<Collapsible.Content>
@@ -58,7 +108,6 @@
 				</Collapsible.Content>
 			</Collapsible.Root>
 		{:else}
-			{@const mark = status?.(node.item)}
 			<div
 				class="flex items-center gap-1 rounded-md ps-2 {selected === node.path ? 'bg-accent' : ''}"
 			>
@@ -80,13 +129,7 @@
 						{node.name}
 					</span>
 				{/if}
-				{#if mark}
-					<span
-						class="size-2 shrink-0 rounded-full {mark.tone === 'info' ? 'bg-info' : 'bg-warning'}"
-						title={mark.label}
-					></span>
-					<span class="sr-only">{mark.label}</span>
-				{/if}
+				{@render dot(status?.(node.item))}
 				{@render trailing?.(node.item)}
 			</div>
 		{/if}

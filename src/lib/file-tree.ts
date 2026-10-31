@@ -16,14 +16,17 @@ function sorted<T>(nodes: TreeNode<T>[]): TreeNode<T>[] {
 
 /**
  * Each item becomes a file node that keeps the item itself. Folders are made from the paths, so
- * only a folder that holds a file exists; they come first, then names in natural order.
+ * a folder exists only if it holds a file, unless it is named in `emptyFolders`. Folders come
+ * first, then names in natural order.
  */
-export function buildFileTree<T extends { path: string }>(items: T[]): TreeNode<T>[] {
+export function buildFileTree<T extends { path: string }>(
+	items: T[],
+	emptyFolders: string[] = []
+): TreeNode<T>[] {
 	const root: FolderNode<T> = { kind: 'folder', name: '', path: '', children: [] };
-	for (const item of items) {
-		const parts = item.path.split('/');
+	const folderAt = (parts: string[]) => {
 		let folder = root;
-		for (const [index, name] of parts.slice(0, -1).entries()) {
+		for (const [index, name] of parts.entries()) {
 			let next = folder.children.find(
 				(child): child is FolderNode<T> => child.kind === 'folder' && child.name === name
 			);
@@ -33,7 +36,17 @@ export function buildFileTree<T extends { path: string }>(items: T[]): TreeNode<
 			}
 			folder = next;
 		}
-		folder.children.push({ kind: 'file', name: parts.at(-1)!, path: item.path, item });
+		return folder;
+	};
+	for (const item of items) {
+		const parts = item.path.split('/');
+		folderAt(parts.slice(0, -1)).children.push({
+			kind: 'file',
+			name: parts.at(-1)!,
+			path: item.path,
+			item
+		});
 	}
+	for (const path of emptyFolders) folderAt(path.split('/'));
 	return sorted(root.children);
 }
