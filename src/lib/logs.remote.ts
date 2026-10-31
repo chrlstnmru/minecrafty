@@ -1,6 +1,4 @@
-import { error } from '@sveltejs/kit';
 import { query } from '$app/server';
-import { getInstance } from '#lib/server/instances.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { readLogSchema, searchLogSchema } from '#lib/schemas/logs.js';
 import { requirePermission } from '#lib/server/auth.js';
@@ -25,6 +23,5 @@ export const searchLog = query(searchLogSchema, async ({ id, name, query: text, 
 /** New lines of `latest.log` as the server writes them. */
 export const followLog = query.live(idSchema, async function* (id) {
 	requirePermission(id, 'logs');
-	if (!getInstance(id)) error(404, 'Instance not found');
 	yield* logs.followLog(id);
 });

@@ -1,13 +1,13 @@
 import { error, json } from '@sveltejs/kit';
-import { can } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
+import { requirePanel, requireUser } from '#lib/server/auth.js';
 import { getPack, iconFile, saveIcon } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
 // An icon is a picture, so anyone signed in may load it: it is also the icon of the servers made
 // from the pack. The address carries the file's time, so a changed icon is a new address.
-export const GET: RequestHandler = ({ params, locals }) => {
-	if (!locals.user) error(401, 'Not signed in');
+export const GET: RequestHandler = ({ params }) => {
+	requireUser();
 	const icon = iconFile(Number(params.id));
 	if (!icon) error(404, 'No icon');
 	return new Response(Bun.file(icon.path), {
@@ -17,9 +17,8 @@ export const GET: RequestHandler = ({ params, locals }) => {
 
 const MAX_BYTES = 2 * 1024 * 1024;
 
-export const POST: RequestHandler = async ({ params, request, locals }) => {
-	if (!locals.user) error(401, 'Not signed in');
-	if (!can(locals.user, 'modpacks.write')) error(403, 'You do not have permission to do that');
+export const POST: RequestHandler = async ({ params, request }) => {
+	requirePanel('modpacks.write');
 	const form = await request.formData();
 	const file = form.get('file');
 	if (!(file instanceof Blob)) error(400, 'Choose an image');

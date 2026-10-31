@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
-import { can } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
+import { requirePanel } from '#lib/server/auth.js';
 import { assertMayWriteCode } from '#lib/server/host-code.js';
 import { getPack, saveOverride } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
@@ -9,9 +9,8 @@ const MAX_BYTES = 20 * 1024 * 1024;
 
 // Adds one config file to a pack, at `path` (a folder inside the server, such as `config`), under
 // the uploaded file's own name unless `name` says otherwise.
-export const POST: RequestHandler = async ({ params, request, locals }) => {
-	if (!locals.user) error(401, 'Not signed in');
-	if (!can(locals.user, 'modpacks.write')) error(403, 'You do not have permission to do that');
+export const POST: RequestHandler = async ({ params, request }) => {
+	const user = requirePanel('modpacks.write');
 
 	const form = await request.formData();
 	const file = form.get('file');
@@ -22,7 +21,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const rel = folder ? `${folder}/${file.name}` : file.name;
 
 	try {
-		assertMayWriteCode(locals.user, rel);
+		assertMayWriteCode(user, rel);
 		await saveOverride(Number(params.id), rel, new Uint8Array(await file.arrayBuffer()));
 		record({
 			action: 'pack.config',

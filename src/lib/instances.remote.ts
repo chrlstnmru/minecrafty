@@ -172,7 +172,6 @@ const OVERLAP_LINES = 200;
  */
 export const consoleStream = query.live(id, async function* (instanceId) {
 	requirePermission(instanceId, 'console');
-	if (!instances.getInstance(instanceId)) error(404, 'Instance not found');
 
 	let state: ConsoleFrame['state'] = 'stopped';
 	let run: number | null = null;
