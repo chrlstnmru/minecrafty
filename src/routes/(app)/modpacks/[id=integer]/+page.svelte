@@ -6,7 +6,9 @@
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
+	import { useSearchParams } from 'runed/kit';
 	import { toast } from 'svelte-sonner';
+	import * as v from 'valibot';
 
 	import {
 		addPackMod,
@@ -52,7 +54,13 @@
 	const canWrite = $derived(data.panel.includes('modpacks.write'));
 	const canMakeServer = $derived(data.panel.includes('instances.create'));
 
-	let tab = $state('mods');
+	// the selected tab lives in the URL (?tab=configs), so a reload or a shared link opens the same one
+	const TABS = ['mods', 'configs', 'settings'] as const;
+	const params = useSearchParams(
+		v.object({ tab: v.optional(v.fallback(v.picklist(TABS), 'mods'), 'mods') }),
+		{ pushHistory: false, noScroll: true }
+	);
+	const tab = $derived(params.tab === 'settings' && !canWrite ? 'mods' : params.tab);
 	let makingServer = $state(false);
 	let deleting = $state(false);
 
@@ -258,7 +266,7 @@
 	</div>
 
 	{#if pack}
-		<Tabs.Root bind:value={tab}>
+		<Tabs.Root value={tab} onValueChange={(value) => (params.tab = value as (typeof TABS)[number])}>
 			<Tabs.List>
 				<Tabs.Trigger value="mods">Mods ({pack.files.length})</Tabs.Trigger>
 				<Tabs.Trigger value="configs">Configs ({pack.overrides.length})</Tabs.Trigger>
