@@ -85,9 +85,12 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 export const updateInstance = form(
 	updateInstanceSchema,
 	async ({ id: instanceId, ...settings }, issue) => {
-		requirePermission(instanceId, 'settings');
+		const user = requirePermission(instanceId, 'settings');
 		const before = instances.getInstance(instanceId);
 		if (!before) error(404, 'Instance not found');
+		// a JVM flag such as -XX:OnError runs a command on the host, so these are the owner's alone
+		if (user.role !== 'owner' && settings.jvmArgs.trim() !== before.jvmArgs)
+			invalid(issue.jvmArgs('Only the owner may change the JVM arguments'));
 		try {
 			instances.updateSettings(instanceId, { ...settings, jvmArgs: settings.jvmArgs.trim() });
 			const changed = (

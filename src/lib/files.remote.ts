@@ -4,6 +4,7 @@ import { idSchema } from '#lib/schemas/common.js';
 import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/files.js';
 import { requirePermission } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
+import { assertMayWriteCode } from '#lib/server/host-code.js';
 import * as uploads from '#lib/server/uploads.js';
 import { record } from '#lib/server/audit.js';
 import { userFacing } from '#lib/server/http.js';
@@ -27,8 +28,11 @@ export const readFile = query(location, async ({ id: instanceId, path }) => {
 export const saveFile = command(
 	v.object({ id, path: filePathSchema, content: v.pipe(v.string(), v.maxLength(2_200_000)) }),
 	async ({ id: instanceId, path, content }) => {
-		requirePermission(instanceId, 'files');
-		await userFacing(async () => files.writeTextFile(instanceId, path, content));
+		const user = requirePermission(instanceId, 'files');
+		await userFacing(async () => {
+			assertMayWriteCode(user, path);
+			files.writeTextFile(instanceId, path, content);
+		});
 		record({ action: 'file.save', summary: `Edited ${path}`, instanceId });
 		await readFile({ id: instanceId, path }).refresh();
 	}
@@ -55,8 +59,11 @@ export const newFolder = command(
 export const newFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
-		requirePermission(instanceId, 'files');
-		await userFacing(async () => files.createTextFile(instanceId, path, name));
+		const user = requirePermission(instanceId, 'files');
+		await userFacing(async () => {
+			assertMayWriteCode(user, joinPath(path, name));
+			files.createTextFile(instanceId, path, name);
+		});
 		record({
 			action: 'file.create',
 			summary: `Created ${joinPath(path, name)}`,
@@ -69,8 +76,9 @@ export const newFile = command(
 export const renameFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
-		requirePermission(instanceId, 'files');
+		const user = requirePermission(instanceId, 'files');
 		await userFacing(async () => {
+			assertMayWriteCode(user, name);
 			await files.assertWorldStopped(instanceId, path, 'renaming');
 			files.renameEntry(instanceId, path, name);
 		});
@@ -97,8 +105,10 @@ export const removeFile = command(
 );
 
 export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, path, items }) => {
-	requirePermission(instanceId, 'files');
+	const user = requirePermission(instanceId, 'files');
 	await userFacing(async () => {
+		// all or nothing: refuse the batch before any of it is written
+		for (const item of items) assertMayWriteCode(user, item.path);
 		for (const { file, path: relPath } of items) {
 			await files.assertWorldStopped(instanceId, joinPath(path, relPath), 'uploading into');
 			await files.saveUpload(instanceId, path, file, relPath);
@@ -124,6 +134,7 @@ export const beginUpload = command(
 	async ({ id: instanceId, path, name, size }) => {
 		const user = requirePermission(instanceId, 'files');
 		return userFacing(async () => {
+			assertMayWriteCode(user, name);
 			await files.assertWorldStopped(instanceId, joinPath(path, name), 'uploading into');
 			return uploads.beginUpload({
 				instanceId,

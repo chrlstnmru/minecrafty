@@ -1,6 +1,7 @@
 import { error, json } from '@sveltejs/kit';
 import { can } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
+import { assertMayWriteCode } from '#lib/server/host-code.js';
 import { getPack, saveOverride } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
@@ -21,6 +22,7 @@ export const POST: RequestHandler = async ({ params, request, locals }) => {
 	const rel = folder ? `${folder}/${file.name}` : file.name;
 
 	try {
+		assertMayWriteCode(locals.user, rel);
 		await saveOverride(Number(params.id), rel, new Uint8Array(await file.arrayBuffer()));
 		record({
 			action: 'pack.config',

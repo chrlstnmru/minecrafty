@@ -3,6 +3,7 @@ import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'no
 import { and, count, desc, eq } from 'drizzle-orm';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 import { dataDir } from './config';
+import { isHostCode } from './host-code';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
 import { isKnownVersion, latestBuild } from './loaders';
@@ -569,9 +570,15 @@ export async function exportBytes(packId: number) {
 /**
  * Makes a pack from a Modrinth .mrpack. Files Modrinth knows by hash get their project and
  * version back (so they can be re-pinned); any other file is kept as it is. Config files under
- * overrides/ and server-overrides/ are stored as the pack's config files.
+ * overrides/ and server-overrides/ are stored as the pack's config files. With `vettedOnly` (an
+ * import by anyone but the owner), a pack with a file Modrinth does not know, or with code in its
+ * config files, is refused: either could run anything on the host once installed.
  */
-export async function importMrpack(bytes: Uint8Array, nameOverride?: string) {
+export async function importMrpack(
+	bytes: Uint8Array,
+	nameOverride?: string,
+	{ vettedOnly = false } = {}
+) {
 	const zip = new Zip(bytes);
 	const index = parseIndex(zip);
 	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
@@ -583,6 +590,18 @@ export async function importMrpack(bytes: Uint8Array, nameOverride?: string) {
 
 	const sha512s = index.files.flatMap((f) => (f.hashes.sha512 ? [f.hashes.sha512] : []));
 	const known = await modrinth.versionsByHashes(sha512s);
+	if (vettedOnly) {
+		const unknown = index.files.find((f) => !f.hashes.sha512 || !known[f.hashes.sha512]);
+		if (unknown)
+			throw new Error(
+				`Only the owner may import a pack with files Modrinth does not know, such as ${unknown.path}`
+			);
+		const code = [...overrideEntries(zip).keys()].find(isHostCode);
+		if (code)
+			throw new Error(
+				`Only the owner may import a pack with code in its config files, such as ${code}`
+			);
+	}
 	const projectIds = [...new Set(Object.values(known).map((v) => v.project_id))];
 	const projects = new Map<string, modrinth.ModrinthProject>();
 	for (let i = 0; i < projectIds.length; i += 100)

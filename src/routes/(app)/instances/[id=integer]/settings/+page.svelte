@@ -84,7 +84,10 @@
 							field={jvmArgs}
 							class="font-mono"
 							placeholder="-XX:+UseG1GC"
-							description="Added after the memory flags, separated by spaces."
+							description={data.user.role === 'owner'
+								? 'Added after the memory flags, separated by spaces.'
+								: 'Only the owner may change these: a JVM flag can run commands on the host.'}
+							readonly={data.user.role !== 'owner'}
 						/>
 						<Form.Checkbox field={autoStart} label="Start automatically when the panel starts" />
 						<Form.Errors form={updateInstance} />
