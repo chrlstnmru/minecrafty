@@ -329,7 +329,9 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content class="grid flex-1 gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
-		<fieldset
+		<div
+			role="group"
+			aria-label="Config files"
 			class="flex min-h-64 min-w-0 flex-col gap-1 rounded-lg border p-2 {dragging
 				? 'bg-accent/30 ring-2 ring-ring/50'
 				: ''}"
@@ -348,10 +350,10 @@
 				void drop(event.dataTransfer, '');
 			}}
 		>
-			<legend class="px-1.5">
+			<div class="flex items-center gap-1 ps-1.5">
 				<button
 					type="button"
-					class="rounded-sm font-mono text-xs {target === ''
+					class="min-w-0 flex-1 truncate rounded-sm text-start font-mono text-xs {target === ''
 						? 'text-foreground'
 						: 'text-muted-foreground hover:text-foreground'}"
 					aria-pressed={target === ''}
@@ -359,24 +361,26 @@
 				>
 					overrides
 				</button>
-			</legend>
+				{#if canWrite}
+					<div class="flex shrink-0 items-center gap-0.5">
+						{@render tool(`New file in ${where}`, FilePlusIcon, () => startNaming('file'))}
+						{@render tool(`New folder in ${where}`, FolderPlusIcon, () => startNaming('folder'))}
+						{@render tool(
+							`Upload files to ${where}`,
+							UploadIcon,
+							() => fileInput?.click(),
+							uploading
+						)}
+						{@render tool(
+							`Upload a folder to ${where}`,
+							FolderUpIcon,
+							() => folderInput?.click(),
+							uploading
+						)}
+					</div>
+				{/if}
+			</div>
 			{#if canWrite}
-				<div class="flex items-center justify-end gap-0.5">
-					{@render tool(`New file in ${where}`, FilePlusIcon, () => startNaming('file'))}
-					{@render tool(`New folder in ${where}`, FolderPlusIcon, () => startNaming('folder'))}
-					{@render tool(
-						`Upload files to ${where}`,
-						UploadIcon,
-						() => fileInput?.click(),
-						uploading
-					)}
-					{@render tool(
-						`Upload a folder to ${where}`,
-						FolderUpIcon,
-						() => folderInput?.click(),
-						uploading
-					)}
-				</div>
 				<input
 					bind:this={fileInput}
 					type="file"
@@ -467,7 +471,7 @@
 					</p>
 				{/if}
 			</div>
-		</fieldset>
+		</div>
 
 		<div class="grid h-full min-w-0 grid-rows-[auto_1fr] content-start gap-3">
 			{#if open === null}
