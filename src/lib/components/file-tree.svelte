@@ -5,9 +5,8 @@
 	import FileIcon from '@tabler/icons-svelte/icons/file';
 	import FolderIcon from '@tabler/icons-svelte/icons/folder';
 
-	import type { FolderNode, TreeNode } from '#lib/file-tree.js';
-
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
+	import { movedPath, TREE_DRAG_TYPE, type FolderNode, type TreeNode } from '#lib/file-tree.js';
 
 	type Status = { tone: 'info' | 'warning'; label: string };
 
@@ -22,6 +21,7 @@
 		onselect,
 		onselectfolder,
 		ondropfiles,
+		onmove,
 		trailing,
 		folderTrailing,
 		open = true
@@ -44,6 +44,12 @@
 		onselectfolder?: (path: string) => void;
 		/** Files from the desktop were dropped on a folder. Without this, folders are not drop targets. */
 		ondropfiles?: (folder: string, transfer: DataTransfer) => void;
+		/**
+		 * A file or folder was dragged onto a folder (or onto a file, meaning the folder it is in). The
+		 * root is not a row here: whoever holds the tree takes drops on the space around it.
+		 * Without this, rows cannot be dragged.
+		 */
+		onmove?: (from: string, folder: string) => void;
 		/** What follows a file's name: a size, action buttons. */
 		trailing?: Snippet<[T]>;
 		folderTrailing?: Snippet<[FolderNode<T>]>;
@@ -52,8 +58,50 @@
 	} = $props();
 
 	let dropOn = $state<string | null>(null);
+	// the path being dragged: a drop target cannot read the data until the drop, but needs to know now
+	let dragged = $state<string | null>(null);
 
 	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
+	const isTreeDrag = (event: DragEvent) =>
+		event.dataTransfer?.types.includes(TREE_DRAG_TYPE) ?? false;
+	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
+
+	function dragStart(event: DragEvent, path: string) {
+		if (!event.dataTransfer) return;
+		event.dataTransfer.setData(TREE_DRAG_TYPE, path);
+		event.dataTransfer.effectAllowed = 'move';
+		dragged = path;
+	}
+
+	function dragEnd() {
+		dragged = null;
+		dropOn = null;
+	}
+
+	/** Takes a dragged tree item hovering over `folder`; false when it is not one. */
+	function dragOverFolder(event: DragEvent, folder: string, highlight: string | null) {
+		if (!onmove || !isTreeDrag(event)) return false;
+		// stopped either way: the space behind the tree would read it as a drop on the root
+		event.stopPropagation();
+		if (dragged === null || movedPath(dragged, folder) === null) return true;
+		event.preventDefault();
+		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
+		dropOn = highlight;
+		return true;
+	}
+
+	/** Takes a dragged tree item dropped on `folder`; false when it is not one. */
+	function dropOnFolder(event: DragEvent, folder: string) {
+		if (!onmove || !isTreeDrag(event)) return false;
+		event.stopPropagation();
+		const from = dragged;
+		dragEnd();
+		if (from !== null && movedPath(from, folder) !== null) {
+			event.preventDefault();
+			onmove(from, folder);
+		}
+		return true;
+	}
 </script>
 
 {#snippet dot(mark: Status | undefined)}
@@ -73,10 +121,14 @@
 				<div
 					role="presentation"
 					data-tree-row
+					draggable={onmove ? 'true' : undefined}
+					ondragstart={(event) => dragStart(event, node.path)}
+					ondragend={dragEnd}
 					class="flex items-center gap-1 rounded-md hover:bg-accent/50 {selectedFolder === node.path
 						? 'bg-accent'
 						: ''} {dropOn === node.path ? 'bg-accent ring-2 ring-ring/50' : ''}"
 					ondragover={(event) => {
+						if (dragOverFolder(event, node.path, node.path)) return;
 						if (!ondropfiles || !hasFiles(event)) return;
 						event.preventDefault();
 						event.stopPropagation();
@@ -86,6 +138,7 @@
 						if (!event.currentTarget.contains(event.relatedTarget as Node)) dropOn = null;
 					}}
 					ondrop={(event) => {
+						if (dropOnFolder(event, node.path)) return;
 						if (!ondropfiles || !event.dataTransfer || !hasFiles(event)) return;
 						event.preventDefault();
 						event.stopPropagation();
@@ -112,7 +165,16 @@
 			</Collapsible.Root>
 		{:else}
 			<div
+				role="presentation"
 				data-tree-row
+				draggable={onmove ? 'true' : undefined}
+				ondragstart={(event) => dragStart(event, node.path)}
+				ondragend={dragEnd}
+				ondragover={(event) => dragOverFolder(event, dirOf(node.path), dirOf(node.path) || null)}
+				ondragleave={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget as Node)) dropOn = null;
+				}}
+				ondrop={(event) => dropOnFolder(event, dirOf(node.path))}
 				class="flex items-center gap-1 rounded-md ps-2 {selected === node.path ? 'bg-accent' : ''}"
 			>
 				<FileIcon class="size-4 shrink-0 text-muted-foreground" />

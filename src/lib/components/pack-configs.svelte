@@ -32,7 +32,7 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
-	import { buildFileTree } from '#lib/file-tree.js';
+	import { buildFileTree, movedPath, TREE_DRAG_TYPE } from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
 	import {
 		batches,
@@ -298,35 +298,13 @@
 		namingOpen = true;
 	}
 
-	async function confirmName() {
-		if (!naming || nameError) return;
-		const { kind, from } = naming;
-		const to = namedPath;
-		namingOpen = false;
-		if (kind === 'folder') {
-			if (!from) {
-				emptyFolders = [...emptyFolders, to];
-				targetDir = to;
-				return;
-			}
-			if (from === to) return;
-			try {
-				// a folder made here that is still empty is not on the server
-				if (files.some((f) => under(f.path, from))) await movePackConfigFolder({ id, from, to });
-				emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
-				targetDir = rebase(targetDir, from, to);
-				if (open) open = rebase(open, from, to);
-				toast.success(`Moved ${from} to ${to}`);
-			} catch (e) {
-				toast.error(message(e, 'Could not move the folder'));
-			}
+	async function moveFile(from: string, to: string) {
+		if (from === to) return;
+		// a new file that is not saved yet is not on the server
+		if (isNew && open === from) {
+			open = to;
 			return;
 		}
-		if (!from) {
-			targetDir = dirOf(to);
-			return unlessDirty(() => show(to, true));
-		}
-		if (from === to) return;
 		try {
 			await movePackConfig({ id, from, to });
 			if (open === from) open = to;
@@ -336,8 +314,46 @@
 		}
 	}
 
+	async function moveFolder(from: string, to: string) {
+		if (from === to) return;
+		try {
+			// a folder made here that is still empty is not on the server
+			if (files.some((f) => under(f.path, from))) await movePackConfigFolder({ id, from, to });
+			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
+			targetDir = rebase(targetDir, from, to);
+			if (open) open = rebase(open, from, to);
+			toast.success(`Moved ${from} to ${to}`);
+		} catch (e) {
+			toast.error(message(e, 'Could not move the folder'));
+		}
+	}
+
+	/** A drop on a folder: the dragged file or folder keeps its name and goes into it. */
+	function moveInto(from: string, folder: string) {
+		const to = movedPath(from, folder);
+		if (!to) return;
+		void (folderPaths.has(from) ? moveFolder(from, to) : moveFile(from, to));
+	}
+
+	async function confirmName() {
+		if (!naming || nameError) return;
+		const { kind, from } = naming;
+		const to = namedPath;
+		namingOpen = false;
+		if (kind === 'folder') {
+			if (from) return moveFolder(from, to);
+			emptyFolders = [...emptyFolders, to];
+			targetDir = to;
+			return;
+		}
+		if (from) return moveFile(from, to);
+		targetDir = dirOf(to);
+		return unlessDirty(() => show(to, true));
+	}
+
 	let uploading = $state(false);
 	let dragging = $state(false);
+	let rootDrop = $state(false);
 	let fileInput = $state<HTMLInputElement>();
 	let folderInput = $state<HTMLInputElement>();
 
@@ -497,9 +513,25 @@
 			<!-- clicking anywhere in the tree but on a row goes back to the server folder; the overrides button is the keyboard way -->
 			<div
 				role="presentation"
-				class="min-h-0 flex-1 overflow-y-auto p-2"
+				class="min-h-0 flex-1 overflow-y-auto p-2 {rootDrop ? 'bg-accent/30' : ''}"
 				onclick={(event) => {
 					if (!(event.target as Element).closest('[data-tree-row]')) targetDir = '';
+				}}
+				ondragover={(event) => {
+					if (!canWrite || !event.dataTransfer?.types.includes(TREE_DRAG_TYPE)) return;
+					event.preventDefault();
+					rootDrop = true;
+				}}
+				ondragleave={(event) => {
+					if (!event.currentTarget.contains(event.relatedTarget as Node)) rootDrop = false;
+				}}
+				ondragend={() => (rootDrop = false)}
+				ondrop={(event) => {
+					rootDrop = false;
+					const from = event.dataTransfer?.getData(TREE_DRAG_TYPE);
+					if (!canWrite || !from) return;
+					event.preventDefault();
+					moveInto(from, '');
 				}}
 			>
 				{#if tree.length}
@@ -526,6 +558,7 @@
 							})}
 						onselectfolder={(path) => (targetDir = path)}
 						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
+						onmove={canWrite ? moveInto : undefined}
 					>
 						{#snippet folderTrailing(folder)}
 							{#if canWrite}

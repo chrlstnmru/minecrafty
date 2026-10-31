@@ -50,3 +50,19 @@ export function buildFileTree<T extends { path: string }>(
 	for (const path of emptyFolders) folderAt(path.split('/'));
 	return sorted(root.children);
 }
+
+/** What a dragged tree item carries, so a drop can tell it from files dragged in from the desktop. */
+export const TREE_DRAG_TYPE = 'application/x-minecrafty-tree-item';
+
+/**
+ * Where a file or folder ends up when dropped on `folder` ('' is the root), or null when the drop
+ * does nothing: it is already there, or a folder would go into itself.
+ */
+export function movedPath(from: string, folder: string): string | null {
+	const to = folder
+		? `${folder}/${from.slice(from.lastIndexOf('/') + 1)}`
+		: from.slice(from.lastIndexOf('/') + 1);
+	if (to === from) return null;
+	if (folder === from || folder.startsWith(`${from}/`)) return null;
+	return to;
+}
