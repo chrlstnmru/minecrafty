@@ -2,6 +2,7 @@
 // in a server folder can run anything on the host as the panel's user, which is more than any
 // per-server permission is meant to give, so only the owner may add or change them.
 import type { Actor } from './access';
+import { fold } from './protected-files';
 
 const CODE_EXTENSIONS = /\.(jar|class|sh|bat|cmd|ps1|exe|dll|so|dylib)$/;
 // Forge and NeoForge read extra JVM arguments from this file at the root of the server
@@ -11,11 +12,7 @@ const CODE_NAMES = new Set(['user_jvm_args.txt']);
 export function isHostCode(rel: string) {
 	const name = rel.replaceAll('\\', '/').split('/').filter(Boolean).at(-1);
 	if (!name) return false;
-	// as the filesystem may see it: Windows and macOS ignore case and trailing dots and spaces
-	const folded = name
-		.normalize('NFC')
-		.toLowerCase()
-		.replace(/[. ]+$/, '');
+	const folded = fold(name);
 	return CODE_EXTENSIONS.test(folded) || CODE_NAMES.has(folded);
 }
 
