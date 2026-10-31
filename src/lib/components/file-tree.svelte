@@ -201,7 +201,7 @@
 				indeterminate={state === 'mixed'}
 				aria-label="Choose {node.name}"
 				onCheckedChange={(on) => toggle(node, on)}
-				class="opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 {selecting
+				class="opacity-0 group-hover/row:opacity-100 group-has-[:focus-visible]/row:opacity-100 after:-inset-x-0.5 after:-inset-y-1 {selecting
 					? 'opacity-100'
 					: 'pointer-coarse:pointer-events-none'}"
 			/>
