@@ -1,15 +1,13 @@
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { and, eq, inArray } from 'drizzle-orm';
-import { writeBackup } from './backups';
-import { claim } from './operations';
 import { javaOverride } from './config';
 import { db } from './db';
-import { installedMods, instances } from './db/schema';
+import { installedMods } from './db/schema';
+import { runUpdate } from './instance-job';
 import { isRunning } from './live-server';
-import { clearProgress, setProgress } from './install-progress';
 import { ensureJava, requiredJavaMajor } from './java';
-import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';
+import { getInstance, serverDir } from './instances';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import {
@@ -27,9 +25,9 @@ import {
 	type ModpackVersion
 } from './modpacks';
 import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
-import { setEnabled } from './mods';
+import { setEnabledHeld } from './mods';
 import { mergeStaged, removeStale } from './staged-install';
-import { clearOutcome, lastOutcome, setOutcome } from './update-outcome';
+import { lastOutcome } from './update-outcome';
 
 export { lastOutcome };
 
@@ -302,37 +300,20 @@ export async function startModpackUpdate(
 
 	const pack = await loadPackFor(inst, opts.versionId);
 	const plan = await planModpackUpdate(instanceId, pack, opts);
-	const release = claim(instanceId, 'update');
-
-	db.update(instances)
-		.set({ installState: 'installing', installMessage: null })
-		.where(eq(instances.id, instanceId))
-		.run();
-	clearOutcome(instanceId);
-	setProgress(instanceId, { label: 'Starting', done: 0, total: 1 });
-
 	const server = serverDir(instanceId);
-	const staging = join(instanceDir(instanceId), 'server.updating');
 	const from = inst.packProjectId
 		? (inst.packVersionNumber ?? 'the old version')
 		: `revision ${inst.fromPackRevision}`;
 
-	const finished = (async () => {
-		let applied = false;
-		try {
-			if (opts.backup) {
-				setProgress(instanceId, { label: 'Backing up the server', done: 0, total: 1 });
-				await writeBackup(
-					instanceId,
-					'before-update',
-					`Before updating to ${plan.name} ${plan.versionNumber}`
-				);
-			}
-
-			rmSync(staging, { recursive: true, force: true });
-			mkdirSync(staging, { recursive: true });
+	const finished = runUpdate(
+		instanceId,
+		{
+			kind: 'modpack',
+			backup: opts.backup ? `Before updating to ${plan.name} ${plan.versionNumber}` : null
+		},
+		async ({ staging, progress, commit }) => {
 			if (plan.loaderChange) {
-				setProgress(instanceId, { label: 'Installing the new server', done: 0, total: 1 });
+				progress('Installing the new server');
 				const java = needsJavaToInstall(plan.loader)
 					? (javaOverride ?? (await ensureJava(await requiredJavaMajor(plan.mcVersion))))
 					: undefined;
@@ -356,8 +337,8 @@ export async function startModpackUpdate(
 				await Bun.write(dest, pack.zip.read(configs.get(path)!));
 			}
 
-			setProgress(instanceId, { label: 'Replacing the old files', done: 0, total: 1 });
-			applied = true;
+			progress('Replacing the old files');
+			commit();
 			// a disabled mod that gets a new version keeps its place at the old path until it is re-disabled
 			const replaced = plan.download.filter((d) => d.disabled).map((d) => d.file.path + DISABLED);
 			for (const path of [...plan.remove, ...plan.removeConfigs, ...replaced])
@@ -386,7 +367,7 @@ export async function startModpackUpdate(
 					.from(installedMods)
 					.where(and(eq(installedMods.instanceId, instanceId), eq(installedMods.file, file.path)))
 					.get();
-				if (row) setEnabled(instanceId, row.id, false);
+				if (row) setEnabledHeld(instanceId, row.id, false);
 			}
 
 			const manifest: PackManifest = {
@@ -400,9 +381,14 @@ export async function startModpackUpdate(
 			if (plan.loaderChange) launchArgs(server, plan.loader);
 			const needed = await requiredJavaMajor(plan.mcVersion);
 			const resetJava = plan.loaderChange && inst.javaMajor !== null && inst.javaMajor < needed;
-			const row = db
-				.update(instances)
-				.set({
+
+			const parts = [
+				plan.download.length ? `${plan.download.length} files downloaded` : null,
+				plan.remove.length ? `${plan.remove.length} removed` : null,
+				plan.writeConfigs.length ? `${plan.writeConfigs.length} configs updated` : null
+			].filter(Boolean);
+			return {
+				set: {
 					mcVersion: plan.mcVersion,
 					loaderVersion: plan.loaderVersion,
 					javaMajor: resetJava ? null : inst.javaMajor,
@@ -410,22 +396,8 @@ export async function startModpackUpdate(
 						? { packVersionId: plan.versionId, packVersionNumber: plan.versionNumber }
 						: { fromPackRevision: Number(plan.versionId.slice('rev:'.length)) }),
 					packName: plan.name,
-					packIconUrl: pack.summary.iconUrl,
-					installState: 'ready',
-					installMessage: null
-				})
-				.where(eq(instances.id, instanceId))
-				.returning()
-				.get();
-			writeInstanceMeta(row);
-
-			const parts = [
-				plan.download.length ? `${plan.download.length} files downloaded` : null,
-				plan.remove.length ? `${plan.remove.length} removed` : null,
-				plan.writeConfigs.length ? `${plan.writeConfigs.length} configs updated` : null
-			].filter(Boolean);
-			setOutcome(instanceId, {
-				ok: true,
+					packIconUrl: pack.summary.iconUrl
+				},
 				message:
 					`Updated ${plan.name} from ${from} to ${plan.versionNumber}` +
 					(parts.length ? `: ${parts.join(', ')}.` : '.') +
@@ -433,29 +405,9 @@ export async function startModpackUpdate(
 				details: plan.kept.length
 					? [`Left as they were, because you changed them (${plan.kept.length}):`, ...plan.kept]
 					: undefined
-			});
-		} catch (e) {
-			const message = e instanceof Error ? e.message : String(e);
-			console.error(`[modpack] update of #${instanceId} failed: ${message}`);
-			// before the files are replaced the server is untouched and can start as before
-			db.update(instances)
-				.set(
-					applied
-						? { installState: 'failed', installMessage: message.slice(0, 500) }
-						: { installState: 'ready', installMessage: null }
-				)
-				.where(eq(instances.id, instanceId))
-				.run();
-			setOutcome(instanceId, {
-				ok: false,
-				message: applied ? `The update stopped part way: ${message}` : message
-			});
-		} finally {
-			rmSync(staging, { recursive: true, force: true });
-			clearProgress(instanceId);
-			release();
+			};
 		}
-	})();
+	);
 
 	return { plan, finished };
 }

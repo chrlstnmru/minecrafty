@@ -7,7 +7,7 @@ import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './ja
 import { db } from './db';
 import { instances } from './db/schema';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
-import { clearProgress, getProgress, setProgress } from './install-progress';
+import { getProgress, runInstall, setProgress } from './install-progress';
 import { busyWith } from './operations';
 import * as live from './live-server';
 import { setProperties } from './server-properties';
@@ -164,26 +164,6 @@ export function discardInstance(id: number) {
 	removeInstanceFiles(id);
 }
 
-/** Finishes an install that started in the background: the instance becomes ready, or failed with the reason. */
-async function finishInstall(row: Instance) {
-	try {
-		await installBase(row);
-		db.update(instances)
-			.set({ installState: 'ready', installMessage: null })
-			.where(eq(instances.id, row.id))
-			.run();
-	} catch (e) {
-		const message = e instanceof Error ? e.message : String(e);
-		console.error(`[install] "${row.name}" (#${row.id}) failed: ${message}`);
-		db.update(instances)
-			.set({ installState: 'failed', installMessage: message.slice(0, 500) })
-			.where(eq(instances.id, row.id))
-			.run();
-	} finally {
-		clearProgress(row.id);
-	}
-}
-
 /**
  * Adds the instance at once, marked as installing, and installs its server in the background
  * (a download of 50 MB, or Java and an installer, is no reason to keep a form waiting). `finished`
@@ -192,7 +172,7 @@ async function finishInstall(row: Instance) {
 export function createInstance(input: NewInstance) {
 	const row = insertInstance({ ...input, installState: 'installing', installMessage: null });
 	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
-	return { row, finished: finishInstall(row) };
+	return { row, finished: runInstall(row, 'install', () => installBase(row)) };
 }
 
 /** Runs a failed install again from scratch. Only for servers made from a loader: a modpack's own files need the pack. */
@@ -216,7 +196,10 @@ export function retryInstall(id: number) {
 		.returning()
 		.get();
 	setProgress(id, { label: 'Starting', done: 0, total: 1 });
-	return { row: installing, finished: finishInstall(installing) };
+	return {
+		row: installing,
+		finished: runInstall(installing, 'install', () => installBase(installing))
+	};
 }
 
 export function getInstance(id: number) {

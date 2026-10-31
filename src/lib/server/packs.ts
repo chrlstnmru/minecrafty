@@ -3,6 +3,7 @@ import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { getInstance, serverDir } from './instances';
+import { assertWritable } from './operations';
 import * as modrinth from './modrinth';
 import { readProperties, setProperties } from './server-properties';
 
@@ -116,6 +117,7 @@ export function serverPack(instanceId: number): ServerPack {
 /** Points the server at a Modrinth resource pack. Takes effect the next time the server starts. */
 export async function useAsServerPack(instanceId: number, projectId: string, versionId?: string) {
 	requireInstance(instanceId);
+	assertWritable(instanceId);
 	const { version, file } = await pickVersion(instanceId, projectId, versionId);
 	if (!file.url.startsWith('https://')) throw new Error('The pack has no public download URL');
 
@@ -154,6 +156,7 @@ export function setServerPackOptions(
 	options: { required: boolean; prompt: string }
 ) {
 	requireInstance(instanceId);
+	assertWritable(instanceId);
 	setProperties(propsFile(instanceId), {
 		'require-resource-pack': options.required,
 		'resource-pack-prompt': toPrompt(options.prompt.trim())
@@ -161,6 +164,7 @@ export function setServerPackOptions(
 }
 
 export function removePack(instanceId: number, rowId: number) {
+	assertWritable(instanceId);
 	const row = currentRow(instanceId);
 	if (!row || row.id !== rowId) throw new Error('Not in use');
 	setProperties(propsFile(instanceId), { 'resource-pack': '', 'resource-pack-sha1': '' });

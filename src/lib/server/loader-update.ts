@@ -1,18 +1,13 @@
-import { mkdirSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
-import { writeBackup } from './backups';
-import { claim } from './operations';
 import { javaOverride } from './config';
 import { db } from './db';
-import { installedMods, instances } from './db/schema';
+import { installedMods } from './db/schema';
+import { runUpdate } from './instance-job';
 import { isRunning } from './live-server';
-import { clearProgress, setProgress } from './install-progress';
 import { updateKind } from '../versions';
 import { mergeStaged, removeStale } from './staged-install';
-import { clearOutcome, setOutcome } from './update-outcome';
 import { ensureJava, requiredJavaMajor } from './java';
-import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';
+import { getInstance, serverDir } from './instances';
 import {
 	getMinecraftVersions,
 	installServer,
@@ -105,31 +100,16 @@ export async function startLoaderUpdate(
 	if (opts.mcVersion === inst.mcVersion && build === inst.loaderVersion)
 		throw new Error('Already up to date');
 
-	const release = claim(instanceId, 'update');
 	const from = { mcVersion: inst.mcVersion, loaderVersion: inst.loaderVersion };
 	const to = { mcVersion: opts.mcVersion, loaderVersion: build };
 	const describe = (v: { mcVersion: string; loaderVersion: string | null }) =>
 		`${loader} ${v.mcVersion}${v.loaderVersion ? ` (${v.loaderVersion})` : ''}`;
 
-	db.update(instances)
-		.set({ installState: 'installing', installMessage: null })
-		.where(eq(instances.id, instanceId))
-		.run();
-	clearOutcome(instanceId);
-	setProgress(instanceId, { label: 'Starting', done: 0, total: 1 });
-
-	const finished = (async () => {
-		const staging = join(instanceDir(instanceId), 'server.updating');
-		let swapped = false;
-		try {
-			if (opts.backup) {
-				setProgress(instanceId, { label: 'Backing up the server', done: 0, total: 1 });
-				await writeBackup(instanceId, 'before-update', `Before updating to ${describe(to)}`);
-			}
-
-			setProgress(instanceId, { label: 'Installing the new server', done: 0, total: 1 });
-			rmSync(staging, { recursive: true, force: true });
-			mkdirSync(staging, { recursive: true });
+	const finished = runUpdate(
+		instanceId,
+		{ kind: 'loader', backup: opts.backup ? `Before updating to ${describe(to)}` : null },
+		async ({ staging, progress, commit }) => {
+			progress('Installing the new server');
 			const java = needsJavaToInstall(loader)
 				? (javaOverride ?? (await ensureJava(await requiredJavaMajor(to.mcVersion))))
 				: undefined;
@@ -141,8 +121,8 @@ export async function startLoaderUpdate(
 				java
 			});
 
-			setProgress(instanceId, { label: 'Replacing the old server', done: 0, total: 1 });
-			swapped = true;
+			progress('Replacing the old server');
+			commit();
 			removeStale(serverDir(instanceId), loader);
 			mergeStaged(serverDir(instanceId), staging);
 			launchArgs(serverDir(instanceId), loader);
@@ -150,47 +130,18 @@ export async function startLoaderUpdate(
 			// a Java version chosen by hand may be too old for the new Minecraft version
 			const needed = await requiredJavaMajor(to.mcVersion);
 			const resetJava = inst.javaMajor !== null && inst.javaMajor < needed;
-			const row = db
-				.update(instances)
-				.set({
+			return {
+				set: {
 					mcVersion: to.mcVersion,
 					loaderVersion: to.loaderVersion,
-					javaMajor: resetJava ? null : inst.javaMajor,
-					installState: 'ready',
-					installMessage: null
-				})
-				.where(eq(instances.id, instanceId))
-				.returning()
-				.get();
-			writeInstanceMeta(row);
-			setOutcome(instanceId, {
-				ok: true,
+					javaMajor: resetJava ? null : inst.javaMajor
+				},
 				message:
 					`Updated from ${describe(from)} to ${describe(to)}.` +
 					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : '')
-			});
-		} catch (e) {
-			const message = e instanceof Error ? e.message : String(e);
-			console.error(`[loader] update of #${instanceId} failed: ${message}`);
-			// before the swap the server is untouched and can start as before; after it, it may not
-			db.update(instances)
-				.set(
-					swapped
-						? { installState: 'failed', installMessage: message.slice(0, 500) }
-						: { installState: 'ready', installMessage: null }
-				)
-				.where(eq(instances.id, instanceId))
-				.run();
-			setOutcome(instanceId, {
-				ok: false,
-				message: swapped ? `The update stopped part way: ${message}` : message
-			});
-		} finally {
-			rmSync(staging, { recursive: true, force: true });
-			clearProgress(instanceId);
-			release();
+			};
 		}
-	})();
+	);
 
 	return { from, to, kind: updateKind(from.mcVersion, to.mcVersion), finished };
 }
