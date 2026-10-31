@@ -210,15 +210,19 @@
 		naming ? (naming.from ? naming.value.trim() : joinPath(naming.dir, naming.value.trim())) : ''
 	);
 
+	// what the field asks for: its description, and the error while it is empty
+	const nameHint = $derived(
+		naming?.from
+			? 'Enter a path, such as config/mod.toml'
+			: naming?.kind === 'folder'
+				? 'Enter a folder name, such as sodium'
+				: 'Enter a file name, such as mod.toml'
+	);
+
 	const nameError = $derived.by(() => {
 		if (!naming) return undefined;
 		const name = naming.value.trim();
-		if (!name)
-			return naming.from
-				? 'Enter a path, such as config/mod.toml'
-				: naming.kind === 'folder'
-					? 'Enter a folder name, such as sodium'
-					: 'Enter a file name, such as mod.toml';
+		if (!name) return nameHint;
 		if (!naming.from && (/[\\/]/.test(name) || name === '.' || name === '..'))
 			return 'Use a name without slashes. Pick the folder first to choose where it goes.';
 		const path = namedPath;
@@ -239,14 +243,6 @@
 
 	// an empty field only keeps Create disabled; a mistake is shown once something is typed
 	const shownError = $derived(naming?.value.trim() ? nameError : undefined);
-
-	const nameHint = $derived(
-		naming?.from
-			? 'The path inside the server folder, such as config/mod.toml.'
-			: naming?.kind === 'folder'
-				? 'A folder name such as sodium. It cannot contain slashes.'
-				: 'A text file such as mod.toml, options.json or config.yml.'
-	);
 
 	function startNaming(kind: 'file' | 'folder', from?: string) {
 		naming = { kind, from, dir: target, value: from ?? '' };
