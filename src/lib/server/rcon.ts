@@ -153,12 +153,16 @@ export async function withRcon<T>(
 			const done = new Promise<void>((resolve, reject) => {
 				waiting.set(id, (reply) => {
 					if (reply.id === -2) return reject(failure);
-					if (reply.type === RESPONSE) parts.push(reply.body);
+					if (reply.type !== RESPONSE) return;
+					// Minecraft reads one packet at a time and drops a client whose read holds two, so
+					// the sentinel waits for the reply to start; the server writes every part of it
+					// before reading the sentinel
+					if (!parts.length) socket.write(packet(end, SENTINEL, ''));
+					parts.push(reply.body);
 				});
 				waiting.set(end, (reply) => (reply.id === -2 ? reject(failure) : resolve()));
 			});
 			socket.write(packet(id, COMMAND, command));
-			socket.write(packet(end, SENTINEL, ''));
 			await done;
 			waiting.delete(id);
 			waiting.delete(end);

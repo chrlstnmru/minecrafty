@@ -30,6 +30,13 @@ export function fakeRcon(
 			},
 			data(socket, chunk) {
 				if (options.silent) return;
+				// like Minecraft, which reads once per packet and drops the client when a read holds
+				// anything other than exactly one packet (two sent back to back, say)
+				const view = new DataView(chunk.buffer, chunk.byteOffset, chunk.byteLength);
+				if (chunk.length < 4 || view.getInt32(0, true) !== chunk.length - 4) {
+					socket.end();
+					return;
+				}
 				const joined = new Uint8Array(socket.data.buffer.length + chunk.length);
 				joined.set(socket.data.buffer);
 				joined.set(chunk, socket.data.buffer.length);
