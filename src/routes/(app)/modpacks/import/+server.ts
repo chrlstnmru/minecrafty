@@ -23,7 +23,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 	try {
 		const pack = await importMrpack(
 			new Uint8Array(await file.arrayBuffer()),
-			typeof name === 'string' && name.trim() ? name : undefined
+			typeof name === 'string' && name.trim() ? name : undefined,
+			{ vettedOnly: locals.user.role !== 'owner' }
 		);
 		record({ action: 'pack.create', summary: `Imported the modpack ${pack.name}` });
 		return json({ id: pack.id });

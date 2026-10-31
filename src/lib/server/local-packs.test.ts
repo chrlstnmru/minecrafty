@@ -294,6 +294,36 @@ describe('the .mrpack', () => {
 		await expect(P.importMrpack(new Uint8Array([1, 2, 3]))).rejects.toThrow('zip');
 		expect(db.select().from(localPacks).all()).toHaveLength(2);
 	});
+	it('takes from anyone but the owner only files Modrinth knows, and no code in the config files', async () => {
+		const pack = await make();
+		await P.addMod(pack.id, 'sodium');
+		await P.saveOverride(pack.id, 'config/a.toml', new TextEncoder().encode('x=1'));
+		const vetted = (await P.exportBytes(pack.id)).bytes;
+		const before = db.select().from(localPacks).all().length;
+
+		await P.saveOverride(pack.id, 'mods/evil.jar', new TextEncoder().encode('jar'));
+		await expect(
+			P.importMrpack((await P.exportBytes(pack.id)).bytes, undefined, { vettedOnly: true })
+		).rejects.toThrow(/code in its config files, such as mods\/evil\.jar/);
+		P.removeOverride(pack.id, 'mods/evil.jar');
+
+		db.insert(localPackFiles)
+			.values({
+				packId: pack.id,
+				title: 'custom.jar',
+				path: 'mods/custom.jar',
+				downloads: JSON.stringify(['https://github.com/x/y/custom.jar']),
+				sha512: 'unknown-hash'
+			})
+			.run();
+		await expect(
+			P.importMrpack((await P.exportBytes(pack.id)).bytes, undefined, { vettedOnly: true })
+		).rejects.toThrow(/Modrinth does not know, such as mods\/custom\.jar/);
+		expect(db.select().from(localPacks).all()).toHaveLength(before);
+
+		const copy = await P.importMrpack(vetted, undefined, { vettedOnly: true });
+		expect(P.getPack(copy.id).files.every((f) => f.projectId)).toBe(true);
+	});
 });
 
 describe('duplicating and deleting', () => {
