@@ -17,4 +17,5 @@
 - File manager actions with all their rules (protected files, host code, world, busy): the action functions in `server/files.ts` (`saveFile`, `moveEntry`, `uploadFiles`…).
 - Where an instance came from: `src/lib/instance-origin.ts`.
 - Modrinth dependency resolution and file picking: `server/mod-resolver.ts`.
+- Showing Markdown (release notes): `components/markdown.svelte`. It draws tokens and never uses `{@html}`; keep it that way.
 - Audit: `record()` in `server/audit.ts`, written from the remote after the action succeeds. Background work captures `currentActor()` while the request is still there.

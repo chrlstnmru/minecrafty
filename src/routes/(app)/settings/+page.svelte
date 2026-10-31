@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 
+	import Markdown from '#lib/components/markdown.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -161,7 +162,7 @@
 							<summary class="cursor-pointer font-medium"
 								>What is new in {upd.available.version}</summary
 							>
-							<p class="mt-2 whitespace-pre-wrap text-muted-foreground">{upd.available.notes}</p>
+							<Markdown source={upd.available.notes} class="mt-2 text-muted-foreground" />
 						</details>
 					{/if}
 					{#if upd.canInstall}
