@@ -348,6 +348,20 @@ describe('changes the player made', () => {
 		expect(lastOutcome(id)?.details?.join('\n')).toContain('mods/a.jar');
 	});
 
+	it('does not report a mod the player already updated to the new version', async () => {
+		await installV1({ 'mods/a.jar': 'a1', 'mods/b.jar': 'b1' });
+		put('mods/a.jar', 'a2');
+		await makePack({
+			versionId: 'V2',
+			versionNumber: '2.0',
+			files: { 'mods/a.jar': 'a2', 'mods/b.jar': 'b2' }
+		});
+		await run('V2');
+		expect(read('mods/a.jar')).toBe('a2');
+		expect(read('mods/b.jar')).toBe('b2');
+		expect(lastOutcome(id)?.details).toBeUndefined();
+	});
+
 	it('does not bring back a mod the player deleted', async () => {
 		await installV1({ 'mods/a.jar': 'a1', 'mods/b.jar': 'b1' });
 		rmSync(join(root, 'mods/a.jar'));
@@ -438,6 +452,15 @@ describe('config files', () => {
 		await run('V2');
 		expect(read('config/edited.toml')).toBe('player edit');
 		expect(lastOutcome(id)?.details?.join('\n')).toContain('config/edited.toml');
+	});
+
+	it('does not flag a config the player already changed to the new version', async () => {
+		put('config/untouched.toml', 'v2');
+		await v2();
+		const preview = await U.previewModpackUpdate(id, 'V2', { replaceConfigs: false });
+		expect(preview.conflicts).toEqual(['config/edited.toml']);
+		expect(preview.kept).toEqual(['config/edited.toml']);
+		expect(preview.writeConfigs.sort()).toEqual(['config/added.toml']);
 	});
 
 	it('replaces the edited config when asked', async () => {

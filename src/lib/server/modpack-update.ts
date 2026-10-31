@@ -29,6 +29,7 @@ import {
 	type ModpackVersion
 } from './modpacks';
 import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from './mods';
+import { decide } from './pack-diff';
 import { mergeStaged, removeStale } from './staged-install';
 import { lastOutcome } from './update-outcome';
 
@@ -140,52 +141,51 @@ export async function planModpackUpdate(
 		downloadBytes: 0
 	};
 
+	const hashOf = async (rel: string | null) => (rel === null ? null : hashFile(join(server, rel)));
+
 	const newFiles = new Map(pack.index.files.filter(wantsOnServer).map((f) => [f.path, f]));
 	for (const [path, file] of newFiles) {
 		safeJoin(server, path);
-		const newHash = file.hashes.sha1;
-		if (!newHash) throw new Error(`${path} has no SHA-1 in the modpack`);
-		const oldHash = manifest.files[path];
+		const wanted = file.hashes.sha1;
+		if (!wanted) throw new Error(`${path} has no SHA-1 in the modpack`);
+		const installed = manifest.files[path];
+		if (installed === wanted) continue;
 		const current = onDisk(server, path);
-		if (oldHash === undefined) {
-			if (current === null) plan.download.push({ file, disabled: false });
-			else if ((await hashFile(join(server, current))) !== newHash) plan.kept.push(path);
-		} else if (oldHash !== newHash && current !== null) {
-			if ((await hashFile(join(server, current))) === oldHash)
-				plan.download.push({ file, disabled: current.endsWith(DISABLED) });
-			else plan.kept.push(path);
-		}
+		const decision = decide(installed, wanted, await hashOf(current));
+		if (decision === 'add') plan.download.push({ file, disabled: false });
+		else if (decision === 'update')
+			plan.download.push({ file, disabled: current!.endsWith(DISABLED) });
+		else if (decision === 'kept' || decision === 'conflict') plan.kept.push(path);
 	}
-	for (const [path, oldHash] of Object.entries(manifest.files)) {
+	for (const [path, installed] of Object.entries(manifest.files)) {
 		if (newFiles.has(path)) continue;
 		const current = onDisk(server, path);
-		if (current === null) continue;
-		if ((await hashFile(join(server, current))) === oldHash) plan.remove.push(current);
-		else plan.kept.push(path);
+		const decision = decide(installed, undefined, await hashOf(current));
+		if (decision === 'remove') plan.remove.push(current!);
+		else if (decision === 'kept') plan.kept.push(path);
 	}
 
 	const newConfigs = new Map<string, string>();
 	for (const [path, entry] of overrideEntries(pack.zip))
 		newConfigs.set(path, sha1Of(pack.zip.read(entry)));
-	for (const [path, newHash] of newConfigs) {
-		const oldHash = manifest.overrides[path];
-		const exists = existsSync(join(server, path));
-		if (oldHash === undefined) {
-			if (!exists) plan.writeConfigs.push(path);
-			else if ((await hashFile(join(server, path))) !== newHash) plan.kept.push(path);
-		} else if (oldHash !== newHash && exists) {
-			if ((await hashFile(join(server, path))) === oldHash) plan.writeConfigs.push(path);
-			else {
-				plan.conflicts.push(path);
-				if (options.replaceConfigs) plan.writeConfigs.push(path);
-				else plan.kept.push(path);
-			}
+	const configOnDisk = (path: string) => (existsSync(join(server, path)) ? path : null);
+	for (const [path, wanted] of newConfigs) {
+		const installed = manifest.overrides[path];
+		if (installed === wanted) continue;
+		const decision = decide(installed, wanted, await hashOf(configOnDisk(path)));
+		if (decision === 'add' || decision === 'update') plan.writeConfigs.push(path);
+		else if (decision === 'kept') plan.kept.push(path);
+		else if (decision === 'conflict') {
+			plan.conflicts.push(path);
+			if (options.replaceConfigs) plan.writeConfigs.push(path);
+			else plan.kept.push(path);
 		}
 	}
-	for (const [path, oldHash] of Object.entries(manifest.overrides)) {
-		if (newConfigs.has(path) || !existsSync(join(server, path))) continue;
-		if ((await hashFile(join(server, path))) === oldHash) plan.removeConfigs.push(path);
-		else plan.kept.push(path);
+	for (const [path, installed] of Object.entries(manifest.overrides)) {
+		if (newConfigs.has(path)) continue;
+		const decision = decide(installed, undefined, await hashOf(configOnDisk(path)));
+		if (decision === 'remove') plan.removeConfigs.push(path);
+		else if (decision === 'kept') plan.kept.push(path);
 	}
 
 	plan.downloadBytes = plan.download.reduce((sum, d) => sum + (d.file.fileSize ?? 0), 0);
