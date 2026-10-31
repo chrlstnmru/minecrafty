@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
-	import ChevronDownIcon from '@tabler/icons-svelte/icons/chevron-down';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
@@ -16,16 +15,17 @@
 		savePackConfig
 	} from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
+	import FileTree from '#lib/components/file-tree.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
-	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
+	import { buildFileTree } from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
 
 	let {
@@ -43,14 +43,9 @@
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
-	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
 	const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
-	const groups = $derived(
-		Object.entries(Object.groupBy(files, (f) => dirOf(f.path)))
-			.map(([dir, entries]) => ({ dir, entries: entries ?? [] }))
-			.toSorted((a, b) => a.dir.localeCompare(b.dir))
-	);
+	const tree = $derived(buildFileTree(files));
 
 	let open = $state<string | null>(null);
 	// a file made here that is not on the server until the first save
@@ -214,68 +209,41 @@
 			Copied into every server made from this pack, and into the .mrpack under overrides/.
 		</Card.Description>
 	</Card.Header>
-	<Card.Content class="grid gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
+	<Card.Content class="grid flex-1 gap-4 md:grid-cols-[18rem_minmax(0,1fr)]">
 		<div class="grid content-start gap-3">
-			{#each groups as group (group.dir)}
-				<Collapsible.Root open class="grid gap-1">
-					<Collapsible.Trigger
-						class="flex items-center gap-1 text-xs font-medium text-muted-foreground"
-					>
-						<ChevronDownIcon class="size-3.5" />
-						<span class="truncate font-mono">{group.dir || '(server folder)'}</span>
-					</Collapsible.Trigger>
-					<Collapsible.Content class="grid gap-0.5">
-						{#each group.entries as entry (entry.path)}
-							<div
-								class="flex items-center gap-1 rounded-md ps-2 {open === entry.path
-									? 'bg-accent'
-									: ''}"
+			{#if tree.length}
+				<FileTree
+					nodes={tree}
+					selected={open}
+					selectable={(file) => isEditable(file.path)}
+					unselectableTitle="Not a text file"
+					onselect={(file) => unlessDirty(() => show(file.path))}
+				>
+					{#snippet trailing(file)}
+						<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
+						{#if canWrite}
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label="Rename {file.path}"
+								onclick={() => startNaming(file.path)}
 							>
-								{#if isEditable(entry.path)}
-									<button
-										type="button"
-										class="min-w-0 flex-1 truncate py-1.5 text-start font-mono text-sm"
-										aria-current={open === entry.path}
-										onclick={() => unlessDirty(() => show(entry.path))}
-									>
-										{nameOf(entry.path)}
-									</button>
-								{:else}
-									<span
-										class="min-w-0 flex-1 truncate py-1.5 font-mono text-sm text-muted-foreground"
-										title="Not a text file"
-									>
-										{nameOf(entry.path)}
-									</span>
-								{/if}
-								<span class="shrink-0 text-xs text-muted-foreground">
-									{formatBytes(entry.size)}
-								</span>
-								{#if canWrite}
-									<Button
-										variant="ghost"
-										size="icon"
-										aria-label="Rename {entry.path}"
-										onclick={() => startNaming(entry.path)}
-									>
-										<PencilIcon />
-									</Button>
-									<Button
-										variant="ghost"
-										size="icon"
-										aria-label="Remove {entry.path}"
-										onClickPromise={() => remove(entry.path)}
-									>
-										<TrashIcon />
-									</Button>
-								{/if}
-							</div>
-						{/each}
-					</Collapsible.Content>
-				</Collapsible.Root>
+								<PencilIcon />
+							</Button>
+							<Button
+								variant="ghost"
+								size="icon"
+								aria-label="Remove {file.path}"
+								onClickPromise={() => remove(file.path)}
+							>
+								<TrashIcon />
+							</Button>
+						{/if}
+					{/snippet}
+				</FileTree>
 			{:else}
 				<p class="text-sm text-muted-foreground">No config files.</p>
-			{/each}
+			{/if}
 			{#if canWrite}
 				<div class="grid gap-3 border-t pt-3">
 					<Button variant="outline" onclick={() => startNaming()}>
@@ -298,7 +266,7 @@
 			{/if}
 		</div>
 
-		<div class="grid min-w-0 content-start gap-3">
+		<div class="grid h-full min-w-0 grid-rows-[auto_1fr] content-start gap-3">
 			{#if open === null}
 				<Empty.Root class="p-8">
 					<Empty.Header>
@@ -333,7 +301,6 @@
 							readonly={!canWrite}
 							onsave={save}
 							onformat={canWrite ? format : undefined}
-							class="h-128"
 						/>
 					{/key}
 				{/if}
