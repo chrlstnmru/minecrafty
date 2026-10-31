@@ -61,7 +61,7 @@
 		"oxfmt": "^0.75.0",
 		"oxlint": "^1.90.0",
 		"prettier": "^3.9.10",
-		"runed": "^0.37.1",
+		"runed": "^0.38.0",
 		"shadcn-svelte": "^1.7.1",
 		"smol-toml": "^1.9.1",
 		"svelte": "^5.57.1",
