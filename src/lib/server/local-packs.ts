@@ -1,7 +1,18 @@
 import { and, count, desc, eq } from 'drizzle-orm';
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { basename, dirname, join } from 'node:path';
+import { createHash } from 'node:crypto';
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readFileSync,
+	readdirSync,
+	renameSync,
+	rmSync,
+	statSync
+} from 'node:fs';
+import { basename, dirname, join, sep } from 'node:path';
 
+import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 
 import { dataDir } from './config';
@@ -472,13 +483,108 @@ export async function setLoaderVersion(packId: number, loaderVersion: string) {
 	bump(packId);
 }
 
-/** Stores a config file at a path inside the server folder (a path that leaves it is refused). */
-export async function saveOverride(packId: number, rel: string, bytes: Uint8Array) {
+/**
+ * Stores config files at paths inside the server folder, as one new revision. Every path is checked
+ * before the first is written, so a path that leaves the folder refuses the lot.
+ */
+export async function saveOverrides(packId: number, files: { rel: string; bytes: Uint8Array }[]) {
+	requirePack(packId);
+	const dests = files.map(({ rel }) => safeJoin(overridesDir(packId), rel));
+	for (const [index, { bytes }] of files.entries()) {
+		mkdirSync(dirname(dests[index]), { recursive: true });
+		await Bun.write(dests[index], bytes);
+	}
+	if (files.length) bump(packId);
+}
+
+export const saveOverride = (packId: number, rel: string, bytes: Uint8Array) =>
+	saveOverrides(packId, [{ rel, bytes }]);
+
+const sha1 = (bytes: Uint8Array) => createHash('sha1').update(bytes).digest('hex');
+
+function overrideFile(packId: number, rel: string) {
 	requirePack(packId);
 	const dest = safeJoin(overridesDir(packId), rel);
-	mkdirSync(dirname(dest), { recursive: true });
-	await Bun.write(dest, bytes);
+	const stat = existsSync(dest) ? statSync(dest) : undefined;
+	if (stat && !stat.isFile()) throw new Error('Not a file');
+	return { dest, stat };
+}
+
+/** A config file as text. `hash` is what `writeOverrideText` takes back, to spot a change made meanwhile. */
+export function readOverrideText(packId: number, rel: string) {
+	const { dest, stat } = overrideFile(packId, rel);
+	if (!stat) throw new Error('Config file not found');
+	assertEditableSize(stat.size);
+	const bytes = readFileSync(dest);
+	return { content: decodeText(bytes), size: stat.size, hash: sha1(bytes) };
+}
+
+/**
+ * Saves edited text. `baseHash` is the hash of the text that was opened; without it the file must
+ * not exist yet. A file that changed since (or is gone) is refused, so two editors never overwrite
+ * each other. Text equal to what is on disk adds no revision.
+ */
+export async function writeOverrideText(
+	packId: number,
+	rel: string,
+	content: string,
+	baseHash?: string
+) {
+	const { dest, stat } = overrideFile(packId, rel);
+	if (!isEditable(basename(dest))) throw new Error('This file type cannot be edited here');
+	const bytes = new TextEncoder().encode(content);
+	if (bytes.length > MAX_EDIT_BYTES) throw new Error('The file is too large (2 MB limit)');
+
+	if (baseHash === undefined) {
+		if (stat) throw new Error(`${rel} already exists`);
+	} else {
+		const changed = new Error(
+			'This file changed since you opened it. Reload it to see the new version.'
+		);
+		if (!stat || stat.size > MAX_EDIT_BYTES) throw changed;
+		const current = readFileSync(dest);
+		if (sha1(current) !== baseHash) throw changed;
+		if (Buffer.compare(current, bytes) === 0) return;
+	}
+	await saveOverride(packId, rel, bytes);
+}
+
+/** Moves a config file to another path inside the server folder. */
+export function moveOverride(packId: number, from: string, to: string) {
+	const source = overrideFile(packId, from);
+	const target = overrideFile(packId, to);
+	if (!source.stat) throw new Error('Config file not found');
+	if (source.dest === target.dest) return;
+	if (target.stat) throw new Error(`${to} already exists`);
+	mkdirSync(dirname(target.dest), { recursive: true });
+	renameSync(source.dest, target.dest);
 	bump(packId);
+}
+
+/** Moves a folder of config files, with everything in it, to another path as one revision. */
+export function moveOverrideFolder(packId: number, from: string, to: string) {
+	requirePack(packId);
+	const source = safeJoin(overridesDir(packId), from);
+	const target = safeJoin(overridesDir(packId), to);
+	if (!existsSync(source) || !statSync(source).isDirectory()) throw new Error('Folder not found');
+	if (source === target) return;
+	if (target.startsWith(`${source}${sep}`)) throw new Error('A folder cannot be moved into itself');
+	if (existsSync(target)) throw new Error(`${to} already exists`);
+	mkdirSync(dirname(target), { recursive: true });
+	renameSync(source, target);
+	bump(packId);
+}
+
+/** Deletes a folder of config files with everything in it, as one revision. Returns how many files went. */
+export function removeOverrideFolder(packId: number, rel: string) {
+	requirePack(packId);
+	const dest = safeJoin(overridesDir(packId), rel);
+	if (!existsSync(dest) || !statSync(dest).isDirectory()) throw new Error('Folder not found');
+	const prefix = `${rel.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')}/`;
+	const removed = listOverrides(packId).filter((f) => f.path.startsWith(prefix)).length;
+	rmSync(dest, { recursive: true, force: true });
+	bump(packId);
+	return removed;
 }
 
 export function removeOverride(packId: number, rel: string) {

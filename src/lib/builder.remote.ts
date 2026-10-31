@@ -6,6 +6,7 @@ import {
 	addPackModSchema,
 	installFromPackSchema,
 	mcChangeSchema,
+	movePackConfigSchema,
 	newPackSchema,
 	overridePathSchema,
 	packArgs,
@@ -14,10 +15,12 @@ import {
 	packLoaderVersionSchema,
 	packProjectArgs,
 	packSearchSchema,
+	savePackConfigSchema,
 	updatePackSchema
 } from '#lib/schemas/builder.js';
 import { record } from '#lib/server/audit.js';
 import { requirePanel } from '#lib/server/auth.js';
+import { assertMayWriteCode } from '#lib/server/host-code.js';
 import { userFacing } from '#lib/server/http.js';
 import { portConflict } from '#lib/server/instances.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
@@ -185,6 +188,68 @@ export const removePackOverride = command(overridePathSchema, async ({ id, path 
 	record({
 		action: 'pack.config',
 		summary: `Removed the config file ${path} from the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
+export const readPackConfig = query(overridePathSchema, async ({ id, path }) => {
+	requirePanel('modpacks.read');
+	return userFacing(async () => packs.readOverrideText(id, path));
+});
+
+/** Without `baseHash` the file is new; with it, the save is refused if the file changed meanwhile. */
+export const savePackConfig = command(
+	savePackConfigSchema,
+	async ({ id, path, content, baseHash }) => {
+		const user = requirePanel('modpacks.write');
+		await userFacing(async () => {
+			assertMayWriteCode(user, path);
+			await packs.writeOverrideText(id, path, content, baseHash);
+		});
+		record({
+			action: 'pack.config',
+			summary: `${baseHash === undefined ? 'Added' : 'Edited'} the config file ${path} ${baseHash === undefined ? 'to' : 'in'} the modpack ${packName(id)}`
+		});
+		await readPackConfig({ id, path }).refresh();
+		await refreshed(id);
+	}
+);
+
+export const removePackConfigFolder = command(overridePathSchema, async ({ id, path }) => {
+	requirePanel('modpacks.write');
+	const removed = await userFacing(async () => packs.removeOverrideFolder(id, path));
+	record({
+		action: 'pack.config',
+		summary: `Removed the config folder ${path} (${removed} ${removed === 1 ? 'file' : 'files'}) from the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
+export const movePackConfigFolder = command(movePackConfigSchema, async ({ id, from, to }) => {
+	const user = requirePanel('modpacks.write');
+	await userFacing(async () => {
+		// a folder move carries its files along, so the owner-only rule holds for each of them
+		for (const file of packs.listOverrides(id))
+			if (file.path.startsWith(`${from}/`)) assertMayWriteCode(user, file.path);
+		packs.moveOverrideFolder(id, from, to);
+	});
+	record({
+		action: 'pack.config',
+		summary: `Moved the config folder ${from} to ${to} in the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
+export const movePackConfig = command(movePackConfigSchema, async ({ id, from, to }) => {
+	const user = requirePanel('modpacks.write');
+	await userFacing(async () => {
+		assertMayWriteCode(user, from);
+		assertMayWriteCode(user, to);
+		packs.moveOverride(id, from, to);
+	});
+	record({
+		action: 'pack.config',
+		summary: `Moved the config file ${from} to ${to} in the modpack ${packName(id)}`
 	});
 	await refreshed(id);
 });
