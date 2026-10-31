@@ -197,24 +197,31 @@
 		}
 	}
 
-	let naming = $state<{ kind: 'file' | 'folder'; from?: string; value: string } | null>(null);
+	// a new file or folder is named inside `dir` (the folder picked when it was asked for); a rename takes a whole path
+	let naming = $state<{
+		kind: 'file' | 'folder';
+		from?: string;
+		dir: string;
+		value: string;
+	} | null>(null);
 	let namingOpen = $state(false);
 
 	const namedPath = $derived(
-		naming
-			? naming.kind === 'folder'
-				? naming.value.trim().replace(/\/+$/, '')
-				: naming.value.trim()
-			: ''
+		naming ? (naming.from ? naming.value.trim() : joinPath(naming.dir, naming.value.trim())) : ''
 	);
 
 	const nameError = $derived.by(() => {
 		if (!naming) return undefined;
+		const name = naming.value.trim();
+		if (!name)
+			return naming.from
+				? 'Enter a path, such as config/mod.toml'
+				: naming.kind === 'folder'
+					? 'Enter a folder name, such as sodium'
+					: 'Enter a file name, such as mod.toml';
+		if (!naming.from && (/[\\/]/.test(name) || name === '.' || name === '..'))
+			return 'Use a name without slashes. Pick the folder first to choose where it goes.';
 		const path = namedPath;
-		if (!path)
-			return naming.kind === 'folder'
-				? 'Enter a folder path, such as config/sodium'
-				: 'Enter a path, such as config/mod.toml';
 		if (path.startsWith('/') || path.split('/').includes('..'))
 			return 'Use a path inside the server folder, without a leading slash or ..';
 		if (path === naming.from) return undefined;
@@ -231,7 +238,7 @@
 	});
 
 	function startNaming(kind: 'file' | 'folder', from?: string) {
-		naming = { kind, from, value: from ?? (target ? `${target}/` : '') };
+		naming = { kind, from, dir: target, value: from ?? '' };
 		namingOpen = true;
 	}
 
@@ -553,9 +560,14 @@
 						: 'New config file'}
 			</Dialog.Title>
 			<Dialog.Description>
-				{naming?.kind === 'folder'
-					? 'The path inside the server folder. The folder is kept once it holds a file.'
-					: 'The path inside the server folder. A new folder in the path is made for you.'}
+				{#if naming?.from}
+					The path inside the server folder. A new folder in the path is made for you.
+				{:else}
+					Made in <span class="font-mono">{naming?.dir || 'overrides'}</span>{naming?.kind ===
+					'folder'
+						? ', and kept once it holds a file.'
+						: '.'}
+				{/if}
 			</Dialog.Description>
 		</Dialog.Header>
 		{#if naming}
@@ -567,10 +579,11 @@
 				}}
 			>
 				<Field.Field data-invalid={nameError ? true : undefined}>
-					<Field.Label for="config-path">Path</Field.Label>
+					<Field.Label for="config-path">{naming.from ? 'Path' : 'Name'}</Field.Label>
 					<Input
 						id="config-path"
 						bind:value={naming.value}
+						placeholder={naming.from ? undefined : naming.kind === 'folder' ? 'sodium' : 'mod.toml'}
 						class="font-mono"
 						autocomplete="off"
 						aria-invalid={nameError ? true : undefined}
