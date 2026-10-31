@@ -21,11 +21,13 @@ export function fakeRcon(
 	options: { silent?: boolean; port?: number } = {}
 ) {
 	const received: string[] = [];
+	const stats = { connections: 0 };
 	const server = Bun.listen<{ buffer: Uint8Array }>({
 		hostname: '127.0.0.1',
 		port: options.port ?? 0,
 		socket: {
 			open(socket) {
+				stats.connections++;
 				socket.data = { buffer: new Uint8Array(0) };
 			},
 			data(socket, chunk) {
@@ -66,7 +68,14 @@ export function fakeRcon(
 		}
 	});
 	servers.push(server);
-	return { port: server.port, received };
+	return {
+		port: server.port,
+		received,
+		/** How many clients have connected so far. */
+		get connections() {
+			return stats.connections;
+		}
+	};
 }
 
 /** Stops every fake server started since the last call; for afterEach. */
