@@ -681,6 +681,38 @@ export async function importMrpack(
 	return pack;
 }
 
+/** How a server made from a builder pack names its source and revision, in the modpack updater's terms. */
+export const localPackSource = (packId: number) => `local:${packId}`;
+export const localRevisionId = (revision: number) => `rev:${revision}`;
+
+/** The pack at its current revision, read the way a downloaded .mrpack is. */
+export async function loadLocalPack(packId: number): Promise<LoadedPack> {
+	const pack = requirePack(packId);
+	const { bytes } = await exportBytes(packId);
+	const zip = new Zip(bytes);
+	const index = parseIndex(zip);
+	const files = index.files.filter((f) => f.env?.server !== 'unsupported');
+	return {
+		zip,
+		index,
+		summary: {
+			projectId: localPackSource(pack.id),
+			versionId: localRevisionId(pack.revision),
+			name: pack.name,
+			iconUrl: iconUrlOf(pack.id),
+			summary: pack.description,
+			versionNumber: `revision ${pack.revision}`,
+			mcVersion: pack.mcVersion,
+			loader: pack.loader,
+			loaderVersion: pack.loaderVersion,
+			files: files.length,
+			clientOnly: index.files.length - files.length,
+			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
+			overrides: overrideEntries(zip).size
+		}
+	};
+}
+
 /**
  * Creates an instance from the pack and installs it in the background, the way a Modrinth
  * modpack is: the loader's server, each file checksum-verified, then the config files. The
@@ -693,29 +725,7 @@ export async function startInstall(
 	const pack = requirePack(packId);
 	if (!listFiles(packId).length)
 		throw new Error('Add at least one mod before making a server from this pack');
-	const { bytes } = await exportBytes(packId);
-	const zip = new Zip(bytes);
-	const index = parseIndex(zip);
-	const files = index.files.filter((f) => f.env?.server !== 'unsupported');
-	const loaded: LoadedPack = {
-		zip,
-		index,
-		summary: {
-			projectId: '',
-			versionId: String(pack.revision),
-			name: pack.name,
-			iconUrl: null,
-			summary: pack.description,
-			versionNumber: String(pack.revision),
-			mcVersion: pack.mcVersion,
-			loader: pack.loader,
-			loaderVersion: pack.loaderVersion,
-			files: files.length,
-			clientOnly: index.files.length - files.length,
-			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
-			overrides: overrideEntries(zip).size
-		}
-	};
+	const loaded = await loadLocalPack(packId);
 	return startImportLoaded(loaded, opts, {
 		packName: pack.name,
 		packIconUrl: iconUrlOf(pack.id),

@@ -129,13 +129,20 @@
 			<Card.Header>
 				<Card.Title>{data.pack.name}</Card.Title>
 				<Card.Description>
-					Version {data.pack.versionNumber} ·
-					<a
-						class="underline"
-						href="https://modrinth.com/modpack/{data.pack.projectId}"
-						target="_blank"
-						rel="noreferrer">on Modrinth</a
-					>
+					{#if data.source === 'builder'}
+						Made from {data.pack.versionNumber} ·
+						<a class="underline" href="/modpacks/{data.pack.projectId.slice('local:'.length)}"
+							>in the modpack builder</a
+						>
+					{:else}
+						Version {data.pack.versionNumber} ·
+						<a
+							class="underline"
+							href="https://modrinth.com/modpack/{data.pack.projectId}"
+							target="_blank"
+							rel="noreferrer">on Modrinth</a
+						>
+					{/if}
 				</Card.Description>
 				{#if newerReleases.length > 0}
 					<Card.Action>
@@ -175,10 +182,14 @@
 			<Card.Content>
 				{#if data.error}
 					<p class="text-sm text-destructive" role="alert">
-						Could not reach Modrinth: {data.error}
+						{data.source === 'builder' ? data.error : `Could not reach Modrinth: ${data.error}`}
 					</p>
 				{:else if !others.length}
-					<p class="text-sm text-muted-foreground">This is the only version of the pack.</p>
+					<p class="text-sm text-muted-foreground">
+						{data.source === 'builder'
+							? 'The server has the pack as it is now. Changes you make to the pack show up here.'
+							: 'This is the only version of the pack.'}
+					</p>
 				{:else}
 					<Field.Group>
 						<Field.Field>

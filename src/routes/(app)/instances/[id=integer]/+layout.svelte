@@ -61,7 +61,7 @@
 	const modules = $derived(
 		instanceModules.filter(
 			(m) =>
-				(m.slug !== 'modpack' || !!instance?.packProjectId) &&
+				(m.slug !== 'modpack' || !!instance?.packProjectId || instance?.fromPackId != null) &&
 				granted.includes(MODULE_PERMISSION[m.slug])
 		)
 	);

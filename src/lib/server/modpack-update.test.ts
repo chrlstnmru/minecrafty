@@ -26,7 +26,19 @@ const fake = vi.hoisted(() => ({
 	failUrl: null as string | null,
 	known: new Map<string, { project_id: string; id: string; version_number: string }>(),
 	installs: [] as { dir: string; mc: string; build?: string }[],
-	packs: new Map<string, unknown>()
+	packs: new Map<string, unknown>(),
+	/** builder packs: their current revision and what loading them gives */
+	builder: new Map<number, { revision: number; name: string; updatedAt: Date; loaded: unknown }>()
+}));
+
+vi.mock('./local-packs', async (original) => ({
+	...(await original<typeof import('./local-packs')>()),
+	getPack: (packId: number) => {
+		const pack = fake.builder.get(packId);
+		if (!pack) throw new Error('Pack not found');
+		return pack;
+	},
+	loadLocalPack: async (packId: number) => fake.builder.get(packId)!.loaded
 }));
 
 vi.mock('./runner-client', () => ({
@@ -593,5 +605,70 @@ describe('modpackInfo', () => {
 
 	it('has no pack for an instance that did not come from one', async () => {
 		expect((await U.modpackInfo(makeInstance().id)).pack).toBeNull();
+	});
+});
+
+describe('a server made from a builder pack', () => {
+	/** The builder pack #7 at `revision`, holding these files. */
+	async function builderPack(revision: number, files: Record<string, string>) {
+		const loaded = await makePack({
+			versionId: `rev:${revision}`,
+			versionNumber: `revision ${revision}`,
+			files,
+			projectId: 'local:7'
+		});
+		fake.builder.set(7, { revision, name: 'My pack', updatedAt: new Date(), loaded });
+	}
+
+	beforeEach(() => {
+		fake.builder.clear();
+		db.update(instances)
+			.set({
+				packProjectId: null,
+				packVersionId: null,
+				packVersionNumber: null,
+				fromPackId: 7,
+				fromPackRevision: 1
+			})
+			.where(eq(instances.id, id))
+			.run();
+	});
+
+	it("offers the pack's current revision once it moves on, and nothing before", async () => {
+		await installV1({ 'mods/a.jar': 'a1' });
+		await builderPack(1, { 'mods/a.jar': 'a1' });
+		expect(await U.modpackInfo(id)).toMatchObject({
+			source: 'builder',
+			pack: { versionId: 'rev:1', name: 'My pack' },
+			versions: [{ id: 'rev:1' }]
+		});
+		await builderPack(2, { 'mods/a.jar': 'a1', 'mods/b.jar': 'b1' });
+		expect((await U.modpackInfo(id)).versions.map((v) => v.id)).toEqual(['rev:2', 'rev:1']);
+	});
+
+	it('updates to the current revision: adds and removes mods, and records the revision', async () => {
+		await installV1({ 'mods/a.jar': 'a1', 'mods/old.jar': 'o1' });
+		await builderPack(3, { 'mods/a.jar': 'a1', 'mods/b.jar': 'b1' });
+		const preview = await U.previewModpackUpdate(id, 'rev:3', { replaceConfigs: false });
+		expect(preview).toMatchObject({ added: ['mods/b.jar'], remove: ['mods/old.jar'] });
+
+		await run('rev:3');
+		expect(read('mods/b.jar')).toBe('b1');
+		expect(existsSync(join(root, 'mods/old.jar'))).toBe(false);
+		expect(state()).toMatchObject({
+			fromPackRevision: 3,
+			packVersionId: null,
+			installState: 'ready'
+		});
+		expect(lastOutcome(id)?.message).toContain('from revision 1 to revision 3');
+		await expect(run('rev:3')).rejects.toThrow(/Already on that version/);
+	});
+
+	it('refuses a revision that is no longer the current one, and says when the pack is gone', async () => {
+		await installV1({ 'mods/a.jar': 'a1' });
+		await builderPack(4, { 'mods/a.jar': 'a2' });
+		await expect(run('rev:2')).rejects.toThrow(/has changed since this page loaded/);
+		fake.builder.clear();
+		expect((await U.modpackInfo(id)).error).toMatch(/has been deleted/);
 	});
 });
