@@ -16,6 +16,7 @@ import type { Actor } from './access';
 import { assertMayWriteCode } from './host-code';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
+import { assertWritable } from './operations';
 import {
 	assertMutable,
 	assertWorldIdle,
@@ -185,27 +186,36 @@ export function deleteEntry(instanceId: number, rel: string) {
 
 // What a person may do to the server folder. One function per file manager action, each applying
 // every rule that action is subject to, so a route cannot forget one: protected install files
-// (inside the primitives above), code files for the owner alone, and a world left alone while
-// the server runs.
+// (inside the primitives above), code files for the owner alone, a world left alone while the
+// server runs, and no changes while a restore or an install or update is working on the folder.
 
 /** Saves the text of a file (an existing protected file such as eula.txt may be edited). */
 export function saveFile(actor: Actor, instanceId: number, rel: string, content: string) {
+	assertWritable(instanceId);
 	assertMayWriteCode(actor, rel);
 	writeTextFile(instanceId, rel, content);
 }
 
+export function addFolder(instanceId: number, parentRel: string, name: string) {
+	assertWritable(instanceId);
+	makeDirectory(instanceId, parentRel, name);
+}
+
 export function addFile(actor: Actor, instanceId: number, parentRel: string, name: string) {
+	assertWritable(instanceId);
 	assertMayWriteCode(actor, name);
 	createTextFile(instanceId, parentRel, name);
 }
 
 export async function moveEntry(actor: Actor, instanceId: number, rel: string, newName: string) {
+	assertWritable(instanceId);
 	assertMayWriteCode(actor, newName);
 	await assertWorldStopped(instanceId, rel, 'renaming');
 	renameEntry(instanceId, rel, newName);
 }
 
 export async function removeEntry(instanceId: number, rel: string) {
+	assertWritable(instanceId);
 	await assertWorldStopped(instanceId, rel, 'deleting from');
 	deleteEntry(instanceId, rel);
 }
@@ -217,6 +227,7 @@ export async function assertMayUpload(
 	dirRel: string,
 	relPath: string
 ) {
+	assertWritable(instanceId);
 	assertMayWriteCode(actor, relPath);
 	await assertWorldStopped(instanceId, join(dirRel, relPath), 'uploading into');
 }
@@ -232,6 +243,7 @@ export async function uploadFiles(
 	items: { file: File; path: string }[],
 	onSaved: (relPath: string) => void
 ) {
+	assertWritable(instanceId);
 	for (const item of items) assertMayWriteCode(actor, item.path);
 	for (const { file, path } of items) {
 		await assertWorldStopped(instanceId, join(dirRel, path), 'uploading into');

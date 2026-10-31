@@ -43,7 +43,7 @@ export const newFolder = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
 		requirePermission(instanceId, 'files');
-		await userFacing(async () => files.makeDirectory(instanceId, path, name));
+		await userFacing(async () => files.addFolder(instanceId, path, name));
 		record({
 			action: 'file.folder',
 			summary: `Made the folder ${joinPath(path, name)}`,

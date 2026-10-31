@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeInstance } from '#test/instance.js';
 import type { Actor } from './access';
+import { claim } from './operations';
 
 // Whether the server runs is decided per test; the runner itself is replaced.
 const state = vi.hoisted(() => ({ running: false }));
@@ -84,6 +85,39 @@ describe('a running server keeps its world', () => {
 		state.running = false;
 		await F.removeEntry(id, 'world/level.dat');
 		expect(existsSync(join(root, 'world/level.dat'))).toBe(false);
+	});
+});
+
+describe('nothing changes while the folder is being restored, installed or updated', () => {
+	const refuse = async (run: () => unknown, message: RegExp) => {
+		await expect(Promise.resolve().then(run)).rejects.toThrow(message);
+	};
+
+	it('during a restore', async () => {
+		const release = claim(id, 'restore');
+		try {
+			const m = /restore is in progress/;
+			await refuse(() => F.saveFile(owner, id, 'a.txt', 'x'), m);
+			await refuse(() => F.addFolder(id, '', 'new'), m);
+			await refuse(() => F.addFile(owner, id, '', 'b.txt'), m);
+			await refuse(() => F.moveEntry(owner, id, 'a.txt', 'c.txt'), m);
+			await refuse(() => F.removeEntry(id, 'a.txt'), m);
+			await refuse(() => F.assertMayUpload(owner, id, '', 'u.txt'), m);
+			await refuse(
+				() => F.uploadFiles(owner, id, '', [{ file: file('u.txt'), path: 'u.txt' }], () => {}),
+				m
+			);
+			expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a');
+		} finally {
+			release();
+		}
+		F.saveFile(owner, id, 'a.txt', 'x');
+	});
+
+	it('during an install or update', async () => {
+		const busy = makeInstance({ installState: 'installing' }).id;
+		await refuse(() => F.saveFile(owner, busy, 'a.txt', 'x'), /install or update/);
+		await refuse(() => F.removeEntry(busy, 'a.txt'), /install or update/);
 	});
 });
 
