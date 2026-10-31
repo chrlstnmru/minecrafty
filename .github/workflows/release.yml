@@ -80,8 +80,13 @@ jobs:
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
+        # a tag with a suffix (v0.2.0-rc.1) is a pre-release, which releases/latest, and so the
+        # install scripts, skip
         run: |
+          pre=()
+          case "$GITHUB_REF_NAME" in *-*) pre=(--prerelease) ;; esac
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --title "$GITHUB_REF_NAME" \
-            --generate-notes
+            --generate-notes \
+            "${pre[@]}"
