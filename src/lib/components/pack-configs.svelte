@@ -45,8 +45,6 @@
 
 	const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 
-	const tree = $derived(buildFileTree(files));
-
 	let open = $state<string | null>(null);
 	// a file made here that is not on the server until the first save
 	let isNew = $state(false);
@@ -54,8 +52,18 @@
 	let loaded = $state('');
 	let hash = $state<string>();
 
+	// the new file shows in the tree before the server has it
+	const listed: { path: string; size: number; pending?: boolean }[] = $derived(
+		isNew && open && !files.some((f) => f.path === open)
+			? [...files, { path: open, size: 0, pending: true }]
+			: files
+	);
+	const tree = $derived(buildFileTree(listed));
+
 	const file = $derived(open && !isNew ? readPackConfig({ id, path: open }) : null);
 	const dirty = $derived(open !== null && draft !== loaded);
+	// a new file counts as unsaved even while empty, so it is never dropped without asking
+	const unsaved = $derived(dirty || isNew);
 
 	// load the file into the editor when it is opened, and again after a save
 	$effect(() => {
@@ -71,20 +79,21 @@
 
 	/** Runs `action` now, or once the user has agreed to drop the unsaved edits. */
 	function unlessDirty(action: () => void) {
-		if (!dirty) return action();
+		if (!unsaved) return action();
 		afterDiscard = action;
 		confirmDiscard = true;
 	}
 
 	function discard() {
-		draft = loaded;
+		if (isNew) show(null);
+		else draft = loaded;
 		afterDiscard?.();
 		afterDiscard = null;
 	}
 
 	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
 	beforeNavigate((navigation) => {
-		if (!dirty) return;
+		if (!unsaved) return;
 		navigation.cancel();
 		if (navigation.type === 'leave' || !navigation.to) return;
 		const { url } = navigation.to;
@@ -106,7 +115,7 @@
 	}
 
 	async function save() {
-		if (!open || !canWrite || !dirty) return;
+		if (!open || !canWrite || !unsaved) return;
 		try {
 			await savePackConfig({
 				id,
@@ -217,11 +226,29 @@
 					selected={open}
 					selectable={(file) => isEditable(file.path)}
 					unselectableTitle="Not a text file"
+					status={(file) =>
+						file.pending
+							? { tone: 'info', label: 'New file, not saved yet' }
+							: file.path === open && dirty
+								? { tone: 'warning', label: 'Unsaved changes' }
+								: undefined}
 					onselect={(file) => unlessDirty(() => show(file.path))}
 				>
 					{#snippet trailing(file)}
-						<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
-						{#if canWrite}
+						{#if file.pending}
+							<Button
+								variant="ghost"
+								size="icon"
+								class="ms-auto"
+								aria-label="Discard the new file {file.path}"
+								onclick={() => unlessDirty(() => show(null))}
+							>
+								<TrashIcon />
+							</Button>
+						{:else}
+							<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
+						{/if}
+						{#if canWrite && !file.pending}
 							<Button
 								variant="ghost"
 								size="icon"
@@ -279,14 +306,18 @@
 			{:else}
 				<div class="flex flex-wrap items-center gap-2">
 					<span class="min-w-0 flex-1 truncate font-mono text-sm">{open}</span>
-					{#if dirty}<span class="text-xs text-muted-foreground">Unsaved changes</span>{/if}
+					{#if isNew}
+						<span class="text-xs text-muted-foreground">New file, not saved yet</span>
+					{:else if dirty}
+						<span class="text-xs text-muted-foreground">Unsaved changes</span>
+					{/if}
 					{#if canWrite}
 						{#if formatKind(open)}
 							<Button variant="outline" onclick={format} disabled={file?.loading}>
 								<WandIcon />Format
 							</Button>
 						{/if}
-						<Button onClickPromise={save} disabled={!dirty}>Save</Button>
+						<Button onClickPromise={save} disabled={!unsaved}>Save</Button>
 					{/if}
 				</div>
 				{#if file?.error}
@@ -351,7 +382,11 @@
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>
-			<AlertDialog.Description>The edits to this file have not been saved.</AlertDialog.Description>
+			<AlertDialog.Description>
+				{isNew
+					? 'This new file has not been saved yet.'
+					: 'The edits to this file have not been saved.'}
+			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>

@@ -14,6 +14,7 @@
 		selected = null,
 		selectable = () => true,
 		unselectableTitle,
+		status,
 		onselect,
 		trailing,
 		folderTrailing,
@@ -27,6 +28,8 @@
 		selectable?: (item: T) => boolean;
 		/** Says why, as a tooltip on an unselectable file's name. */
 		unselectableTitle?: string;
+		/** A coloured dot after a file's name, with what it means (also read out to screen readers). */
+		status?: (item: T) => { tone: 'info' | 'warning'; label: string } | undefined;
 		onselect?: (item: T) => void;
 		/** What follows a file's name: a size, action buttons. */
 		trailing?: Snippet<[T]>;
@@ -55,6 +58,7 @@
 				</Collapsible.Content>
 			</Collapsible.Root>
 		{:else}
+			{@const mark = status?.(node.item)}
 			<div
 				class="flex items-center gap-1 rounded-md ps-2 {selected === node.path ? 'bg-accent' : ''}"
 			>
@@ -75,6 +79,13 @@
 					>
 						{node.name}
 					</span>
+				{/if}
+				{#if mark}
+					<span
+						class="size-2 shrink-0 rounded-full {mark.tone === 'info' ? 'bg-info' : 'bg-warning'}"
+						title={mark.label}
+					></span>
+					<span class="sr-only">{mark.label}</span>
 				{/if}
 				{@render trailing?.(node.item)}
 			</div>
