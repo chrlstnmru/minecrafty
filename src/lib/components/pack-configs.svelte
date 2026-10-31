@@ -118,11 +118,20 @@
 		confirmDiscard = true;
 	}
 
+	/** The dialog's Discard: close it first, so nothing the action does can leave it open. */
 	function discard() {
+		confirmDiscard = false;
+		const next = afterDiscard;
+		afterDiscard = null;
 		if (isNew) show(null);
 		else draft = loaded;
-		afterDiscard?.();
-		afterDiscard = null;
+		next?.();
+	}
+
+	/** The Discard button: an edit goes back to the saved text (undo brings it back), a new file is dropped. */
+	function discardEdits() {
+		if (isNew) unlessDirty(() => show(null));
+		else draft = loaded;
 	}
 
 	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
@@ -499,6 +508,7 @@
 								<WandIcon />Format
 							</Button>
 						{/if}
+						<Button variant="ghost" onclick={discardEdits} disabled={!unsaved}>Discard</Button>
 						<Button onClickPromise={save} disabled={!unsaved}>Save</Button>
 					{/if}
 				</div>
@@ -569,7 +579,12 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<AlertDialog.Root bind:open={confirmDiscard}>
+<AlertDialog.Root
+	bind:open={confirmDiscard}
+	onOpenChange={(isOpen) => {
+		if (!isOpen) afterDiscard = null;
+	}}
+>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>

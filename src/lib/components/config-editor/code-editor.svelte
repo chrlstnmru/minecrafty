@@ -83,8 +83,9 @@
 	});
 
 	$effect(() => {
-		if (!editor || !monaco) return;
-		monaco.loadMonaco().editor.setModelLanguage(editor.getModel()!, monaco.languageFor(filename));
+		const text = editor?.getModel();
+		if (!monaco || !text) return;
+		monaco.loadMonaco().editor.setModelLanguage(text, monaco.languageFor(filename));
 	});
 
 	// The text changes from outside when Format or a reload gives the file new content
