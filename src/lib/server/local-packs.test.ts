@@ -59,16 +59,19 @@ vi.mock('./loaders', async (original) => ({
 }));
 
 const searches = vi.hoisted(() => [] as Record<string, unknown>[]);
+const lookups = vi.hoisted(() => ({ versionLists: 0 }));
 
 vi.mock('./modrinth', () => ({
 	searchProjects: async (opts: Record<string, unknown>) => {
 		searches.push(opts);
 		return { hits: [], total_hits: 0 };
 	},
-	listVersions: async (project: string, _loaders: string[], mc?: string) =>
-		(fake.versions as Version[])
+	listVersions: async (project: string, _loaders: string[], mc?: string) => {
+		lookups.versionLists++;
+		return (fake.versions as Version[])
 			.filter((v) => v.project_id === project && (!mc || v.game_versions.includes(mc)))
-			.toSorted((a, b) => b.version_number.localeCompare(a.version_number)),
+			.toSorted((a, b) => b.version_number.localeCompare(a.version_number));
+	},
 	getVersion: async (id: string) => (fake.versions as Version[]).find((v) => v.id === id)!,
 	getProjects: async (ids: string[]) =>
 		ids.map((id) => ({
@@ -204,6 +207,18 @@ describe('changing the Minecraft version', () => {
 		expect(preview.compatible.map((c) => c.title).sort()).toEqual(['FABRIC-API', 'SODIUM']);
 		expect(preview.incompatible.map((c) => c.title)).toEqual(['LITHIUM']);
 		expect(P.getPack(pack.id).mcVersion).toBe('1.21.1');
+	});
+
+	it('asks Modrinth about each mod once, whether previewing or applying', async () => {
+		const pack = await make();
+		await P.addMod(pack.id, 'sodium');
+		const mods = P.listFiles(pack.id).filter((f) => f.projectId).length;
+		lookups.versionLists = 0;
+		await P.previewVersionChange(pack.id, '1.20.1');
+		expect(lookups.versionLists).toBe(mods);
+		lookups.versionLists = 0;
+		await P.applyVersionChange(pack.id, '1.20.1');
+		expect(lookups.versionLists).toBe(mods);
 	});
 
 	it('only applies once nothing is incompatible, unless told to drop those', async () => {

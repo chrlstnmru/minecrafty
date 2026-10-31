@@ -374,33 +374,43 @@ export type VersionChange = {
 	unchecked: number;
 };
 
-/** What changing the Minecraft version would do to each mod, without changing anything. */
-export async function previewVersionChange(
-	packId: number,
-	mcVersion: string
-): Promise<VersionChange> {
-	const pack = requirePack(packId);
+/**
+ * Looks up, once per mod, the version each would move to. `chosen` holds those versions by file
+ * id so applying the change does not ask Modrinth again.
+ */
+async function planVersionChange(pack: LocalPack, mcVersion: string) {
 	if (!(await isKnownVersion(pack.loader, mcVersion)))
 		throw new Error(`${pack.loader} has no Minecraft ${mcVersion}`);
-	const result: VersionChange = { mcVersion, compatible: [], incompatible: [], unchecked: 0 };
-	for (const file of listFiles(packId)) {
+	const preview: VersionChange = { mcVersion, compatible: [], incompatible: [], unchecked: 0 };
+	const files = listFiles(pack.id);
+	const chosen = new Map<number, modrinth.ModrinthVersion>();
+	for (const file of files) {
 		if (!file.projectId) {
-			result.unchecked++;
+			preview.unchecked++;
 			continue;
 		}
 		const found = pickVersion(
 			await modrinth.listVersions(file.projectId, [pack.loader], mcVersion)
 		);
-		if (found)
-			result.compatible.push({
+		if (found) {
+			chosen.set(file.id, found);
+			preview.compatible.push({
 				id: file.id,
 				title: file.title,
 				from: file.versionNumber ?? '',
 				to: found.version_number
 			});
-		else result.incompatible.push({ id: file.id, title: file.title });
+		} else preview.incompatible.push({ id: file.id, title: file.title });
 	}
-	return result;
+	return { preview, files, chosen };
+}
+
+/** What changing the Minecraft version would do to each mod, without changing anything. */
+export async function previewVersionChange(
+	packId: number,
+	mcVersion: string
+): Promise<VersionChange> {
+	return (await planVersionChange(requirePack(packId), mcVersion)).preview;
 }
 
 /**
@@ -413,26 +423,25 @@ export async function applyVersionChange(
 	dropIncompatible = false
 ) {
 	const pack = requirePack(packId);
-	const preview = await previewVersionChange(packId, mcVersion);
+	const { preview, files, chosen } = await planVersionChange(pack, mcVersion);
 	if (preview.incompatible.length && !dropIncompatible)
 		throw new Error(
 			`${preview.incompatible.length} mods have no version for Minecraft ${mcVersion}; remove them first`
 		);
 	const loaderVersion = (await latestBuild(pack.loader, mcVersion)) ?? null;
 	const projects = new Map(
-		(
-			await modrinth.getProjects(
-				listFiles(packId).flatMap((f) => (f.projectId ? [f.projectId] : []))
-			)
-		).map((p) => [p.id, p])
+		(await modrinth.getProjects(files.flatMap((f) => (f.projectId ? [f.projectId] : [])))).map(
+			(p) => [p.id, p]
+		)
 	);
+	const byId = new Map(files.map((f) => [f.id, f]));
 	const rows = new Map<number, ReturnType<typeof rowFor>>();
 	for (const item of preview.compatible) {
-		const file = listFiles(packId).find((f) => f.id === item.id)!;
-		const version = pickVersion(
-			await modrinth.listVersions(file.projectId!, [pack.loader], mcVersion)
+		const file = byId.get(item.id)!;
+		rows.set(
+			item.id,
+			rowFor(packId, chosen.get(item.id)!, projects.get(file.projectId!), file.dependencyOf)
 		);
-		rows.set(item.id, rowFor(packId, version!, projects.get(file.projectId!), file.dependencyOf));
 	}
 	db.transaction((tx) => {
 		for (const [id, row] of rows) {
