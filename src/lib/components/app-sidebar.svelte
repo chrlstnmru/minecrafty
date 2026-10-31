@@ -12,11 +12,14 @@
 		user,
 		panel,
 		anywhere,
+		update = null,
 		...restProps
 	}: ComponentProps<typeof Sidebar.Root> & {
 		user: { name: string; role: string };
 		panel: readonly string[];
 		anywhere: readonly string[];
+		/** a newer Minecrafty release, flagged on Settings */
+		update?: string | null;
 	} = $props();
 
 	const ctx = $derived({
@@ -49,7 +52,12 @@
 	</Sidebar.Header>
 	<Sidebar.Content>
 		<NavMain items={visibleItems(navMain, ctx)} />
-		<NavSecondary items={visibleItems(navSecondary, ctx)} class="mt-auto" />
+		<NavSecondary
+			items={visibleItems(navSecondary, ctx).map((item) =>
+				item.url === '/settings' && update ? { ...item, badge: 'Update' } : item
+			)}
+			class="mt-auto"
+		/>
 	</Sidebar.Content>
 	<Sidebar.Footer>
 		<NavUser {user} />

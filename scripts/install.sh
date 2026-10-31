@@ -31,6 +31,8 @@ DATA_DIR="$ROOT/var/lib/minecrafty"
 ENV_DIR="$ROOT/etc/minecrafty"
 ENV_FILE="$ENV_DIR/minecrafty.env"
 UNIT_FILE="$ROOT/etc/systemd/system/minecrafty.service"
+UPDATE_UNIT="$ROOT/etc/systemd/system/minecrafty-update.service"
+UPDATE_PATH="$ROOT/etc/systemd/system/minecrafty-update.path"
 
 UNINSTALL=0
 PURGE=0
@@ -65,9 +67,10 @@ fi
 # ---- uninstall ----
 if [ "$UNINSTALL" -eq 1 ]; then
   if [ "$NO_SERVICE" -eq 0 ] && command -v systemctl > /dev/null; then
+    systemctl disable --now minecrafty-update.path 2> /dev/null || true
     systemctl disable --now minecrafty 2> /dev/null || true
   fi
-  rm -f "$UNIT_FILE" "$BINARY"
+  rm -f "$UNIT_FILE" "$UPDATE_UNIT" "$UPDATE_PATH" "$BINARY" "$INSTALL_DIR/update-status.json"
   rmdir "$INSTALL_DIR" 2> /dev/null || true
   [ "$NO_SERVICE" -eq 0 ] && command -v systemctl > /dev/null && systemctl daemon-reload
   if [ "$PURGE" -eq 1 ]; then
@@ -183,13 +186,42 @@ Restart=on-failure
 RestartSec=3
 KillMode=process
 NoNewPrivileges=true
+# tells the panel the update service below is there, so the owner can update from Settings
+Environment=MINECRAFTY_UPDATER=systemd
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
+# ---- one-click updates ----
+# The panel cannot replace its own program, so when the owner clicks Update it leaves a request in
+# its data folder; this path unit sees it and runs the update service as root, which checks the
+# request, downloads and verifies the release, swaps it in and restarts the panel.
+cat > "$UPDATE_PATH" << EOF
+[Unit]
+Description=Watch for a Minecrafty update the owner asked for
+
+[Path]
+PathExists=$DATA_DIR/update-request
+Unit=minecrafty-update.service
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+cat > "$UPDATE_UNIT" << EOF
+[Unit]
+Description=Install the Minecrafty update the owner asked for
+
+[Service]
+Type=oneshot
+EnvironmentFile=$ENV_FILE
+ExecStart=$BINARY self-update
+EOF
+
 systemctl daemon-reload
 systemctl enable minecrafty > /dev/null 2>&1
+systemctl enable --now minecrafty-update.path > /dev/null 2>&1
 if [ "$CHANGED" -eq 1 ] || ! systemctl is-active --quiet minecrafty; then
   say "Starting the panel"
   systemctl restart minecrafty

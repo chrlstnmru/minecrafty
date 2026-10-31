@@ -3,7 +3,7 @@
 // 1. The compiled binary is both the panel and the per-server runner: started as
 //    `minecrafty runner <instanceDir> <id>` it becomes the runner and never starts the panel (no
 //    web server, no database, no scheduler). Under Bun the runner is a script, so this does not
-//    apply there.
+//    apply there. Started as `minecrafty self-update` it installs a requested update and exits.
 // 2. The adapter builds each request's origin as https unless a header names the scheme, because
 //    it assumes TLS ends at a proxy; opened as plain http://host:3000, every form and command
 //    would then fail the cross-site check. So, unless PROTOCOL_HEADER is set, the scheme comes from
@@ -12,6 +12,12 @@ if (process.argv[2] === 'runner') {
 	await import('../runner/main');
 	// the module above keeps the process alive through its sockets; hold the panel back for good
 	await new Promise<never>(() => {});
+} else if (process.argv[2] === 'self-update') {
+	// run as root by the minecrafty-update service; installs an update the owner asked for, then exits
+	const { runSelfUpdate } = await import('./lib/server/self-update-apply');
+	const { currentVersion } = await import('./lib/server/self-update');
+	await runSelfUpdate(currentVersion);
+	process.exit(0);
 } else if (!process.env.PROTOCOL_HEADER) {
 	const header = 'x-minecrafty-scheme';
 	process.env.PROTOCOL_HEADER = header;

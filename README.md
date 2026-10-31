@@ -16,7 +16,8 @@ It installs one program to `/opt/minecrafty`, keeps data in `/var/lib/minecrafty
 systemd service on port 3000. Open `http://<the machine>:3000/setup` and make the owner account with
 the setup code the script prints (it is also in the panel's log and in `setup-token.txt` in the data
 folder).
-Run it again to upgrade; game servers keep running through the upgrade.
+Run it again to upgrade; game servers keep running through the upgrade. The panel also checks for a
+new release once a day: the owner sees it under Settings and, on Linux, can install it from there.
 
 **Proxmox VE**, on the host, to make a container and install in it:
 

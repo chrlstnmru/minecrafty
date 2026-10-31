@@ -55,6 +55,8 @@ jobs:
       - run: bun run build
         env:
           MINECRAFTY_COMPILE: ${{ matrix.target }}
+          # stamped into the program, so it knows which release it is (Settings, the update check)
+          MINECRAFTY_BUILD_VERSION: ${{ github.ref_name }}
       - run: |
           mkdir dist
           cp "${{ matrix.built }}" "dist/${{ matrix.asset }}"
