@@ -7,6 +7,7 @@
 	import * as v from 'valibot';
 	import { playerActionSchema, type PlayerAction } from '#lib/schemas/players.js';
 	import { onlineNow, playerAction, playerLists, setWhitelist } from '#lib/players.remote.js';
+	import Notice from '#lib/components/notice.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -149,12 +150,7 @@
 						</Empty.Header>
 					</Empty.Root>
 				{:else if online.current.state === 'unavailable'}
-					<p
-						class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
-						role="status"
-					>
-						{online.current.reason}
-					</p>
+					<Notice tone="warning">{online.current.reason}</Notice>
 				{:else if !online.current.names.length}
 					<Empty.Root class="border">
 						<Empty.Header>

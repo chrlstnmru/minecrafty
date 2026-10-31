@@ -41,6 +41,7 @@
 	} from '#lib/files.remote.js';
 	import type { FileEntry } from '#lib/server/files.js';
 	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
+	import Notice from '#lib/components/notice.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -572,13 +573,10 @@
 		</Sheet.Header>
 		<div class="flex min-h-0 flex-1 flex-col gap-3 px-4 pb-4">
 			{#if running && editingEntry?.rewritten}
-				<p
-					class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm"
-					role="status"
-				>
+				<Notice tone="warning">
 					The server is running and writes this file back when it stops, so changes made now can be
 					lost. Stop the server first.
-				</p>
+				</Notice>
 			{/if}
 			{#if file?.error}
 				<p class="text-sm text-destructive" role="alert">
