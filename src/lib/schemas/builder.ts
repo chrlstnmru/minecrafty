@@ -53,6 +53,33 @@ export const savePackConfigSchema = v.object({
 	content: v.pipe(v.string(), v.maxLength(2_200_000)),
 	baseHash: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)))
 });
+export const savePackConfigsSchema = v.object({
+	id: idSchema,
+	files: v.pipe(
+		v.array(
+			v.object({
+				path: overridePath,
+				content: v.pipe(v.string(), v.maxLength(2_200_000)),
+				baseHash: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)))
+			})
+		),
+		v.minLength(1),
+		v.maxLength(200),
+		v.check(
+			(files) => files.reduce((sum, f) => sum + f.content.length, 0) <= 16_000_000,
+			'Too much text to save at once'
+		)
+	)
+});
+export const overridePathsSchema = v.object({
+	id: idSchema,
+	paths: v.pipe(v.array(overridePath), v.minLength(1), v.maxLength(500))
+});
+export const movePackConfigsSchema = v.object({
+	id: idSchema,
+	paths: v.pipe(v.array(overridePath), v.minLength(1), v.maxLength(500)),
+	folder: v.pipe(v.string(), v.maxLength(512))
+});
 export const movePackConfigSchema = v.object({
 	id: idSchema,
 	from: overridePath,
