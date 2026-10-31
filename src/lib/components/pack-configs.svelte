@@ -237,6 +237,9 @@
 		return undefined;
 	});
 
+	// an empty field only keeps Create disabled; a mistake is shown once something is typed
+	const shownError = $derived(naming?.value.trim() ? nameError : undefined);
+
 	function startNaming(kind: 'file' | 'folder', from?: string) {
 		naming = { kind, from, dir: target, value: from ?? '' };
 		namingOpen = true;
@@ -578,7 +581,7 @@
 					void confirmName();
 				}}
 			>
-				<Field.Field data-invalid={nameError ? true : undefined}>
+				<Field.Field data-invalid={shownError ? true : undefined}>
 					<Field.Label for="config-path">{naming.from ? 'Path' : 'Name'}</Field.Label>
 					<Input
 						id="config-path"
@@ -586,9 +589,9 @@
 						placeholder={naming.from ? undefined : naming.kind === 'folder' ? 'sodium' : 'mod.toml'}
 						class="font-mono"
 						autocomplete="off"
-						aria-invalid={nameError ? true : undefined}
+						aria-invalid={shownError ? true : undefined}
 					/>
-					{#if nameError}<Field.Error>{nameError}</Field.Error>{/if}
+					{#if shownError}<Field.Error>{shownError}</Field.Error>{/if}
 				</Field.Field>
 				<Dialog.Footer>
 					<Button type="button" variant="ghost" onclick={() => (namingOpen = false)}>Cancel</Button>
