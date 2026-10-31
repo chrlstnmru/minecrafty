@@ -3,12 +3,13 @@
 // program (it runs as an unprivileged user), so it only asks; this checks the request, downloads
 // the release, verifies it against the release's checksums and swaps it in.
 //
-// It trusts nothing in the request but a version string: the repository comes from the root-owned
-// settings, and only a full release newer than the running one is installed, so a compromised
-// panel cannot use it to downgrade to an older, weaker build.
+// It trusts nothing in the request but a version and a channel: the repository comes from the
+// root-owned settings, and only a release newer than the running one is installed (a full release,
+// unless the request is on the pre-release channel), so a compromised panel cannot use it to
+// downgrade to an older, weaker build.
 import { lstatSync, readFileSync, renameSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
-import { compareReleases, isStableTag } from '../release-version';
+import { compareReleases, isReleaseTag, isStableTag } from '../release-version';
 import { dataDir } from './config';
 
 export type UpdateStatus = {
@@ -71,8 +72,11 @@ export async function applyUpdate(o: ApplyOptions): Promise<UpdateStatus | null>
 	rmSync(o.requestFile, { force: true });
 
 	let version = '';
+	let prerelease = false;
 	try {
-		version = String((JSON.parse(raw) as { version?: unknown }).version ?? '');
+		const request = JSON.parse(raw) as { version?: unknown; channel?: unknown };
+		version = String(request.version ?? '');
+		prerelease = request.channel === 'prerelease';
 	} catch {
 		// reported below as an unreadable request
 	}
@@ -81,7 +85,8 @@ export async function applyUpdate(o: ApplyOptions): Promise<UpdateStatus | null>
 		writeStatus(o.statusFile, status);
 		return status;
 	};
-	if (!isStableTag(version)) return fail('The request did not name a release');
+	if (!(prerelease ? isReleaseTag(version) : isStableTag(version)))
+		return fail('The request did not name a release');
 	if (!((compareReleases(version, o.current) ?? 0) > 0))
 		return fail(`${version} is not newer than ${o.current}`);
 

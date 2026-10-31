@@ -22,7 +22,8 @@ const github =
 		return new Response('missing', { status: 404 });
 	};
 
-const ask = (version: unknown) => writeFileSync(opts.requestFile, JSON.stringify({ version }));
+const ask = (version: unknown, channel?: string) =>
+	writeFileSync(opts.requestFile, JSON.stringify({ version, channel }));
 const status = () => JSON.parse(readFileSync(opts.statusFile, 'utf8'));
 const program = () => readFileSync(opts.binary, 'utf8');
 
@@ -74,6 +75,23 @@ describe('applyUpdate', () => {
 		expect(urls).toEqual([]);
 		expect(program()).toBe('old program');
 		expect(restarts).toBe(0);
+	});
+
+	it('installs a pre-release only when the request is on the pre-release channel', async () => {
+		ask('v0.2.0-rc.1', 'release');
+		expect(await applyUpdate(opts)).toMatchObject({ state: 'failed' });
+		ask('v0.2.0-rc.1', 'prerelease');
+		expect(await applyUpdate(opts)).toMatchObject({ state: 'done', version: 'v0.2.0-rc.1' });
+		expect(program()).toBe('new program');
+	});
+
+	it('never goes back, even on the pre-release channel', async () => {
+		opts.current = 'v0.2.0';
+		for (const version of ['v0.2.0-rc.5', 'v0.1.9', 'nightly']) {
+			ask(version, 'prerelease');
+			expect(await applyUpdate(opts)).toMatchObject({ state: 'failed' });
+		}
+		expect(urls).toEqual([]);
 	});
 
 	it('keeps the old program when the download does not match its checksum', async () => {

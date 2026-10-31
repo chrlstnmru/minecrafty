@@ -2,7 +2,10 @@
 
 const TAG = /^v(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z.-]+))?$/;
 
-/** A full release, which is all the updater installs. */
+/** A release tag, full or pre-release. */
+export const isReleaseTag = (tag: string) => TAG.test(tag);
+
+/** A full release, the only kind offered on the Release channel. */
 export const isStableTag = (tag: string) => TAG.test(tag) && !tag.includes('-');
 
 /** Positive when `a` is newer than `b`, 0 when equal; null when either is not a release tag. */
