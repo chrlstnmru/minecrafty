@@ -3,6 +3,7 @@
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import SkullIcon from '@tabler/icons-svelte/icons/skull';
 	import { toast } from 'svelte-sonner';
+	import { isFromPack } from '#lib/instance-origin.js';
 	import { goto } from '$app/navigation';
 	import { instanceModules, type InstanceModule } from '#lib/instance-modules.js';
 	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
@@ -61,7 +62,7 @@
 	const modules = $derived(
 		instanceModules.filter(
 			(m) =>
-				(m.slug !== 'modpack' || !!instance?.packProjectId || instance?.fromPackId != null) &&
+				(m.slug !== 'modpack' || (!!instance && isFromPack(instance))) &&
 				granted.includes(MODULE_PERMISSION[m.slug])
 		)
 	);

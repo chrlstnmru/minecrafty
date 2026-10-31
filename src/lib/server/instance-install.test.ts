@@ -166,6 +166,13 @@ describe('retryInstall', () => {
 		expect(() => I.retryInstall(row.id)).toThrow(/modpack/i);
 	});
 
+	it('refuses a server made from a pack in the builder too', async () => {
+		const row = await failed();
+		db.update(instances).set({ fromPackId: 7 }).where(eq(instances.id, row.id)).run();
+		expect(() => I.retryInstall(row.id)).toThrow(/modpack/i);
+		expect(I.getInstance(row.id)?.installState).toBe('failed');
+	});
+
 	it('refuses a server that was set up before, so a failed update never erases its world', async () => {
 		const { row, finished } = I.createInstance(input());
 		await tick();
