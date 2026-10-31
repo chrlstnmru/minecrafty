@@ -7,7 +7,7 @@
 	let {
 		items,
 		...restProps
-	}: { items: { title: string; url: string; icon: Icon }[] } & WithoutChildren<
+	}: { items: { title: string; url: string; icon: Icon; badge?: string }[] } & WithoutChildren<
 		ComponentProps<typeof Sidebar.Group>
 	> = $props();
 </script>
@@ -25,6 +25,7 @@
 							</a>
 						{/snippet}
 					</Sidebar.MenuButton>
+					{#if item.badge}<Sidebar.MenuBadge>{item.badge}</Sidebar.MenuBadge>{/if}
 				</Sidebar.MenuItem>
 			{/each}
 		</Sidebar.Menu>

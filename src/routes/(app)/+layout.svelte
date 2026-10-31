@@ -15,6 +15,7 @@
 		user={{ name: data.user.username, role: data.user.role }}
 		panel={data.panel}
 		anywhere={data.anywhere}
+		update={data.update}
 	/>
 	<Sidebar.Inset class="min-h-0 overflow-hidden">
 		<SiteHeader />

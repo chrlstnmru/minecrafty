@@ -5,6 +5,8 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import { defineConfig } from 'vite';
 
 export default defineConfig({
+	// the release workflow sets the tag; any other build reports itself as "dev"
+	define: { __MINECRAFTY_VERSION__: JSON.stringify(process.env.MINECRAFTY_BUILD_VERSION ?? '') },
 	plugins: [
 		tailwindcss(),
 		// resizes and re-encodes the loader icons at build time

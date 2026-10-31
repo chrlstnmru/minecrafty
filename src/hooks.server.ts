@@ -8,6 +8,7 @@ import { announceSetupToken } from '#lib/server/setup-token.js';
 import { addSecurityHeaders } from '#lib/server/security-headers.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
+import { startUpdateChecks } from '#lib/server/self-update.js';
 import { startStats } from '#lib/server/stats.js';
 import { sweepUploads } from '#lib/server/uploads.js';
 
@@ -78,6 +79,8 @@ export const init: ServerInit = () => {
 	startScheduler();
 	// CPU, memory, players and folder sizes, for the dashboard
 	startStats();
+	// a newer Minecrafty release, shown to the owner; nothing is installed unless they ask
+	startUpdateChecks();
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
 };
