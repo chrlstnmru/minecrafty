@@ -33,16 +33,6 @@ export const readFile = query(location, async ({ id: instanceId, path }) => {
 	return userFacing(async () => files.readTextFile(instanceId, path));
 });
 
-export const saveFile = command(
-	v.object({ id, path: filePathSchema, content: v.pipe(v.string(), v.maxLength(2_200_000)) }),
-	async ({ id: instanceId, path, content }) => {
-		const user = requirePermission(instanceId, 'files');
-		await userFacing(async () => files.saveFile(user, instanceId, path, content));
-		record({ action: 'file.save', summary: `Edited ${path}`, instanceId });
-		await readFile({ id: instanceId, path }).refresh();
-	}
-);
-
 const listedPaths = (paths: string[]) =>
 	paths.length > 3
 		? `${paths.slice(0, 3).join(', ')} and ${paths.length - 3} more`
