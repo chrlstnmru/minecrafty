@@ -1,16 +1,13 @@
 import { error } from '@sveltejs/kit';
 import { record } from '#lib/server/audit.js';
-import { check } from '#lib/server/access.js';
+import { requirePermission } from '#lib/server/auth.js';
 import { describeDownload } from '#lib/server/files.js';
 import { zipStream } from '#lib/server/zip-writer.js';
 import type { RequestHandler } from './$types';
 
 // A real download needs a plain GET the browser can follow, which a remote function is not.
-export const GET: RequestHandler = ({ params, url, locals }) => {
-	if (!locals.user) error(401, 'Not signed in');
-	const allowed = check(locals.user, Number(params.id), 'files');
-	if (allowed === 'unknown') error(404, 'Instance not found');
-	if (allowed === 'denied') error(403, 'You do not have permission to do that');
+export const GET: RequestHandler = ({ params, url }) => {
+	requirePermission(Number(params.id), 'files');
 
 	let target;
 	try {

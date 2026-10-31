@@ -1,6 +1,6 @@
 import { error, json } from '@sveltejs/kit';
-import { can } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
+import { requirePanel } from '#lib/server/auth.js';
 import { importMrpack } from '#lib/server/local-packs.js';
 import type { RequestHandler } from './$types';
 
@@ -9,9 +9,8 @@ const MAX_BYTES = 60 * 1024 * 1024;
 
 // Takes a Modrinth .mrpack as a multipart upload and makes it a pack; a remote function cannot
 // carry a file this large.
-export const POST: RequestHandler = async ({ request, locals }) => {
-	if (!locals.user) error(401, 'Not signed in');
-	if (!can(locals.user, 'modpacks.write')) error(403, 'You do not have permission to do that');
+export const POST: RequestHandler = async ({ request }) => {
+	const user = requirePanel('modpacks.write');
 
 	const form = await request.formData();
 	const file = form.get('file');
@@ -24,7 +23,7 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		const pack = await importMrpack(
 			new Uint8Array(await file.arrayBuffer()),
 			typeof name === 'string' && name.trim() ? name : undefined,
-			{ vettedOnly: locals.user.role !== 'owner' }
+			{ vettedOnly: user.role !== 'owner' }
 		);
 		record({ action: 'pack.create', summary: `Imported the modpack ${pack.name}` });
 		return json({ id: pack.id });

@@ -17,7 +17,7 @@ export type PackVersion = {
 	publishedAt: string;
 };
 
-function requireInstance(instanceId: number) {
+function instanceRow(instanceId: number) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
 	return inst;
@@ -34,7 +34,7 @@ function currentRow(instanceId: number) {
 }
 
 export async function search(instanceId: number, query: string, limit: number) {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	const res = await modrinth.searchProjects({
 		query,
 		loaders: [],
@@ -47,7 +47,7 @@ export async function search(instanceId: number, query: string, limit: number) {
 }
 
 function compatibleVersions(instanceId: number, projectId: string) {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	return modrinth.listVersions(projectId, [], inst.mcVersion);
 }
 
@@ -70,7 +70,7 @@ async function pickVersion(instanceId: number, projectId: string, versionId?: st
 		? versions.find((v) => v.id === versionId)
 		: (versions.find((v) => v.version_type === 'release') ?? versions[0]);
 	if (!version) {
-		const inst = requireInstance(instanceId);
+		const inst = instanceRow(instanceId);
 		throw new Error(
 			versionId
 				? 'That version does not run on this server'
@@ -116,7 +116,7 @@ export function serverPack(instanceId: number): ServerPack {
 
 /** Points the server at a Modrinth resource pack. Takes effect the next time the server starts. */
 export async function useAsServerPack(instanceId: number, projectId: string, versionId?: string) {
-	requireInstance(instanceId);
+	instanceRow(instanceId);
 	assertWritable(instanceId);
 	const { version, file } = await pickVersion(instanceId, projectId, versionId);
 	if (!file.url.startsWith('https://')) throw new Error('The pack has no public download URL');
@@ -155,7 +155,7 @@ export function setServerPackOptions(
 	instanceId: number,
 	options: { required: boolean; prompt: string }
 ) {
-	requireInstance(instanceId);
+	instanceRow(instanceId);
 	assertWritable(instanceId);
 	setProperties(propsFile(instanceId), {
 		'require-resource-pack': options.required,

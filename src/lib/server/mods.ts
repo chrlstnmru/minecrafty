@@ -17,7 +17,7 @@ export const DISABLED_SUFFIX = '.disabled';
 
 export { modSupport };
 
-function requireInstance(instanceId: number): Instance {
+function instanceRow(instanceId: number): Instance {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
 	if (!modSupport(inst.loader).supported)
@@ -36,7 +36,7 @@ export function listInstalled(instanceId: number) {
 }
 
 export async function search(instanceId: number, query: string, limit: number) {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	const res = await modrinth.searchProjects({
 		query,
 		loaders: modSupport(inst.loader).loaders,
@@ -190,7 +190,7 @@ export async function listModVersions(
 	instanceId: number,
 	projectId: string
 ): Promise<ModVersion[]> {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	const versions = await modrinth.listVersions(
 		projectId,
 		modSupport(inst.loader).loaders,
@@ -217,7 +217,7 @@ async function resolveVersion(inst: Instance, projectId: string, versionId: stri
 }
 
 export async function install(instanceId: number, projectId: string, versionId?: string) {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	assertWritable(instanceId);
 	if (listInstalled(instanceId).some((m) => m.projectId === projectId))
 		throw new Error('Already installed');
@@ -233,7 +233,7 @@ export type ModUpdate = {
 
 /** Newer releases for the installed Modrinth mods, found by file hash in a single request. */
 export async function checkUpdates(instanceId: number): Promise<ModUpdate[]> {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	const rows = listInstalled(instanceId).filter((m) => m.source === 'modrinth' && m.hash);
 	const latest = await modrinth.latestVersions(
 		rows.map((r) => r.hash!),
@@ -250,7 +250,7 @@ export async function checkUpdates(instanceId: number): Promise<ModUpdate[]> {
 
 /** Moves an installed mod to its newest release, or to a chosen version (including older ones). */
 export async function update(instanceId: number, modId: number, versionId?: string) {
-	const inst = requireInstance(instanceId);
+	const inst = instanceRow(instanceId);
 	assertWritable(instanceId);
 	const row = listInstalled(instanceId).find((m) => m.id === modId);
 	if (!row?.hash) throw new Error('Not installed');

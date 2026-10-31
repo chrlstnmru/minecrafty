@@ -160,6 +160,11 @@ describe('check', () => {
 	it('is always ok for an owner', () => {
 		for (const p of INSTANCE_PERMISSIONS) expect(A.check(owner, one, p)).toBe('ok');
 	});
+
+	it('says "unknown" for an instance that does not exist, even to the owner', () => {
+		expect(A.canSee(owner, 999_999)).toBe(false);
+		for (const p of INSTANCE_PERMISSIONS) expect(A.check(owner, 999_999, p)).toBe('unknown');
+	});
 });
 
 describe('visibleInstanceIds', () => {

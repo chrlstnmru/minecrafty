@@ -108,16 +108,22 @@ export function visibleInstanceIds(user: Actor): number[] | null {
 const seesAny = (granted: ReadonlySet<Permission>) =>
 	INSTANCE_PERMISSIONS.some((p) => granted.has(p));
 
-/** Whether the user may see the instance at all. */
-export const canSee = (user: Actor, instanceId: number) => seesAny(grantedTo(user, instanceId));
+const instanceExists = (instanceId: number) =>
+	!!db.select({ id: instances.id }).from(instances).where(eq(instances.id, instanceId)).get();
+
+/** Whether the user may see the instance at all. An instance that does not exist is seen by no one. */
+export const canSee = (user: Actor, instanceId: number) =>
+	instanceExists(instanceId) && seesAny(grantedTo(user, instanceId));
 
 export type Check = 'ok' | 'unknown' | 'denied';
 
 /**
- * Whether the user may do `needed` on the instance. "unknown" means they may not even see it, which
- * callers report as not found, so a server they have no access to does not reveal that it exists.
+ * Whether the user may do `needed` on the instance. "unknown" means they may not even see it (or
+ * there is no such instance, for the owner too), which callers report as not found, so a server
+ * they have no access to does not reveal that it exists.
  */
 export function check(user: Actor, instanceId: number, needed: InstancePermission): Check {
+	if (!instanceExists(instanceId)) return 'unknown';
 	const granted = grantedTo(user, instanceId);
 	if (!seesAny(granted)) return 'unknown';
 	return granted.has(needed) ? 'ok' : 'denied';
