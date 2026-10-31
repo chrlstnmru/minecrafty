@@ -149,7 +149,11 @@
 		if (draft.isNew) {
 			delete drafts[path];
 			if (open === path) open = null;
-		} else draft.content = draft.loaded;
+		} else {
+			draft.content = draft.loaded;
+			// a save refused this file as out of date, so what it was read as is stale too
+			if (path === failedPath) void refetch(path);
+		}
 	}
 
 	let discarding = $state<{ paths: string[]; then?: () => void } | null>(null);
