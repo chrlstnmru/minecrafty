@@ -4,7 +4,8 @@ import { join } from 'node:path';
 import type { PlayerAction } from '#lib/schemas/players.js';
 import { isRunning } from './files';
 import { getInstance, serverDir } from './instances';
-import { RconError, withRcon } from './rcon';
+import { RconError } from './rcon';
+import { rconCommand } from './rcon-sessions';
 import { readProperties, setProperties } from './server-properties';
 
 export type ListedPlayer = { uuid: string; name: string };
@@ -143,7 +144,7 @@ export async function onlinePlayers(instanceId: number): Promise<Online> {
 				'RCON is switched on the next time the server starts. Restart it to see who is online.'
 		};
 	try {
-		const reply = await withRcon(target, (run) => run('list'));
+		const reply = await rconCommand(instanceId, target, 'list');
 		return { state: 'online', ...parseList(reply) };
 	} catch (e) {
 		return { state: 'unavailable', reason: rconProblem(e) };
@@ -316,7 +317,7 @@ export async function runPlayerAction(instanceId: number, action: PlayerAction) 
 	if (!target)
 		throw new Error('RCON is switched on the next time the server starts. Restart it first.');
 	try {
-		const reply = await withRcon(target, (run) => run(commandFor(action)));
+		const reply = await rconCommand(instanceId, target, commandFor(action));
 		return reply.replace(/§./g, '').trim() || 'Done';
 	} catch (e) {
 		throw new Error(rconProblem(e));
@@ -331,7 +332,7 @@ export async function setWhitelistEnabled(instanceId: number, enabled: boolean) 
 	const target = rconTarget(instanceId);
 	if (!target) return;
 	try {
-		await withRcon(target, (run) => run(`whitelist ${enabled ? 'on' : 'off'}`));
+		await rconCommand(instanceId, target, `whitelist ${enabled ? 'on' : 'off'}`);
 	} catch (e) {
 		throw new Error(rconProblem(e));
 	}

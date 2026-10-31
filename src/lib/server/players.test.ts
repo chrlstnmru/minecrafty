@@ -5,6 +5,7 @@ import * as v from 'valibot';
 import { eq } from 'drizzle-orm';
 import { makeInstance } from '#test/instance.js';
 import { fakeRcon, stopFakeRcon } from '#test/fake-rcon.js';
+import { closeAllRcon } from './rcon-sessions';
 import { playerActionSchema } from '#lib/schemas/players.js';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -45,6 +46,7 @@ beforeEach(() => {
 	put('server.properties', 'online-mode=false\n');
 });
 afterEach(() => {
+	closeAllRcon();
 	stopFakeRcon();
 	vi.unstubAllGlobals();
 });

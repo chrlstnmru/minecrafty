@@ -1,8 +1,7 @@
 import type { Socket } from 'bun';
 
 // A small client for Minecraft's RCON (the Source RCON protocol): packets of
-// [length][id][type][body]\0\0, little-endian, over one TCP connection. The panel opens a
-// connection per job, so nothing has to be kept alive or reconnected.
+// [length][id][type][body]\0\0, little-endian, over one TCP connection.
 
 const AUTH = 3;
 const COMMAND = 2;
@@ -61,19 +60,29 @@ function reader() {
 	};
 }
 
+export type RconConnection = {
+	/** Sends a command and resolves to the server's reply, giving up after the connection's timeout. */
+	run(command: string): Promise<string>;
+	/** False once the server or a timeout has ended the connection; it is not reopened. */
+	readonly open: boolean;
+	close(): void;
+};
+
 /**
- * Connects, logs in and runs `job` with a function that sends a command and resolves to the
- * server's reply. The connection is closed afterwards, and the whole thing gives up after `timeoutMs`.
+ * Connects and logs in. Commands go one at a time, each in turn: Minecraft answers a connection in
+ * order, so overlapping ones would mix up their replies. A command that times out ends the
+ * connection, because its late reply would otherwise be taken for the next command's.
  */
-export async function withRcon<T>(
-	target: RconTarget,
-	job: (run: (command: string) => Promise<string>) => Promise<T>,
-	timeoutMs = 5000
-): Promise<T> {
+export async function openRcon(target: RconTarget, timeoutMs = 5000): Promise<RconConnection> {
 	const waiting = new Map<number, (reply: Reply) => void>();
 	const parse = reader();
 	let failure: RconError | null = null;
 	let closed = false;
+
+	const fail = (error: RconError) => {
+		failure ??= error;
+		for (const wake of waiting.values()) wake({ id: -2, type: -1, body: '' });
+	};
 
 	const socket = await new Promise<Socket>((resolve, reject) => {
 		const refused = new RconError(
@@ -98,14 +107,12 @@ export async function withRcon<T>(
 							wake?.(reply);
 						}
 					} catch (e) {
-						failure = e as RconError;
-						for (const wake of waiting.values()) wake({ id: -2, type: -1, body: '' });
+						fail(e as RconError);
 					}
 				},
 				close() {
 					closed = true;
-					failure ??= new RconError('The server closed the RCON connection', 'closed');
-					for (const wake of waiting.values()) wake({ id: -2, type: -1, body: '' });
+					fail(new RconError('The server closed the RCON connection', 'closed'));
 				},
 				error(_socket, error) {
 					failure ??= new RconError(error.message, 'closed');
@@ -127,50 +134,94 @@ export async function withRcon<T>(
 		);
 	});
 
+	const close = () => {
+		failure ??= new RconError('The RCON connection was closed', 'closed');
+		if (!closed) socket.end();
+		closed = true;
+	};
+
+	/** Waits for `settled`, ending the connection if it takes longer than the timeout. */
+	const limited = async <T>(settled: Promise<T>) => {
+		const timer = setTimeout(() => {
+			fail(new RconError('RCON did not answer in time', 'timeout'));
+			close();
+		}, timeoutMs);
+		try {
+			return await settled;
+		} finally {
+			clearTimeout(timer);
+		}
+	};
+
 	let next = AUTH_ID + 1;
-	const timer = setTimeout(() => {
-		failure ??= new RconError('RCON did not answer in time', 'timeout');
-		for (const wake of waiting.values()) wake({ id: -2, type: -1, body: '' });
-		socket.end();
-	}, timeoutMs);
-
-	/** Sends one packet and resolves with the next packet for `id`. */
-	const exchange = (id: number, type: number, body: string) =>
-		new Promise<Reply>((resolve, reject) => {
-			if (failure) return reject(failure);
-			waiting.set(id, (reply) => (reply.id === -2 ? reject(failure) : resolve(reply)));
-			socket.write(packet(id, type, body));
-		});
-
 	try {
-		const auth = await exchange(AUTH_ID, AUTH, target.password);
+		const auth = await limited(
+			new Promise<Reply>((resolve, reject) => {
+				waiting.set(AUTH_ID, (reply) => (reply.id === -2 ? reject(failure) : resolve(reply)));
+				socket.write(packet(AUTH_ID, AUTH, target.password));
+			})
+		);
+		waiting.delete(AUTH_ID);
 		if (auth.id === -1) throw new RconError('RCON refused the password', 'auth');
+	} catch (e) {
+		close();
+		throw e;
+	}
 
-		const run = async (command: string) => {
-			const id = next++;
-			const end = next++;
-			const parts: string[] = [];
-			const done = new Promise<void>((resolve, reject) => {
-				waiting.set(id, (reply) => {
-					if (reply.id === -2) return reject(failure);
-					if (reply.type !== RESPONSE) return;
-					// Minecraft reads one packet at a time and drops a client whose read holds two, so
-					// the sentinel waits for the reply to start; the server writes every part of it
-					// before reading the sentinel
-					if (!parts.length) socket.write(packet(end, SENTINEL, ''));
-					parts.push(reply.body);
-				});
-				waiting.set(end, (reply) => (reply.id === -2 ? reject(failure) : resolve()));
+	const send = async (command: string) => {
+		if (failure) throw failure;
+		const id = next++;
+		const end = next++;
+		const parts: string[] = [];
+		const done = new Promise<void>((resolve, reject) => {
+			waiting.set(id, (reply) => {
+				if (reply.id === -2) return reject(failure);
+				if (reply.type !== RESPONSE) return;
+				// Minecraft reads one packet at a time and drops a client whose read holds two, so
+				// the sentinel waits for the reply to start; the server writes every part of it
+				// before reading the sentinel
+				if (!parts.length) socket.write(packet(end, SENTINEL, ''));
+				parts.push(reply.body);
 			});
-			socket.write(packet(id, COMMAND, command));
-			await done;
+			waiting.set(end, (reply) => (reply.id === -2 ? reject(failure) : resolve()));
+		});
+		socket.write(packet(id, COMMAND, command));
+		try {
+			await limited(done);
+		} finally {
 			waiting.delete(id);
 			waiting.delete(end);
-			return parts.join('');
-		};
-		return await job(run);
+		}
+		return parts.join('');
+	};
+
+	let queue: Promise<unknown> = Promise.resolve();
+	return {
+		run(command) {
+			const result = queue.then(() => send(command));
+			queue = result.catch(() => {});
+			return result;
+		},
+		get open() {
+			return !failure && !closed;
+		},
+		close
+	};
+}
+
+/**
+ * Connects, logs in and runs `job` with a function that sends a command and resolves to the
+ * server's reply. The connection is closed afterwards.
+ */
+export async function withRcon<T>(
+	target: RconTarget,
+	job: (run: (command: string) => Promise<string>) => Promise<T>,
+	timeoutMs = 5000
+): Promise<T> {
+	const connection = await openRcon(target, timeoutMs);
+	try {
+		return await job(connection.run);
 	} finally {
-		clearTimeout(timer);
-		if (!closed) socket.end();
+		connection.close();
 	}
 }
