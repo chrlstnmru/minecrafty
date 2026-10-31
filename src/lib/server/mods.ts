@@ -1,5 +1,5 @@
 import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
-import { basename, join } from 'node:path';
+import { join } from 'node:path';
 import { and, eq } from 'drizzle-orm';
 import { db } from './db';
 import { installedMods } from './db/schema';
@@ -7,6 +7,7 @@ import { downloadFile } from './download';
 import { getInstance, serverDir, type Instance } from './instances';
 import { assertWritable } from './operations';
 import * as modrinth from './modrinth';
+import { pickFile, resolveMods } from './mod-resolver';
 import { modSupport } from '#lib/mod-support.js';
 import { projectSides } from './mod-sides';
 
@@ -47,61 +48,14 @@ export async function search(instanceId: number, query: string, limit: number) {
 	return { hits: res.hits, total: res.total_hits };
 }
 
-/** Prefers a stable release over betas and alphas; versions arrive newest first. */
-function pickVersion(versions: modrinth.ModrinthVersion[]) {
-	return versions.find((v) => v.version_type === 'release') ?? versions[0];
-}
-
-function pickFile(version: modrinth.ModrinthVersion) {
-	const file = version.files.find((f) => f.primary) ?? version.files[0];
-	if (!file) throw new Error(`Version ${version.version_number} has no files`);
-	// the name comes from a third party and is joined onto a path
-	const name = basename(file.filename);
-	if (name !== file.filename || name.startsWith('.') || !name.endsWith('.jar'))
-		throw new Error(`Refusing unexpected file name "${file.filename}"`);
-	return { ...file, filename: name };
-}
-
-type Planned = { version: modrinth.ModrinthVersion; dependencyOf: string | null };
-
-/**
- * Works out which versions to install: the requested project plus every required
- * dependency that isn't installed yet. Dependencies with no compatible version are skipped.
- */
-async function plan(inst: Instance, projectId: string, rootVersion?: modrinth.ModrinthVersion) {
-	const { loaders } = modSupport(inst.loader);
-	const have = new Set(listInstalled(inst.id).map((m) => m.projectId));
-	const planned = new Map<string, Planned>();
-	const skipped: string[] = [];
-	// the root version may be given up front (a chosen version, or an update of an installed mod)
-	if (rootVersion) have.delete(projectId);
-	const queue: { projectId: string | null; versionId: string | null; parent: string | null }[] = [
-		{ projectId, versionId: rootVersion?.id ?? null, parent: null }
-	];
-
-	while (queue.length) {
-		const next = queue.shift()!;
-		let version: modrinth.ModrinthVersion | undefined;
-		if (rootVersion && next.versionId === rootVersion.id) version = rootVersion;
-		else if (next.versionId) version = await modrinth.getVersion(next.versionId);
-		else if (next.projectId)
-			version = pickVersion(await modrinth.listVersions(next.projectId, loaders, inst.mcVersion));
-		const id = next.projectId ?? version?.project_id;
-		if (!id || have.has(id) || planned.has(id)) continue;
-
-		if (!version) {
-			if (!next.parent)
-				throw new Error(`No ${inst.loader} version for Minecraft ${inst.mcVersion} was found`);
-			skipped.push(id);
-			continue;
-		}
-		planned.set(id, { version, dependencyOf: next.parent });
-		for (const dep of version.dependencies) {
-			if (dep.dependency_type === 'required')
-				queue.push({ projectId: dep.project_id, versionId: dep.version_id, parent: id });
-		}
-	}
-	return { planned, skipped };
+/** Which versions to install: the requested project plus every required dependency not installed yet. */
+function plan(inst: Instance, projectId: string, rootVersion?: modrinth.ModrinthVersion) {
+	return resolveMods(
+		{ loader: inst.loader, loaders: modSupport(inst.loader).loaders, mcVersion: inst.mcVersion },
+		new Set(listInstalled(inst.id).map((m) => m.projectId)),
+		projectId,
+		{ root: rootVersion }
+	);
 }
 
 /**
@@ -111,7 +65,7 @@ async function plan(inst: Instance, projectId: string, rootVersion?: modrinth.Mo
  */
 async function apply(
 	inst: Instance,
-	{ planned, skipped }: Awaited<ReturnType<typeof plan>>,
+	{ planned, skipped }: Awaited<ReturnType<typeof resolveMods>>,
 	replacing?: InstalledMod
 ) {
 	const projects = new Map(

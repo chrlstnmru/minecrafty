@@ -25,13 +25,11 @@ import {
 	type ModpackVersion
 } from './modpacks';
 import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
-import { setEnabledHeld } from './mods';
+import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from './mods';
 import { mergeStaged, removeStale } from './staged-install';
 import { lastOutcome } from './update-outcome';
 
 export { lastOutcome };
-
-const DISABLED = '.disabled';
 
 async function hashFile(path: string) {
 	const hash = new Bun.CryptoHasher('sha1');
