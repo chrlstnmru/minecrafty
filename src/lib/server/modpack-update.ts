@@ -6,7 +6,7 @@ import { claim } from './operations';
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods, instances } from './db/schema';
-import { isRunning } from './files';
+import { isRunning } from './live-server';
 import { clearProgress, setProgress } from './install-progress';
 import { ensureJava, requiredJavaMajor } from './java';
 import { getInstance, instanceDir, serverDir, writeInstanceMeta } from './instances';

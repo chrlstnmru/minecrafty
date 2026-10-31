@@ -10,7 +10,7 @@ import * as S from './schedules';
 // The server is a fake: tests decide whether it runs, and see what the scheduler did to it.
 function fakeServer(running = false) {
 	const log: string[] = [];
-	const state = { running, stopTakes: 0, failWith: null as string | null };
+	const state = { running, stubborn: false, failWith: null as string | null };
 	const deps: S.Deps = {
 		isRunning: async () => state.running,
 		start: async () => {
@@ -20,17 +20,21 @@ function fakeServer(running = false) {
 		},
 		stop: async () => {
 			log.push('stop');
-			// a stop takes a few checks before the server is really gone
-			state.stopTakes = 2;
+			state.running = false;
+		},
+		restart: async () => {
+			if (state.running) {
+				log.push('stop');
+				if (state.stubborn) throw new Error('The server did not stop within three minutes');
+			}
+			log.push('start');
+			state.running = true;
 		},
 		console: async (_id, line) => void log.push(`console: ${line}`),
 		backup: async (_id, note) => {
 			if (state.failWith) throw new Error(state.failWith);
 			log.push(`backup: ${note}`);
 			return { size: 2048 };
-		},
-		sleep: async () => {
-			if (state.stopTakes > 0 && --state.stopTakes === 0) state.running = false;
 		}
 	};
 	return { deps, log, state };
@@ -149,8 +153,8 @@ describe('the actions', () => {
 	});
 
 	it('restart: gives up, and does not start a second copy, when the server will not stop', async () => {
-		const { deps, log } = fakeServer(true);
-		deps.sleep = async () => {};
+		const { deps, log, state } = fakeServer(true);
+		state.stubborn = true;
 		const task = add({ action: 'restart' });
 		expect(await S.runSchedule(id, task.id, deps)).toMatchObject({ status: 'failed' });
 		expect(log).toEqual(['stop']);

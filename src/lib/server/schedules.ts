@@ -12,9 +12,8 @@ import { can, type Actor } from './access';
 import { createBackup } from './backups';
 import { db } from './db';
 import { schedules } from './db/schema';
-import { isRunning } from './files';
-import { getInstance, instanceDir, startInstance, stopInstance } from './instances';
-import * as runner from './runner-client';
+import { getInstance, restartInstance, startInstance, stopInstance } from './instances';
+import { isRunning, sendLine } from './live-server';
 
 export type Schedule = typeof schedules.$inferSelect;
 
@@ -134,32 +133,23 @@ export type Deps = {
 	isRunning(instanceId: number): Promise<boolean>;
 	start(instanceId: number): Promise<void>;
 	stop(instanceId: number): Promise<void>;
+	/** stops the server, waits for it to exit, and starts it again; throws if it will not stop */
+	restart(instanceId: number): Promise<void>;
 	/** a line typed into the server's console */
 	console(instanceId: number, line: string): Promise<void>;
 	backup(instanceId: number, note: string): Promise<{ size: number }>;
-	sleep(ms: number): Promise<void>;
 };
 
 const realDeps: Deps = {
 	isRunning,
 	start: startInstance,
 	stop: stopInstance,
+	restart: restartInstance,
 	console: async (id, line) => {
-		await runner.send(instanceDir(id), id, { type: 'stdin', line });
+		await sendLine(id, line);
 	},
-	backup: (id, note) => createBackup(id, { kind: 'scheduled', note }),
-	sleep: (ms) => Bun.sleep(ms)
+	backup: (id, note) => createBackup(id, { kind: 'scheduled', note })
 };
-
-const STOP_WAIT_MS = 3 * 60_000;
-
-async function waitUntilStopped(instanceId: number, deps: Deps) {
-	for (let waited = 0; waited < STOP_WAIT_MS; waited += 1000) {
-		if (!(await deps.isRunning(instanceId))) return true;
-		await deps.sleep(1000);
-	}
-	return !(await deps.isRunning(instanceId));
-}
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
@@ -181,12 +171,7 @@ export async function performAction(task: Schedule, deps: Deps = realDeps): Prom
 					message: 'Stop requested; the server saves the world and shuts down'
 				};
 			case 'restart':
-				if (running) {
-					await deps.stop(id);
-					if (!(await waitUntilStopped(id, deps)))
-						return { status: 'failed', message: 'The server did not stop within three minutes' };
-				}
-				await deps.start(id);
+				await deps.restart(id);
 				return { status: 'ok', message: running ? 'Restarted' : 'Was stopped, so it was started' };
 			case 'backup': {
 				const { size } = await deps.backup(id, `Scheduled: ${task.name}`);

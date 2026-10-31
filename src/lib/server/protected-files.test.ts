@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 import { makeInstance } from '#test/instance.js';
 import * as F from './files';
+import { isRunning } from './live-server';
 import { serverDir } from './instances';
 import { assertWorldIdle, isProtected, isRewrittenOnStop, isWorldPath } from './protected-files';
 import * as uploads from './uploads';
@@ -144,7 +145,7 @@ describe('while the server runs', () => {
 
 	it('a stopped instance can be changed (no runner is attached)', async () => {
 		mkdirSync(join(root, 'world'));
-		expect(await F.isRunning(id)).toBe(false);
+		expect(await isRunning(id)).toBe(false);
 		await F.assertWorldStopped(id, 'world/level.dat', 'deleting from');
 	});
 });

@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, readdirSync, writeFileSync } from 
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
+import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -9,7 +10,6 @@ import { instances } from './db/schema';
 // The version services and the installer are replaced: what matters here is what the update does
 // to the server folder and the database, not downloading real loaders.
 const fake = vi.hoisted(() => ({
-	running: false,
 	builds: {} as Record<string, string | null | undefined>,
 	lists: {} as Record<string, string[]>,
 	known: new Set<string>(),
@@ -17,12 +17,7 @@ const fake = vi.hoisted(() => ({
 	seen: [] as { dir: string; mc: string; build?: string }[]
 }));
 
-vi.mock('./runner-client', () => ({
-	status: async () =>
-		fake.running ? { state: 'running', pid: 1, startedAt: 0, exitCode: null } : null,
-	send: async () => true,
-	subscribe: async () => null
-}));
+vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
 
 vi.mock('./java', () => ({
 	ensureJava: async () => '/fake/java',
@@ -58,8 +53,8 @@ const put = (rel: string, content = 'x') => {
 const state = () => getInstance(id)!;
 
 beforeEach(() => {
+	runner.running = false;
 	Object.assign(fake, {
-		running: false,
 		builds: { '1.21.4': '130', '1.21.5': '140', '1.20.1': '20' },
 		lists: { '1.21.4': ['130', '125', '120'], '1.21.5': ['140', '135'] },
 		known: new Set(['1.21.5', '1.21.4', '1.20.1']),
@@ -159,11 +154,11 @@ describe('startLoaderUpdate', () => {
 	});
 
 	it('refuses a running server, an unknown version and a version with no build', async () => {
-		fake.running = true;
+		runner.running = true;
 		await expect(U.startLoaderUpdate(id, { mcVersion: '1.21.5', backup: false })).rejects.toThrow(
 			/Stop the server/
 		);
-		fake.running = false;
+		runner.running = false;
 		await expect(U.startLoaderUpdate(id, { mcVersion: '9.9.9', backup: false })).rejects.toThrow(
 			/does not support/
 		);

@@ -22,6 +22,7 @@ vi.mock('./runner-client', () => ({
 }));
 
 const I = await import('./instances');
+const L = await import('./live-server');
 
 /** An instance whose start fails at once on the EULA, so reaching the start is visible without a JVM. */
 function instance() {
@@ -33,7 +34,7 @@ function instance() {
 
 beforeEach(() => {
 	Object.assign(fake, { states: [], checks: 0, sent: [] });
-	Object.assign(I.stopTiming, { timeoutMs: 200, pollMs: 5 });
+	Object.assign(L.stopTiming, { timeoutMs: 200, pollMs: 5 });
 });
 
 describe('restartInstance', () => {

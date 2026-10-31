@@ -3,6 +3,7 @@ import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as v from 'valibot';
 import { eq } from 'drizzle-orm';
+import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
 import { fakeRcon, stopFakeRcon } from '#test/fake-rcon.js';
 import { closeAllRcon } from './rcon-sessions';
@@ -10,15 +11,7 @@ import { playerActionSchema } from '#lib/schemas/players.js';
 import { db } from './db';
 import { instances } from './db/schema';
 
-// Whether the server runs is decided per test; the runner itself is replaced.
-const state = vi.hoisted(() => ({ running: false }));
-
-vi.mock('./runner-client', () => ({
-	status: async () =>
-		state.running ? { state: 'running', pid: 1, startedAt: 0, exitCode: null } : null,
-	send: async () => true,
-	subscribe: async () => null
-}));
+vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
 
 const P = await import('./players');
 const { serverDir } = await import('./instances');
@@ -38,7 +31,7 @@ const withRcon = (handler: (command: string) => string) => {
 };
 
 beforeEach(() => {
-	state.running = false;
+	runner.running = false;
 	id = makeInstance().id;
 	root = serverDir(id);
 	mkdirSync(root, { recursive: true });
@@ -219,7 +212,7 @@ describe('with the server stopped', () => {
 
 describe('with the server running', () => {
 	beforeEach(() => {
-		state.running = true;
+		runner.running = true;
 	});
 
 	it('sends commands over RCON and returns what the server says', async () => {
@@ -257,7 +250,7 @@ describe('with the server running', () => {
 
 	it('explains a server without RCON, and reports a stopped one', async () => {
 		expect(await P.onlinePlayers(id)).toMatchObject({ state: 'unavailable' });
-		state.running = false;
+		runner.running = false;
 		expect(await P.onlinePlayers(id)).toEqual({ state: 'stopped' });
 	});
 

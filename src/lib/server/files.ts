@@ -12,7 +12,8 @@ import {
 } from 'node:fs';
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 import { SMALL_FILE_BYTES } from '../upload-limits';
-import { getInstance, instanceDir, serverDir } from './instances';
+import { getInstance, serverDir } from './instances';
+import { isRunning } from './live-server';
 import {
 	assertMutable,
 	assertWorldIdle,
@@ -20,7 +21,6 @@ import {
 	isRewrittenOnStop,
 	isWorldPath
 } from './protected-files';
-import * as runner from './runner-client';
 import { readProperties } from './server-properties';
 import { listZipEntries } from './zip-entries';
 
@@ -87,11 +87,6 @@ function levelName(instanceId: number) {
 	} catch {
 		return 'world';
 	}
-}
-
-export async function isRunning(instanceId: number) {
-	const live = await runner.status(instanceDir(instanceId), instanceId);
-	return !!live && live.state !== 'exited';
 }
 
 /** Refuses to change the world (delete, rename, replace files in it) while the server runs. */
