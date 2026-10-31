@@ -57,7 +57,13 @@ vi.mock('./loaders', async (original) => ({
 	latestBuild: async (_loader: string, mc: string) => `build-${mc}`
 }));
 
+const searches = vi.hoisted(() => [] as Record<string, unknown>[]);
+
 vi.mock('./modrinth', () => ({
+	searchProjects: async (opts: Record<string, unknown>) => {
+		searches.push(opts);
+		return { hits: [], total_hits: 0 };
+	},
 	listVersions: async (project: string, _loaders: string[], mc?: string) =>
 		(fake.versions as Version[])
 			.filter((v) => v.project_id === project && (!mc || v.game_versions.includes(mc)))
@@ -323,6 +329,19 @@ describe('the .mrpack', () => {
 
 		const copy = await P.importMrpack(vetted, undefined, { vettedOnly: true });
 		expect(P.getPack(copy.id).files.every((f) => f.projectId)).toBe(true);
+	});
+});
+
+describe('searching mods', () => {
+	it('includes client-only mods such as Sodium, for the loader and Minecraft version', async () => {
+		const pack = await make();
+		await P.searchMods(pack.id, 'sodium', 10);
+		expect(searches.at(-1)).toMatchObject({
+			query: 'sodium',
+			loaders: ['fabric'],
+			mc: '1.21.1',
+			serverSide: false
+		});
 	});
 });
 

@@ -250,6 +250,9 @@ export async function searchMods(packId: number, query: string, limit: number) {
 		loaders: [pack.loader],
 		plugins: false,
 		mc: pack.mcVersion,
+		// a pack is for players too: client-only mods such as Sodium go in the .mrpack, and a server
+		// made from it skips them
+		serverSide: false,
 		limit
 	});
 	return { hits: res.hits, total: res.total_hits };
