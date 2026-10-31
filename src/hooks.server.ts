@@ -1,10 +1,11 @@
 import { redirect } from '@sveltejs/kit';
-import type { Handle, ServerInit } from '@sveltejs/kit/hooks';
+import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
 import { building } from '$app/env';
 import { getRequestEvent } from '$app/server';
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
 import { announceSetupToken } from '#lib/server/setup-token.js';
+import { addSecurityHeaders } from '#lib/server/security-headers.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
 import { startStats } from '#lib/server/stats.js';
@@ -16,7 +17,13 @@ const PUBLIC = ['/login', '/setup'];
 // that is big or of unknown length; everyone else gets a small cap before anything reads it
 const ANONYMOUS_BODY_LIMIT = 64 * 1024;
 
-export const handle: Handle = async ({ event, resolve }) => {
+const securityHeaders: Handle = async ({ event, resolve }) => {
+	const response = await resolve(event);
+	addSecurityHeaders(response.headers);
+	return response;
+};
+
+const handleAccess: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
 	const { method, headers } = event.request;
@@ -51,6 +58,8 @@ export const handle: Handle = async ({ event, resolve }) => {
 
 	return resolve(event);
 };
+
+export const handle = sequence(securityHeaders, handleAccess);
 
 export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
