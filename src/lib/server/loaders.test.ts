@@ -1,8 +1,8 @@
 import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { beforeEach, describe, expect, it } from 'vitest';
-import { launchArgs, needsJavaToInstall } from './loaders';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { launchArgs, loaderBuilds, needsJavaToInstall } from './loaders';
 
 let dir: string;
 beforeEach(() => {
@@ -62,5 +62,29 @@ describe('needsJavaToInstall', () => {
 			true,
 			true
 		]);
+	});
+});
+
+describe('loaderBuilds', () => {
+	afterEach(() => vi.restoreAllMocks());
+
+	it("reads Forge's builds for one Minecraft version from its maven list, newest first", async () => {
+		const xml = ['1.20.1-47.2.0', '1.20.1-47.3.0', '1.20.4-49.0.1', '1.20.1-47.1.0']
+			.map((v) => `<version>${v}</version>`)
+			.join('');
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(new Response(xml));
+		expect(await loaderBuilds('forge', '1.20.1')).toEqual(['47.3.0', '47.2.0', '47.1.0']);
+	});
+
+	it('leaves out Fabric betas, and offers vanilla nothing', async () => {
+		vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+			Response.json([
+				{ version: '0.16.10', stable: true },
+				{ version: '0.17.0-beta.1', stable: false },
+				{ version: '0.16.9', stable: false }
+			])
+		);
+		expect(await loaderBuilds('fabric', '1.21.1')).toEqual(['0.16.10', '0.16.9']);
+		expect(await loaderBuilds('vanilla', '1.21.1')).toEqual([]);
 	});
 });

@@ -19,6 +19,7 @@ import {
 	isKnownVersion,
 	latestBuild,
 	launchArgs,
+	loaderBuilds,
 	needsJavaToInstall,
 	type Loader
 } from './loaders';
@@ -67,16 +68,23 @@ export async function loaderInfo(instanceId: number): Promise<LoaderInfo> {
 	};
 }
 
+/** The builds an instance could move to on `mcVersion`, newest first; empty for vanilla. */
+export async function buildsFor(instanceId: number, mcVersion: string) {
+	const inst = getInstance(instanceId);
+	if (!inst) throw new Error('Instance not found');
+	return loaderBuilds(inst.loader as Loader, mcVersion);
+}
+
 /**
- * Starts moving an instance to the newest build of `mcVersion` (the current version for a plain
- * build update). The checks run now and throw; the install runs in the background while the
+ * Starts moving an instance to `build` of `mcVersion`, or its newest build when none is given
+ * (the current version for a plain build update). The checks run now and throw; the install runs in the background while the
  * instance shows as installing, and `finished` settles when it is over. The new files are built
  * beside the server and swapped in only after the installer succeeded, so a failed install
  * leaves the old server as it was.
  */
 export async function startLoaderUpdate(
 	instanceId: number,
-	opts: { mcVersion: string; backup: boolean }
+	opts: { mcVersion: string; build?: string; backup: boolean }
 ) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
@@ -86,7 +94,12 @@ export async function startLoaderUpdate(
 	if (!(await isKnownVersion(loader, opts.mcVersion)))
 		throw new Error(`${loader} does not support Minecraft ${opts.mcVersion}`);
 
-	const build = (await latestBuild(loader, opts.mcVersion)) ?? null;
+	let build: string | null | undefined;
+	if (opts.build && loader !== 'vanilla') {
+		if (!(await loaderBuilds(loader, opts.mcVersion)).includes(opts.build))
+			throw new Error(`${loader} has no build ${opts.build} for Minecraft ${opts.mcVersion}`);
+		build = opts.build;
+	} else build = (await latestBuild(loader, opts.mcVersion)) ?? null;
 	if (build === undefined || (loader !== 'vanilla' && build === null))
 		throw new Error(`There is no ${loader} build for Minecraft ${opts.mcVersion}`);
 	if (opts.mcVersion === inst.mcVersion && build === inst.loaderVersion)

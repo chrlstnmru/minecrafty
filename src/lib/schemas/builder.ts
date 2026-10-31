@@ -33,6 +33,10 @@ export const mcChangeSchema = v.object({
 	mcVersion,
 	dropIncompatible: v.optional(v.boolean(), false)
 });
+export const packLoaderVersionSchema = v.object({
+	id: idSchema,
+	loaderVersion: v.pipe(v.string(), v.trim(), v.minLength(1, 'Choose a build'), v.maxLength(64))
+});
 export const packSearchSchema = v.object({
 	id: idSchema,
 	query: v.pipe(v.string(), v.maxLength(100)),

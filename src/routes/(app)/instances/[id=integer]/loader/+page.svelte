@@ -2,7 +2,7 @@
 	import { page } from '$app/state';
 	import { toast } from 'svelte-sonner';
 	import { getInstance, listInstances } from '#lib/instances.remote.js';
-	import { loaderStatus, updateLoader } from '#lib/loader.remote.js';
+	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
@@ -25,9 +25,28 @@
 	let backup = $state(true);
 	const target = $derived(picked ?? info.mcVersion);
 	const kind = $derived(updateKind(info.mcVersion, target));
-	const sameBuild = $derived(
-		kind === 'build' && (info.latest === null || info.latest === info.loaderVersion)
+
+	// the builds of the chosen Minecraft version; the newest is used unless another is picked
+	let pickedBuild = $state<string>();
+	const builds = $derived(
+		info.loader === 'vanilla' || info.error ? null : loaderBuilds({ id, mcVersion: target })
 	);
+	const newest = $derived(builds?.current?.[0] ?? (target === info.mcVersion ? info.latest : null));
+	const build = $derived(
+		pickedBuild && builds?.current?.includes(pickedBuild) ? pickedBuild : newest
+	);
+	const buildOptions = $derived(
+		(builds?.current ?? []).map((b, i) => ({
+			value: b,
+			label:
+				target === info.mcVersion && b === info.loaderVersion
+					? `${b} (current)`
+					: i === 0
+						? `${b} (newest)`
+						: b
+		}))
+	);
+	const sameBuild = $derived(kind === 'build' && (build === null || build === info.loaderVersion));
 
 	const options = $derived(
 		(info.versions.includes(info.mcVersion)
@@ -42,7 +61,9 @@
 	const noun = $derived(info.loader === 'vanilla' ? 'server jar' : `${info.loader} build`);
 	const action = $derived(
 		kind === 'build'
-			? `Update ${noun}`
+			? build && build !== newest
+				? `Switch to ${build}`
+				: `Update ${noun}`
 			: kind === 'upgrade'
 				? `Upgrade to ${target}`
 				: `Downgrade to ${target}`
@@ -55,7 +76,9 @@
 				: sameBuild
 					? info.loader === 'vanilla'
 						? 'Vanilla has one server jar per version, so there is nothing newer for this version.'
-						: 'Already on the newest build.'
+						: build === newest
+							? 'Already on the newest build.'
+							: 'This server already runs that build.'
 					: null
 	);
 
@@ -67,13 +90,19 @@
 			// the page header shows the version too
 			void getInstance(id).refresh();
 			picked = undefined;
+			pickedBuild = undefined;
 		}
 		wasInstalling = installing;
 	});
 
 	async function update() {
 		try {
-			await updateLoader({ id, mcVersion: target, backup });
+			await updateLoader({
+				id,
+				mcVersion: target,
+				build: info.loader === 'vanilla' ? undefined : (build ?? undefined),
+				backup
+			});
 			toast.info('Update started');
 			await loaderStatus(id).refresh();
 		} catch (e) {
@@ -126,8 +155,9 @@
 		<Card.Header>
 			<Card.Title>Update</Card.Title>
 			<Card.Description>
-				Installs the newest {info.loader} build for the Minecraft version you choose. The new files are
-				prepared first, so a failed install leaves the current server as it is.
+				Installs the {info.loader} build you choose for a Minecraft version, the newest unless you pick
+				another. The new files are prepared first, so a failed install leaves the current server as it
+				is.
 			</Card.Description>
 		</Card.Header>
 		<Card.Content>
@@ -153,6 +183,23 @@
 							onValueChange={(value) => (picked = value)}
 						/>
 					</Field.Field>
+					{#if info.loader !== 'vanilla'}
+						<Field.Field>
+							<Field.Label for="loader-build">Build</Field.Label>
+							{#if builds?.error}
+								<p class="text-sm text-destructive" role="alert">Could not load the builds.</p>
+							{:else}
+								<Combobox
+									id="loader-build"
+									options={buildOptions}
+									value={build ?? ''}
+									disabled={installing || running || !buildOptions.length}
+									placeholder={builds?.loading ? 'Loading builds…' : 'No builds'}
+									onValueChange={(value) => (pickedBuild = value)}
+								/>
+							{/if}
+						</Field.Field>
+					{/if}
 
 					{#if kind === 'upgrade'}
 						<p class="rounded-md border border-warning/40 bg-warning/10 px-3 py-2 text-sm">

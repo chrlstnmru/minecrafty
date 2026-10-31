@@ -9,6 +9,7 @@ import {
 	packArgs,
 	packFileArgs,
 	packFileVersionSchema,
+	packLoaderVersionSchema,
 	packProjectArgs,
 	packSearchSchema,
 	updatePackSchema
@@ -121,6 +122,26 @@ export const setPackFileVersion = command(
 		record({
 			action: 'pack.mod',
 			summary: `Moved ${file?.title ?? 'a mod'} to ${file?.versionNumber ?? 'another version'} in the modpack ${packName(id)}`
+		});
+		await refreshed(id);
+	}
+);
+
+/** The loader builds on offer for the pack's Minecraft version, newest first. */
+export const packLoaderBuilds = query(packArgs, async ({ id }) => {
+	requirePanel('modpacks.read');
+	return userFacing(() => packs.packLoaderBuilds(id));
+});
+
+export const setPackLoaderVersion = command(
+	packLoaderVersionSchema,
+	async ({ id, loaderVersion }) => {
+		requirePanel('modpacks.write');
+		const pack = packs.getPack(id);
+		await userFacing(() => packs.setLoaderVersion(id, loaderVersion));
+		record({
+			action: 'pack.version',
+			summary: `Set the ${pack.loader} build of the modpack ${pack.name} to ${loaderVersion}`
 		});
 		await refreshed(id);
 	}

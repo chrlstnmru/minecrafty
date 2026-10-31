@@ -54,7 +54,8 @@ const version = (
 vi.mock('./loaders', async (original) => ({
 	...(await original<typeof import('./loaders')>()),
 	isKnownVersion: async (_loader: string, mc: string) => fake.mcs.includes(mc),
-	latestBuild: async (_loader: string, mc: string) => `build-${mc}`
+	latestBuild: async (_loader: string, mc: string) => `build-${mc}`,
+	loaderBuilds: async (_loader: string, mc: string) => [`build-${mc}`, `older-${mc}`]
 }));
 
 vi.mock('./modrinth', () => ({
@@ -323,6 +324,22 @@ describe('the .mrpack', () => {
 
 		const copy = await P.importMrpack(vetted, undefined, { vettedOnly: true });
 		expect(P.getPack(copy.id).files.every((f) => f.projectId)).toBe(true);
+	});
+});
+
+describe('loader version', () => {
+	it('offers the builds for the pack, pins one, and refuses one it does not have', async () => {
+		const pack = await make();
+		expect(await P.packLoaderBuilds(pack.id)).toEqual(['build-1.21.1', 'older-1.21.1']);
+		const revision = P.getPack(pack.id).revision;
+		await P.setLoaderVersion(pack.id, 'older-1.21.1');
+		expect(P.getPack(pack.id)).toMatchObject({
+			loaderVersion: 'older-1.21.1',
+			revision: revision + 1
+		});
+		await expect(P.setLoaderVersion(pack.id, 'nope')).rejects.toThrow(
+			'fabric has no build nope for Minecraft 1.21.1'
+		);
 	});
 });
 

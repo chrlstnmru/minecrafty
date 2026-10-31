@@ -6,7 +6,7 @@ import { dataDir } from './config';
 import { isHostCode } from './host-code';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
-import { isKnownVersion, latestBuild } from './loaders';
+import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
 import * as modrinth from './modrinth';
 import {
 	LOADER_KEYS,
@@ -485,6 +485,24 @@ export async function applyVersionChange(
 	});
 	bump(packId);
 	return { updated: rows.size, removed: preview.incompatible.length };
+}
+
+// ---- loader version ----
+
+/** The loader builds a pack may use on its Minecraft version, newest first. */
+export async function packLoaderBuilds(packId: number) {
+	const pack = requirePack(packId);
+	return loaderBuilds(pack.loader, pack.mcVersion);
+}
+
+/** Pins the pack to one loader build; a change of Minecraft version moves it to that version's newest. */
+export async function setLoaderVersion(packId: number, loaderVersion: string) {
+	const pack = requirePack(packId);
+	if (!(await loaderBuilds(pack.loader, pack.mcVersion)).includes(loaderVersion))
+		throw new Error(`${pack.loader} has no build ${loaderVersion} for Minecraft ${pack.mcVersion}`);
+	if (loaderVersion === pack.loaderVersion) return;
+	db.update(localPacks).set({ loaderVersion }).where(eq(localPacks.id, packId)).run();
+	bump(packId);
 }
 
 // ---- config files ----
