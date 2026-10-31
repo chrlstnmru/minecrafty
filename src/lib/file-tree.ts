@@ -66,3 +66,45 @@ export function movedPath(from: string, folder: string): string | null {
 	if (folder === from || folder.startsWith(`${from}/`)) return null;
 	return to;
 }
+
+const pathsOf = <T>(node: TreeNode<T>): string[] =>
+	node.kind === 'file' ? [node.path] : [node.path, ...node.children.flatMap(pathsOf)];
+
+const filesOf = <T>(node: TreeNode<T>): string[] =>
+	node.kind === 'file' ? [node.path] : node.children.flatMap(filesOf);
+
+/**
+ * The selection with `node` turned on or off, a folder with everything in it. Turning one off also
+ * takes off the folders around it, which are no longer wholly chosen.
+ */
+export function toggleNode<T>(
+	selection: ReadonlySet<string>,
+	node: TreeNode<T>,
+	on: boolean
+): Set<string> {
+	const next = new Set(selection);
+	for (const path of pathsOf(node)) {
+		if (on) next.add(path);
+		else next.delete(path);
+	}
+	if (!on) {
+		const parts = node.path.split('/');
+		for (let length = 1; length < parts.length; length++)
+			next.delete(parts.slice(0, length).join('/'));
+	}
+	return next;
+}
+
+/** Whether a row reads as chosen: a folder is chosen when all its files are, 'mixed' when some are. */
+export function nodeState<T>(node: TreeNode<T>, selection: ReadonlySet<string>): boolean | 'mixed' {
+	const files = filesOf(node);
+	if (node.kind === 'file' || !files.length) return selection.has(node.path);
+	const chosen = files.filter((path) => selection.has(path)).length;
+	return chosen === 0 ? false : chosen === files.length ? true : 'mixed';
+}
+
+/** The chosen paths without those inside another chosen folder, which that folder already covers. */
+export function topLevelPaths(paths: Iterable<string>): string[] {
+	const all = [...new Set(paths)];
+	return all.filter((path) => !all.some((other) => other !== path && path.startsWith(`${other}/`)));
+}

@@ -11,7 +11,10 @@
 		saving,
 		canSave,
 		onsave,
-		ondiscard
+		ondiscard,
+		noun = ['change', 'changes'],
+		saveLabel = 'Save changes',
+		discardLabel = 'Discard'
 	}: {
 		/** What the changes are to, named after the count ("3 unsaved changes to server.properties"). */
 		subject?: string;
@@ -21,6 +24,10 @@
 		canSave: boolean;
 		onsave: () => void;
 		ondiscard: () => void;
+		/** What is counted, as [one, many]; changes by default. */
+		noun?: [string, string];
+		saveLabel?: string;
+		discardLabel?: string;
 	} = $props();
 </script>
 
@@ -36,13 +43,14 @@
 			{#if error}
 				<span class="text-destructive">{error}</span>
 			{:else}
-				{changeCount} unsaved {changeCount === 1 ? 'change' : 'changes'}
+				{changeCount} unsaved {changeCount === 1 ? noun[0] : noun[1]}
 				{#if subject}to <span class="font-semibold">{subject}</span>{/if}
 			{/if}
 		</p>
 		<div class="flex gap-1.5">
-			<Button variant="ghost" size="sm" onclick={ondiscard} disabled={saving}>Discard</Button>
-			<Button size="sm" onclick={onsave} loading={saving} disabled={!canSave}>Save changes</Button>
+			<Button variant="ghost" size="sm" onclick={ondiscard} disabled={saving}>{discardLabel}</Button
+			>
+			<Button size="sm" onclick={onsave} loading={saving} disabled={!canSave}>{saveLabel}</Button>
 		</div>
 	</div>
 </div>

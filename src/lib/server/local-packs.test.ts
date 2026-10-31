@@ -380,13 +380,18 @@ describe('config files', () => {
 		const b = P.readOverrideText(pack.id, 'b.txt').hash;
 		const before = P.getPack(pack.id).revision;
 
-		expect(
-			await P.writeOverrideTexts(pack.id, [
-				{ rel: 'a.txt', content: 'one!', baseHash: a },
-				{ rel: 'b.txt', content: 'two', baseHash: b },
-				{ rel: 'config/c.toml', content: 'x = 1' }
-			])
-		).toBe(2);
+		const saved = await P.writeOverrideTexts(pack.id, [
+			{ rel: 'a.txt', content: 'one!', baseHash: a },
+			{ rel: 'b.txt', content: 'two', baseHash: b },
+			{ rel: 'config/c.toml', content: 'x = 1' }
+		]);
+		expect(saved.changed).toBe(2);
+		// each hash is what a file reads as now, so the next save can build on it
+		expect(saved.hashes).toEqual({
+			'a.txt': P.readOverrideText(pack.id, 'a.txt').hash,
+			'b.txt': b,
+			'config/c.toml': P.readOverrideText(pack.id, 'config/c.toml').hash
+		});
 		expect(P.getPack(pack.id).revision).toBe(before + 1);
 		expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('one!');
 		expect(P.readOverrideText(pack.id, 'config/c.toml').content).toBe('x = 1');
@@ -420,7 +425,8 @@ describe('config files', () => {
 		const hash = P.readOverrideText(pack.id, 'a.txt').hash;
 		const before = P.getPack(pack.id).revision;
 		expect(
-			await P.writeOverrideTexts(pack.id, [{ rel: 'a.txt', content: 'one', baseHash: hash }])
+			(await P.writeOverrideTexts(pack.id, [{ rel: 'a.txt', content: 'one', baseHash: hash }]))
+				.changed
 		).toBe(0);
 		expect(P.getPack(pack.id).revision).toBe(before);
 	});

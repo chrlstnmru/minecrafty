@@ -52,6 +52,16 @@ const LANGUAGES: Record<string, string> = {
 	ini: 'ini'
 };
 
+/** The scheme of texts an editor keeps under a `modelKey`. */
+export const MODEL_SCHEME = 'minecrafty-config';
+
+/** Frees the texts kept under keys that start with `prefix`. */
+export function disposeModels(prefix: string) {
+	for (const model of monaco.editor.getModels())
+		if (model.uri.scheme === MODEL_SCHEME && model.uri.path.startsWith(`/${prefix}`))
+			model.dispose();
+}
+
 export const languageFor = (name: string) =>
 	LANGUAGES[name.toLowerCase().match(/\.([^./]+)$/)?.[1] ?? ''] ?? 'plaintext';
 

@@ -1,5 +1,7 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
+	import ArrowsMoveIcon from '@tabler/icons-svelte/icons/arrows-move';
+	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
 	import FileSearchIcon from '@tabler/icons-svelte/icons/file-search';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
@@ -8,19 +10,25 @@
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
 	import WandIcon from '@tabler/icons-svelte/icons/wand';
+	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import {
 		getLocalPack,
 		movePackConfig,
 		movePackConfigFolder,
+		movePackConfigs,
 		readPackConfig,
 		removePackConfigFolder,
+		removePackConfigs,
 		removePackOverride,
-		savePackConfig
+		savePackConfigs
 	} from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import FileTree from '#lib/components/file-tree.svelte';
+	import SaveBar from '#lib/components/save-bar.svelte';
+	import SelectMenu from '#lib/components/select-menu.svelte';
+	import SelectionBar from '#lib/components/selection-bar.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
@@ -32,7 +40,7 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
-	import { buildFileTree, movedPath, TREE_DRAG_TYPE } from '#lib/file-tree.js';
+	import { buildFileTree, movedPath, TREE_DRAG_TYPE, topLevelPaths } from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
 	import {
 		batches,
@@ -63,19 +71,28 @@
 	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
 	const joinPath = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
 
+	// Every file opened here keeps its own text, so switching file never loses an edit. `loaded` is
+	// what the server had when it was read (or last saved), `hash` is what a save builds on, and a
+	// file made here is `isNew` until its first save.
+	type Draft = { content: string; loaded: string; hash?: string; isNew: boolean };
 	let open = $state<string | null>(null);
-	// a file made here that is not on the server until the first save
-	let isNew = $state(false);
-	let draft = $state('');
-	let loaded = $state('');
-	let hash = $state<string>();
-
-	// the new file shows in the tree before the server has it
-	const listed: { path: string; size: number; pending?: boolean }[] = $derived(
-		isNew && open && !files.some((f) => f.path === open)
-			? [...files, { path: open, size: 0, pending: true }]
-			: files
+	let drafts = $state<Record<string, Draft>>({});
+	const entry = $derived(open ? drafts[open] : undefined);
+	const isDirty = (d: Draft) => d.isNew || d.content !== d.loaded;
+	const unsavedPaths = $derived(
+		Object.entries(drafts)
+			.filter(([, d]) => isDirty(d))
+			.map(([path]) => path)
 	);
+	let editorShown = false;
+
+	// the new files show in the tree before the server has them
+	const listed: { path: string; size: number; pending?: boolean }[] = $derived([
+		...files,
+		...Object.entries(drafts)
+			.filter(([path, d]) => d.isNew && !files.some((f) => f.path === path))
+			.map(([path]) => ({ path, size: 0, pending: true }))
+	]);
 	// folders that are new here or lost their last file: the pack cannot keep an empty folder, so the
 	// server has no trace of them, but they stay in the tree until the page is reloaded or they are deleted
 	let emptyFolders = $state<string[]>([]);
@@ -94,92 +111,157 @@
 	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
 	const where = $derived(target || 'overrides');
 
-	const file = $derived(open && !isNew ? readPackConfig({ id, path: open }) : null);
-	const dirty = $derived(open !== null && draft !== loaded);
-	// a new file counts as unsaved even while empty, so it is never dropped without asking
-	const unsaved = $derived(dirty || isNew);
+	const file = $derived(open && entry && !entry.isNew ? readPackConfig({ id, path: open }) : null);
+	const dirty = $derived(entry ? entry.content !== entry.loaded : false);
+	const unsaved = $derived(entry ? isDirty(entry) : false);
 
 	// load the file into the editor when it is opened, and again after a save
 	$effect(() => {
 		const current = file?.current;
-		if (!current) return;
-		if (draft === loaded) draft = current.content;
-		loaded = current.content;
-		hash = current.hash;
-	});
-
-	let confirmDiscard = $state(false);
-	let afterDiscard = $state<(() => void) | null>(null);
-
-	/** Runs `action` now, or once the user has agreed to drop the unsaved edits. */
-	function unlessDirty(action: () => void) {
-		if (!unsaved) return action();
-		afterDiscard = action;
-		confirmDiscard = true;
-	}
-
-	/** The dialog's Discard: close it first, so nothing the action does can leave it open. */
-	function discard() {
-		confirmDiscard = false;
-		const next = afterDiscard;
-		afterDiscard = null;
-		if (isNew) show(null);
-		else draft = loaded;
-		next?.();
-	}
-
-	/** The Discard button: an edit goes back to the saved text (undo brings it back), a new file is dropped. */
-	function discardEdits() {
-		if (isNew) unlessDirty(() => show(null));
-		else draft = loaded;
-	}
-
-	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
-	beforeNavigate((navigation) => {
-		if (!unsaved) return;
-		navigation.cancel();
-		if (navigation.type === 'leave' || !navigation.to) return;
-		const { url } = navigation.to;
-		unlessDirty(() => void goto(url));
+		const path = open;
+		if (!current || !path) return;
+		untrack(() => {
+			const draft = drafts[path];
+			if (!draft) return;
+			if (draft.content === draft.loaded) draft.content = current.content;
+			draft.loaded = current.content;
+			draft.hash = current.hash;
+		});
 	});
 
 	function show(path: string | null, created = false) {
 		open = path;
-		isNew = created;
-		draft = '';
-		loaded = '';
-		hash = undefined;
+		if (!path) return;
+		editorShown = true;
+		drafts[path] ??= { content: '', loaded: '', isNew: created };
 	}
 
-	async function reload() {
-		draft = '';
-		loaded = '';
-		await file?.refresh();
+	// the editor keeps each file's text and undo history; free them when the panel goes
+	onDestroy(() => {
+		if (editorShown)
+			void import('./config-editor/monaco.js').then((editor) => editor.disposeModels(`${id}/`));
+	});
+
+	/** Puts a file back to its saved text; a file made here is dropped. */
+	function revert(path: string) {
+		const draft = drafts[path];
+		if (!draft) return;
+		if (draft.isNew) {
+			delete drafts[path];
+			if (open === path) open = null;
+		} else draft.content = draft.loaded;
 	}
 
-	async function save() {
-		if (!open || !canWrite || !unsaved) return;
+	let discarding = $state<{ paths: string[]; then?: () => void } | null>(null);
+	let discardOpen = $state(false);
+
+	function askDiscard(paths: string[], then?: () => void) {
+		discarding = { paths, then };
+		discardOpen = true;
+	}
+
+	/** The dialog's Discard: close it first, so nothing the action does can leave it open. */
+	function discard() {
+		discardOpen = false;
+		const asked = discarding;
+		discarding = null;
+		if (!asked) return;
+		for (const path of asked.paths) revert(path);
+		asked.then?.();
+	}
+
+	/** The Discard button: an edit goes back to the saved text (undo brings it back), a new file is asked about. */
+	function discardEdits() {
+		if (!open || !entry) return;
+		if (entry.isNew) askDiscard([open]);
+		else revert(open);
+	}
+
+	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
+	beforeNavigate((navigation) => {
+		if (!unsavedPaths.length) return;
+		navigation.cancel();
+		if (navigation.type === 'leave' || !navigation.to) return;
+		const { url } = navigation.to;
+		askDiscard(unsavedPaths, () => void goto(url));
+	});
+
+	let saving = $state(false);
+	let saveError = $state<string>();
+	// the file a failed save names, marked in the tree
+	let failedPath = $state<string>();
+
+	$effect(() => {
+		if (unsavedPaths.length) return;
+		saveError = undefined;
+		failedPath = undefined;
+	});
+
+	/** Saves these files together, as one revision; one that fails stops them all. */
+	async function saveAll(paths: string[]) {
+		if (!canWrite || saving) return;
+		const sent = paths.flatMap((path) => {
+			const draft = drafts[path];
+			return draft && isDirty(draft)
+				? [{ path, content: draft.content, baseHash: draft.isNew ? undefined : draft.hash }]
+				: [];
+		});
+		if (!sent.length) return;
+		saving = true;
+		saveError = undefined;
+		failedPath = undefined;
 		try {
-			await savePackConfig({
-				id,
-				path: open,
-				content: draft,
-				baseHash: isNew ? undefined : hash
-			});
-			isNew = false;
-			toast.success('Saved');
+			const { hashes } = await savePackConfigs({ id, files: sent });
+			for (const { path, content } of sent) {
+				const draft = drafts[path];
+				if (!draft) continue;
+				// edits made while the save was going out stay unsaved
+				draft.loaded = content;
+				draft.hash = hashes[path];
+				draft.isNew = false;
+			}
+			toast.success(sent.length === 1 ? 'Saved' : `Saved ${sent.length} files`);
 		} catch (e) {
-			const text = message(e, 'Could not save the file');
-			if (text.includes('changed since you opened it'))
-				toast.error(text, { action: { label: 'Reload', onClick: () => unlessDirty(reload) } });
-			else toast.error(text);
+			const text = message(e, 'Could not save the files');
+			saveError = text;
+			failedPath = sent.find((f) => text.startsWith(`${f.path}: `))?.path;
+			const stale = failedPath && text.includes('changed since you opened it');
+			if (stale) {
+				const path = failedPath!;
+				toast.error(text, {
+					action: { label: 'Reload', onClick: () => askDiscard([path], () => void refetch(path)) }
+				});
+			} else toast.error(text);
+		} finally {
+			saving = false;
+		}
+	}
+
+	const save = () => (open ? saveAll([open]) : undefined);
+
+	/** Reads a file again, as the server has it now, replacing what was in the editor. */
+	async function refetch(path: string) {
+		try {
+			await readPackConfig({ id, path }).refresh();
+			const fresh = await readPackConfig({ id, path });
+			const draft = drafts[path];
+			if (draft) {
+				draft.content = draft.loaded = fresh.content;
+				draft.hash = fresh.hash;
+			}
+			if (failedPath === path) {
+				failedPath = undefined;
+				saveError = undefined;
+			}
+		} catch (e) {
+			toast.error(message(e, 'Could not read the file again'));
 		}
 	}
 
 	async function format() {
-		if (!open) return;
+		if (!open || !entry) return;
 		try {
-			draft = await formatConfig(open, draft);
+			entry.content = await formatConfig(open, entry.content);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Could not format this file');
 		}
@@ -194,7 +276,7 @@
 		try {
 			await removePackOverride({ id, path });
 			keepFolder(dirOf(path));
-			if (open === path) show(null);
+			dropDrafts(path);
 		} catch (e) {
 			toast.error(message(e, 'Could not remove the file'));
 		}
@@ -209,11 +291,27 @@
 	let deletingFolder = $state<{ path: string; count: number } | null>(null);
 	let deletingOpen = $state(false);
 
+	/** Drops the texts held for a file, or for everything in a folder; closes the editor if it was on one. */
+	function dropDrafts(path: string) {
+		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
+		if (open && under(open, path)) open = null;
+	}
+
+	/** Moves the texts held for a file, or for everything in a folder, to where it went. */
+	function rekeyDrafts(from: string, to: string) {
+		for (const key of Object.keys(drafts)) {
+			if (!under(key, from)) continue;
+			drafts[rebase(key, from, to)] = drafts[key];
+			delete drafts[key];
+		}
+		if (open && under(open, from)) open = rebase(open, from, to);
+	}
+
 	/** Forgets a folder the page was showing: its empty-folder marks, the target and the open file. */
 	function forgetFolder(path: string) {
 		emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
 		if (under(targetDir, path)) targetDir = dirOf(path);
-		if (open && under(open, path)) show(null);
+		dropDrafts(path);
 	}
 
 	function askDeleteFolder(path: string) {
@@ -303,14 +401,14 @@
 	async function moveFile(from: string, to: string) {
 		if (from === to) return;
 		// a new file that is not saved yet is not on the server
-		if (isNew && open === from) {
-			open = to;
+		if (drafts[from]?.isNew) {
+			rekeyDrafts(from, to);
 			return;
 		}
 		try {
 			await movePackConfig({ id, from, to });
 			keepFolder(dirOf(from));
-			if (open === from) open = to;
+			rekeyDrafts(from, to);
 			toast.success(`Moved ${from} to ${to}`);
 		} catch (e) {
 			toast.error(message(e, 'Could not move the file'));
@@ -325,7 +423,7 @@
 			keepFolder(dirOf(from));
 			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
 			targetDir = rebase(targetDir, from, to);
-			if (open) open = rebase(open, from, to);
+			rekeyDrafts(from, to);
 			toast.success(`Moved ${from} to ${to}`);
 		} catch (e) {
 			toast.error(message(e, 'Could not move the folder'));
@@ -352,7 +450,107 @@
 		}
 		if (from) return moveFile(from, to);
 		targetDir = dirOf(to);
-		return unlessDirty(() => show(to, true));
+		show(to, true);
+	}
+
+	// Rows chosen with the checkboxes. A file made here, or a folder that holds no file yet, is not on
+	// the server, so there is nothing to delete, move or download: those get no checkbox.
+	let selection = $state<ReadonlySet<string>>(new Set());
+	const onServer = (path: string) => files.some((f) => under(f.path, path));
+
+	$effect(() => {
+		const kept = [...selection].filter(onServer);
+		if (kept.length !== selection.size) selection = new Set(kept);
+	});
+
+	const chosen = $derived(topLevelPaths(selection));
+	const chosenFiles = $derived(files.filter((f) => chosen.some((path) => under(f.path, path))));
+	const chosenLabel = $derived.by(() => {
+		const folders = chosen.filter((path) => !files.some((f) => f.path === path)).length;
+		const loose = chosen.length - folders;
+		return [
+			folders ? `${folders} ${folders === 1 ? 'folder' : 'folders'}` : '',
+			loose ? `${loose} ${loose === 1 ? 'file' : 'files'}` : ''
+		]
+			.filter(Boolean)
+			.join(' and ');
+	});
+	const chosenUnsaved = $derived(
+		unsavedPaths.filter((path) => chosen.some((c) => under(path, c)) && !drafts[path]?.isNew)
+	);
+
+	let bulkDeleteOpen = $state(false);
+	let bulkMoveOpen = $state(false);
+	let moveTo = $state('');
+	const moveOptions = $derived([
+		{ value: '', label: 'overrides (the server folder)' },
+		...[...folderPaths]
+			.filter((folder) => !chosen.some((path) => under(folder, path)))
+			.sort((a, b) => a.localeCompare(b))
+			.map((folder) => ({ value: folder, label: folder }))
+	]);
+
+	async function bulkDelete() {
+		bulkDeleteOpen = false;
+		const paths = chosen;
+		try {
+			await removePackConfigs({ id, paths });
+			for (const path of paths) {
+				emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
+				if (under(targetDir, path)) targetDir = dirOf(path);
+				dropDrafts(path);
+				keepFolder(dirOf(path));
+			}
+			selection = new Set();
+			toast.success(`Deleted ${chosenLabel}`);
+		} catch (e) {
+			toast.error(message(e, 'Could not delete them'));
+		}
+	}
+
+	async function bulkMove() {
+		bulkMoveOpen = false;
+		const paths = chosen;
+		const folder = moveTo;
+		try {
+			await movePackConfigs({ id, paths, folder });
+			for (const from of paths) {
+				const to = joinPath(folder, nameOf(from));
+				if (to === from) continue;
+				keepFolder(dirOf(from));
+				emptyFolders = emptyFolders.map((empty) => rebase(empty, from, to));
+				targetDir = rebase(targetDir, from, to);
+				rekeyDrafts(from, to);
+			}
+			selection = new Set();
+			toast.success(`Moved ${chosenLabel} to ${folder || 'the server folder'}`);
+		} catch (e) {
+			toast.error(message(e, 'Could not move them'));
+		}
+	}
+
+	let downloading = $state(false);
+
+	async function download() {
+		downloading = true;
+		try {
+			const body = new FormData();
+			for (const path of chosen) body.append('path', path);
+			const res = await fetch(`/modpacks/${id}/overrides/download`, { method: 'POST', body });
+			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
+			const name = /filename\*=UTF-8''([^;]+)/.exec(
+				res.headers.get('Content-Disposition') ?? ''
+			)?.[1];
+			const link = document.createElement('a');
+			link.href = URL.createObjectURL(await res.blob());
+			link.download = name ? decodeURIComponent(name) : 'config-files.zip';
+			link.click();
+			setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+		} catch (e) {
+			toast.error(e instanceof Error && e.message ? e.message : 'Could not make the zip');
+		} finally {
+			downloading = false;
+		}
 	}
 
 	let uploading = $state(false);
@@ -548,18 +746,22 @@
 						status={(file) =>
 							file.pending
 								? { tone: 'info', label: 'New file, not saved yet' }
-								: file.path === open && dirty
-									? { tone: 'warning', label: 'Unsaved changes' }
-									: undefined}
+								: file.path === failedPath
+									? { tone: 'danger', label: 'Stopped the save' }
+									: drafts[file.path] && isDirty(drafts[file.path])
+										? { tone: 'warning', label: 'Unsaved changes' }
+										: undefined}
 						folderStatus={(folder) =>
 							emptyFolders.includes(folder.path) && !listed.some((f) => under(f.path, folder.path))
 								? { tone: 'info', label: 'Empty folder, not kept in the pack' }
 								: undefined}
-						onselect={(file) =>
-							unlessDirty(() => {
-								targetDir = dirOf(file.path);
-								show(file.path);
-							})}
+						onselect={(file) => {
+							targetDir = dirOf(file.path);
+							show(file.path);
+						}}
+						{selection}
+						onselection={(next) => (selection = next)}
+						checkable={onServer}
 						onselectfolder={(path) => (targetDir = path)}
 						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
 						onmove={canWrite ? moveInto : undefined}
@@ -591,7 +793,7 @@
 									size="icon"
 									class="ms-auto"
 									aria-label="Discard the new file {file.path}"
-									onclick={() => unlessDirty(() => show(null))}
+									onclick={() => askDiscard([file.path])}
 								>
 									<TrashIcon />
 								</Button>
@@ -646,7 +848,7 @@
 			{:else}
 				<div class="flex flex-wrap items-center gap-2">
 					<span class="min-w-0 flex-1 truncate font-mono text-sm">{open}</span>
-					{#if isNew}
+					{#if entry?.isNew}
 						<span class="text-xs text-muted-foreground">New file, not saved yet</span>
 					{:else if dirty}
 						<span class="text-xs text-muted-foreground">Unsaved changes</span>
@@ -659,18 +861,19 @@
 							<Separator orientation="vertical" />
 						{/if}
 						<Button variant="ghost" onclick={discardEdits} disabled={!unsaved}>Discard</Button>
-						<Button onClickPromise={save} disabled={!unsaved}>Save</Button>
+						<Button onclick={save} loading={saving} disabled={!unsaved}>Save</Button>
 					{/if}
 				</div>
 				{#if file?.error}
 					<p class="text-sm text-destructive" role="alert">
 						{message(file.error, 'Could not open this file.')}
 					</p>
-				{:else if isNew || file?.current}
+				{:else if entry && (entry.isNew || file?.current)}
 					{#key open}
 						<CodeEditor
-							bind:value={draft}
+							bind:value={entry.content}
 							filename={open}
+							modelKey="{id}/{open}"
 							readonly={!canWrite}
 							onsave={save}
 							onformat={canWrite ? format : undefined}
@@ -760,18 +963,22 @@
 </AlertDialog.Root>
 
 <AlertDialog.Root
-	bind:open={confirmDiscard}
+	bind:open={discardOpen}
 	onOpenChange={(isOpen) => {
-		if (!isOpen) afterDiscard = null;
+		if (!isOpen) discarding = null;
 	}}
 >
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>
 			<AlertDialog.Description>
-				{isNew
-					? 'This new file has not been saved yet.'
-					: 'The edits to this file have not been saved.'}
+				{#if discarding && discarding.paths.length > 1}
+					{discarding.paths.length} files have changes that have not been saved.
+				{:else if discarding && drafts[discarding.paths[0]]?.isNew}
+					This new file has not been saved yet.
+				{:else}
+					The edits to this file have not been saved.
+				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
@@ -780,3 +987,84 @@
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
+
+<AlertDialog.Root bind:open={bulkDeleteOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Delete {chosenLabel}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				This removes {chosenFiles.length}
+				{chosenFiles.length === 1 ? 'file' : 'files'} from the pack. It cannot be undone.
+				{#if chosenUnsaved.length}
+					Your unsaved edits to {chosenUnsaved.length === 1
+						? 'one of them'
+						: `${chosenUnsaved.length} of them`} are lost too.
+				{/if}
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Keep them</AlertDialog.Cancel>
+			<AlertDialog.Action variant="destructive" onclick={bulkDelete}>Delete</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
+
+<Dialog.Root bind:open={bulkMoveOpen}>
+	<Dialog.Content>
+		<Dialog.Header>
+			<Dialog.Title>Move {chosenLabel}</Dialog.Title>
+			<Dialog.Description>
+				Into the folder you choose, each keeping its name. Nothing moves if a name is already there.
+			</Dialog.Description>
+		</Dialog.Header>
+		<Field.Field>
+			<Field.Label for="move-to">Move to</Field.Label>
+			<SelectMenu id="move-to" bind:value={moveTo} options={moveOptions} />
+		</Field.Field>
+		<Dialog.Footer>
+			<Button type="button" variant="ghost" onclick={() => (bulkMoveOpen = false)}>Cancel</Button>
+			<Button onclick={bulkMove}>Move</Button>
+		</Dialog.Footer>
+	</Dialog.Content>
+</Dialog.Root>
+
+{#if canWrite && unsavedPaths.length}
+	<SaveBar
+		changeCount={unsavedPaths.length}
+		noun={['file', 'files']}
+		error={saveError}
+		{saving}
+		canSave={!saving}
+		saveLabel="Save all"
+		discardLabel="Discard all"
+		onsave={() => saveAll(unsavedPaths)}
+		ondiscard={() => askDiscard(unsavedPaths)}
+	/>
+{/if}
+
+{#if chosen.length}
+	<SelectionBar
+		label={chosenLabel}
+		raised={canWrite && unsavedPaths.length > 0}
+		onclear={() => (selection = new Set())}
+	>
+		{#if canWrite}
+			<Button variant="ghost" size="sm" onclick={() => (bulkDeleteOpen = true)}>
+				<TrashIcon />Delete
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
+				onclick={() => {
+					moveTo = '';
+					bulkMoveOpen = true;
+				}}
+			>
+				<ArrowsMoveIcon />Move
+			</Button>
+		{/if}
+		<Button variant="ghost" size="sm" loading={downloading} onclick={download}>
+			<DownloadIcon />Download
+		</Button>
+	</SelectionBar>
+{/if}

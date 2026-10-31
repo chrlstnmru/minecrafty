@@ -519,7 +519,7 @@ export function readOverrideText(packId: number, rel: string) {
 	return { content: decodeText(bytes), size: stat.size, hash: sha1(bytes) };
 }
 
-/** Checks one edited text against the disk; null when it is the text already there. */
+/** Checks one edited text against the disk. `changed` is false when it is the text already there. */
 function prepareText(packId: number, rel: string, content: string, baseHash?: string) {
 	const { dest, stat } = overrideFile(packId, rel);
 	if (!isEditable(basename(dest))) throw new Error('This file type cannot be edited here');
@@ -535,9 +535,9 @@ function prepareText(packId: number, rel: string, content: string, baseHash?: st
 		if (!stat || stat.size > MAX_EDIT_BYTES) throw changed;
 		const current = readFileSync(dest);
 		if (sha1(current) !== baseHash) throw changed;
-		if (Buffer.compare(current, bytes) === 0) return null;
+		if (Buffer.compare(current, bytes) === 0) return { rel, bytes, changed: false, hash: baseHash };
 	}
-	return { rel, bytes };
+	return { rel, bytes, changed: true, hash: sha1(bytes) };
 }
 
 /**
@@ -552,32 +552,35 @@ export async function writeOverrideText(
 	baseHash?: string
 ) {
 	const prepared = prepareText(packId, rel, content, baseHash);
-	if (prepared) await saveOverride(packId, rel, prepared.bytes);
+	if (prepared.changed) await saveOverride(packId, rel, prepared.bytes);
 }
 
 /**
  * Saves several edited texts as one revision, all or none: each is checked as in
  * `writeOverrideText` before the first is written, and the error names the file that failed.
- * Returns how many files changed.
+ * Returns how many files changed, and the hash of every file's text as it is now, to save over next.
  */
 export async function writeOverrideTexts(
 	packId: number,
 	files: { rel: string; content: string; baseHash?: string }[]
 ) {
-	const prepared: { rel: string; bytes: Uint8Array }[] = [];
+	const prepared: { rel: string; bytes: Uint8Array; changed: boolean; hash: string }[] = [];
 	const seen = new Set<string>();
 	for (const { rel, content, baseHash } of files) {
 		if (seen.has(rel)) throw new Error(`${rel} is in the list twice`);
 		seen.add(rel);
 		try {
-			const text = prepareText(packId, rel, content, baseHash);
-			if (text) prepared.push(text);
+			prepared.push(prepareText(packId, rel, content, baseHash));
 		} catch (e) {
 			throw new Error(`${rel}: ${e instanceof Error ? e.message : 'could not be saved'}`);
 		}
 	}
-	await saveOverrides(packId, prepared);
-	return prepared.length;
+	const changed = prepared.filter((text) => text.changed);
+	await saveOverrides(packId, changed);
+	return {
+		changed: changed.length,
+		hashes: Object.fromEntries(prepared.map((text) => [text.rel, text.hash]))
+	};
 }
 
 const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);

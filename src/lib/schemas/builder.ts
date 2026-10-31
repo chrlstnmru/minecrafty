@@ -47,12 +47,6 @@ export const packSearchSchema = v.object({
 const overridePath = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
 
 export const overridePathSchema = v.object({ id: idSchema, path: overridePath });
-export const savePackConfigSchema = v.object({
-	id: idSchema,
-	path: overridePath,
-	content: v.pipe(v.string(), v.maxLength(2_200_000)),
-	baseHash: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)))
-});
 export const savePackConfigsSchema = v.object({
 	id: idSchema,
 	files: v.pipe(

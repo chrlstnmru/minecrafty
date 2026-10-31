@@ -6,11 +6,12 @@ import { zipStream } from '#lib/server/zip-writer.js';
 
 import type { RequestHandler } from './$types';
 
-// A real download needs a plain GET the browser can follow, which a remote function is not.
-export const GET: RequestHandler = ({ params, url }) => {
+// A POST, not a GET: a long list of paths would not fit in a URL. The page sends the form and saves
+// the answer as a file.
+export const POST: RequestHandler = async ({ params, request }) => {
 	requirePanel('modpacks.read');
 
-	const paths = url.searchParams.getAll('path');
+	const paths = (await request.formData()).getAll('path').map(String);
 	if (paths.length > 500) error(400, 'Choose fewer files and folders');
 	let built;
 	try {

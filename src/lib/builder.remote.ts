@@ -17,7 +17,6 @@ import {
 	packLoaderVersionSchema,
 	packProjectArgs,
 	packSearchSchema,
-	savePackConfigSchema,
 	savePackConfigsSchema,
 	updatePackSchema
 } from '#lib/schemas/builder.js';
@@ -200,24 +199,6 @@ export const readPackConfig = query(overridePathSchema, async ({ id, path }) => 
 	return userFacing(async () => packs.readOverrideText(id, path));
 });
 
-/** Without `baseHash` the file is new; with it, the save is refused if the file changed meanwhile. */
-export const savePackConfig = command(
-	savePackConfigSchema,
-	async ({ id, path, content, baseHash }) => {
-		const user = requirePanel('modpacks.write');
-		await userFacing(async () => {
-			assertMayWriteCode(user, path);
-			await packs.writeOverrideText(id, path, content, baseHash);
-		});
-		record({
-			action: 'pack.config',
-			summary: `${baseHash === undefined ? 'Added' : 'Edited'} the config file ${path} ${baseHash === undefined ? 'to' : 'in'} the modpack ${packName(id)}`
-		});
-		await readPackConfig({ id, path }).refresh();
-		await refreshed(id);
-	}
-);
-
 const listed = (paths: string[]) =>
 	paths.length > 3
 		? `${paths.slice(0, 3).join(', ')} and ${paths.length - 3} more`
@@ -226,7 +207,7 @@ const listed = (paths: string[]) =>
 /** Saves every edited file together, as one revision; one that fails stops them all. */
 export const savePackConfigs = command(savePackConfigsSchema, async ({ id, files }) => {
 	const user = requirePanel('modpacks.write');
-	const saved = await userFacing(async () => {
+	const { changed: saved, hashes } = await userFacing(async () => {
 		for (const file of files) assertMayWriteCode(user, file.path);
 		return packs.writeOverrideTexts(
 			id,
@@ -240,6 +221,7 @@ export const savePackConfigs = command(savePackConfigsSchema, async ({ id, files
 		});
 	await Promise.all(files.map((f) => readPackConfig({ id, path: f.path }).refresh()));
 	await refreshed(id);
+	return { hashes };
 });
 
 export const removePackConfigs = command(overridePathsSchema, async ({ id, paths }) => {
