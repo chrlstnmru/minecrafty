@@ -418,7 +418,7 @@
 		</Card.Description>
 	</Card.Header>
 	<Card.Content
-		class="grid min-h-0 flex-1 gap-4 max-md:overflow-y-auto md:grid-cols-[18rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
+		class="grid min-h-0 flex-1 gap-4 max-md:overflow-y-auto md:grid-cols-[24rem_minmax(0,1fr)] md:grid-rows-[minmax(0,1fr)]"
 	>
 		<div
 			role="group"

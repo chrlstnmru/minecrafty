@@ -99,13 +99,15 @@
 					>
 						<ChevronRightIcon class="size-3.5 shrink-0 transition-transform" />
 						<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
-						<span class="truncate font-mono">{node.name}</span>
+						<span class="truncate font-mono" title={node.name}>{node.name}</span>
 					</Collapsible.Trigger>
 					{@render dot(folderStatus?.(node))}
 					{@render folderTrailing?.(node)}
 				</div>
 				<Collapsible.Content>
-					<div class="ms-4 grid gap-0.5 border-s ps-1.5">{@render branch(node.children)}</div>
+					<div class="ms-4 grid grid-cols-[minmax(0,1fr)] gap-0.5 border-s ps-1.5">
+						{@render branch(node.children)}
+					</div>
 				</Collapsible.Content>
 			</Collapsible.Root>
 		{:else}
@@ -118,6 +120,7 @@
 					<button
 						type="button"
 						class="min-w-0 flex-1 truncate py-1.5 ps-1 text-start font-mono text-sm"
+						title={node.name}
 						aria-current={selected === node.path}
 						onclick={() => onselect?.(node.item)}
 					>
@@ -126,7 +129,7 @@
 				{:else}
 					<span
 						class="min-w-0 flex-1 truncate py-1.5 ps-1 font-mono text-sm text-muted-foreground"
-						title={unselectableTitle}
+						title={unselectableTitle ? `${node.name} (${unselectableTitle})` : node.name}
 					>
 						{node.name}
 					</span>
@@ -138,4 +141,5 @@
 	{/each}
 {/snippet}
 
-<div class="grid gap-0.5">{@render branch(nodes)}</div>
+<!-- minmax(0, 1fr): a grid column otherwise grows to its longest name instead of truncating it -->
+<div class="grid grid-cols-[minmax(0,1fr)] gap-0.5">{@render branch(nodes)}</div>
