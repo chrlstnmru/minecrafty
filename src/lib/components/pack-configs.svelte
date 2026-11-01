@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
+	import ArrowBackUpIcon from '@tabler/icons-svelte/icons/arrow-back-up';
 	import ArrowsMoveIcon from '@tabler/icons-svelte/icons/arrows-move';
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import FilePlusIcon from '@tabler/icons-svelte/icons/file-plus';
@@ -14,17 +15,7 @@
 	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
-	import {
-		getLocalPack,
-		movePackConfig,
-		movePackConfigFolder,
-		movePackConfigs,
-		readPackConfig,
-		removePackConfigFolder,
-		removePackConfigs,
-		removePackOverride,
-		savePackConfigs
-	} from '#lib/builder.remote.js';
+	import { getLocalPack, readPackConfig, savePackChanges } from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import FileTree from '#lib/components/file-tree.svelte';
 	import SaveBar from '#lib/components/save-bar.svelte';
@@ -45,11 +36,20 @@
 		buildFileTree,
 		canMoveInto,
 		decodeDrag,
-		movedPath,
 		TREE_DRAG_TYPE,
 		topLevelPaths
 	} from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
+	import {
+		changesOf,
+		countChanges,
+		originalOf,
+		stageDelete,
+		stageMove,
+		undoStaged,
+		viewOf,
+		type Staged
+	} from '#lib/pack-changes.js';
 	import {
 		batches,
 		collectEntries,
@@ -78,6 +78,11 @@
 	const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
 	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
 	const joinPath = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
+	const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
+
+	/** `path` as it reads once the folder `from` has been renamed to `to`. */
+	const rebase = (path: string, from: string, to: string) =>
+		under(path, from) ? `${to}${path.slice(from.length)}` : path;
 
 	// Every file opened here keeps its own text, so switching file never loses an edit. `loaded` is
 	// what the server had when it was read (or last saved), `hash` is what a save builds on, and a
@@ -94,13 +99,37 @@
 	);
 	let editorShown = false;
 
+	// Moves and deletes wait here, by where each file is on the server now, until Save all. The tree
+	// shows the result as if it were done.
+	let staged = $state<Staged>({});
+	const view = $derived(viewOf(files, staged));
+
+	type Item = {
+		path: string;
+		size: number;
+		pending?: boolean;
+		deleted?: boolean;
+		moved?: boolean;
+		original?: string;
+	};
 	// the new files show in the tree before the server has them
-	const listed: { path: string; size: number; pending?: boolean }[] = $derived([
-		...files,
+	const listed: Item[] = $derived([
+		...view.map((f) => ({ ...f })),
 		...Object.entries(drafts)
-			.filter(([path, d]) => d.isNew && !files.some((f) => f.path === path))
+			.filter(([path, d]) => d.isNew && !view.some((f) => f.path === path))
 			.map(([path]) => ({ path, size: 0, pending: true }))
 	]);
+	// what is waiting to be saved: edited and new files, moves and deletes
+	const draftList = $derived(
+		unsavedPaths.map((path) => ({
+			path,
+			content: drafts[path].content,
+			hash: drafts[path].hash,
+			isNew: drafts[path].isNew
+		}))
+	);
+	const changeCount = $derived(countChanges(view, staged, draftList));
+
 	// folders that are new here or lost their last file: the pack cannot keep an empty folder, so the
 	// server has no trace of them, but they stay in the tree until the page is reloaded or they are deleted
 	let emptyFolders = $state<string[]>([]);
@@ -119,7 +148,13 @@
 	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
 	const where = $derived(target || 'overrides');
 
-	const file = $derived(open && entry && !entry.isNew ? readPackConfig({ id, path: open }) : null);
+	// the open file is read from where it is on the server, even when a move is waiting for it
+	const openOriginal = $derived(open ? originalOf(view, open) : undefined);
+	const file = $derived(
+		open && entry && !entry.isNew && openOriginal
+			? readPackConfig({ id, path: openOriginal })
+			: null
+	);
 	const dirty = $derived(entry ? entry.content !== entry.loaded : false);
 	const unsaved = $derived(entry ? isDirty(entry) : false);
 
@@ -164,11 +199,25 @@
 		}
 	}
 
-	let discarding = $state<{ paths: string[]; then?: () => void } | null>(null);
+	/** Takes everything waiting away: edits, new files, moves and deletes. */
+	function undoAll() {
+		for (const item of view) if (item.moved) rekeyDrafts(item.path, item.original);
+		staged = {};
+		for (const path of Object.keys(drafts)) revert(path);
+		failedPath = undefined;
+		saveError = undefined;
+	}
+
+	let discarding = $state<{ paths: string[]; all?: boolean; then?: () => void } | null>(null);
 	let discardOpen = $state(false);
 
 	function askDiscard(paths: string[], then?: () => void) {
 		discarding = { paths, then };
+		discardOpen = true;
+	}
+
+	function askDiscardAll(then?: () => void) {
+		discarding = { paths: unsavedPaths, all: true, then };
 		discardOpen = true;
 	}
 
@@ -178,7 +227,8 @@
 		const asked = discarding;
 		discarding = null;
 		if (!asked) return;
-		for (const path of asked.paths) revert(path);
+		if (asked.all) undoAll();
+		else for (const path of asked.paths) revert(path);
 		asked.then?.();
 	}
 
@@ -193,11 +243,11 @@
 	beforeNavigate((navigation) => {
 		// changing the tab only changes the query; this panel stays mounted, so nothing is lost
 		if (navigation.to?.url.pathname === page.url.pathname) return;
-		if (!unsavedPaths.length) return;
+		if (!changeCount) return;
 		navigation.cancel();
 		if (navigation.type === 'leave' || !navigation.to) return;
 		const { url } = navigation.to;
-		askDiscard(unsavedPaths, () => void goto(url));
+		askDiscardAll(() => void goto(url));
 	});
 
 	let saving = $state(false);
@@ -206,39 +256,59 @@
 	let failedPath = $state<string>();
 
 	$effect(() => {
-		if (unsavedPaths.length) return;
+		if (changeCount) return;
 		saveError = undefined;
 		failedPath = undefined;
 	});
 
-	/** Saves these files together, as one revision; one that fails stops them all. */
-	async function saveAll(paths: string[]) {
+	/**
+	 * Saves what is waiting together, as one revision; one part refused stops it all. `only` limits
+	 * it to the edits of those files (shown at those paths) and the moves that belong to them.
+	 */
+	async function saveAll(only?: string[]) {
 		if (!canWrite || saving) return;
-		const sent = paths.flatMap((path) => {
-			const draft = drafts[path];
-			return draft && isDirty(draft)
-				? [{ path, content: draft.content, baseHash: draft.isNew ? undefined : draft.hash }]
-				: [];
-		});
-		if (!sent.length) return;
+		const sentDrafts = draftList.filter((d) => !only || only.includes(d.path));
+		const originals = new Set(
+			(only ?? []).flatMap((path) => {
+				const original = originalOf(view, path);
+				return original === undefined ? [] : [original];
+			})
+		);
+		const sentStaged: Staged = only
+			? Object.fromEntries(Object.entries(staged).filter(([original]) => originals.has(original)))
+			: staged;
+		const changes = changesOf(view, sentStaged, sentDrafts);
+		if (!changes.moves.length && !changes.deletes.length && !changes.writes.length) return;
+		const count = countChanges(view, sentStaged, sentDrafts);
 		saving = true;
 		saveError = undefined;
 		failedPath = undefined;
 		try {
-			const { hashes } = await savePackConfigs({ id, files: sent });
-			for (const { path, content } of sent) {
-				const draft = drafts[path];
+			const { hashes } = await savePackChanges({ id, ...changes });
+			for (const sent of sentDrafts) {
+				const draft = drafts[sent.path];
 				if (!draft) continue;
 				// edits made while the save was going out stay unsaved
-				draft.loaded = content;
-				draft.hash = hashes[path];
+				draft.loaded = sent.content;
+				draft.hash = hashes[sent.path];
 				draft.isNew = false;
 			}
-			toast.success(sent.length === 1 ? 'Saved' : `Saved ${sent.length} files`);
+			staged = Object.fromEntries(
+				Object.entries(staged).filter(([original]) => !(original in sentStaged))
+			);
+			toast.success(count === 1 ? 'Saved' : `Saved ${count} changes`);
 		} catch (e) {
-			const text = message(e, 'Could not save the files');
+			const text = message(e, 'Could not save the changes');
 			saveError = text;
-			failedPath = sent.find((f) => text.startsWith(`${f.path}: `))?.path;
+			// the message starts with the path it is about, as the server knows it
+			const named = [
+				...changes.moves.flatMap((m) => [m.from, m.to]),
+				...changes.deletes,
+				...changes.writes.flatMap((w) => [w.path, w.original ?? ''])
+			].find((path) => path && text.startsWith(`${path}: `));
+			failedPath = named
+				? (view.find((f) => f.original === named || f.path === named)?.path ?? named)
+				: undefined;
 			const stale = failedPath && text.includes('changed since you opened it');
 			if (stale) {
 				const path = failedPath!;
@@ -255,9 +325,10 @@
 
 	/** Reads a file again, as the server has it now, replacing what was in the editor. */
 	async function refetch(path: string) {
+		const original = originalOf(view, path) ?? path;
 		try {
-			await readPackConfig({ id, path }).refresh();
-			const fresh = await readPackConfig({ id, path });
+			await readPackConfig({ id, path: original }).refresh();
+			const fresh = await readPackConfig({ id, path: original });
 			const draft = drafts[path];
 			if (draft) {
 				draft.content = draft.loaded = fresh.content;
@@ -286,25 +357,6 @@
 		if (dir && !emptyFolders.includes(dir)) emptyFolders = [...emptyFolders, dir];
 	}
 
-	async function remove(path: string) {
-		try {
-			await removePackOverride({ id, path });
-			keepFolder(dirOf(path));
-			dropDrafts(path);
-		} catch (e) {
-			toast.error(message(e, 'Could not remove the file'));
-		}
-	}
-
-	const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-
-	/** `path` as it reads once the folder `from` has been renamed to `to`. */
-	const rebase = (path: string, from: string, to: string) =>
-		under(path, from) ? `${to}${path.slice(from.length)}` : path;
-
-	let deletingFolder = $state<{ path: string; count: number } | null>(null);
-	let deletingOpen = $state(false);
-
 	/** Drops the texts held for a file, or for everything in a folder; closes the editor if it was on one. */
 	function dropDrafts(path: string) {
 		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
@@ -321,33 +373,93 @@
 		if (open && under(open, from)) open = rebase(open, from, to);
 	}
 
-	/** Forgets a folder the page was showing: its empty-folder marks, the target and the open file. */
+	/** Forgets what the page held for a folder that goes: its empty-folder marks, the target and the texts. */
 	function forgetFolder(path: string) {
 		emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
 		if (under(targetDir, path)) targetDir = dirOf(path);
 		dropDrafts(path);
 	}
 
-	function askDeleteFolder(path: string) {
-		const count = files.filter((f) => under(f.path, path)).length;
-		// a folder made here that holds nothing is not on the server, so there is nothing to confirm
-		if (!count) return forgetFolder(path);
-		deletingFolder = { path, count };
-		deletingOpen = true;
+	/** Stages deleting files and folders (by where they show): they stay in the tree, struck through, until saved. */
+	function deletePaths(paths: string[]) {
+		let next = staged;
+		for (const path of paths) {
+			const current = viewOf(files, next);
+			if (current.some((f) => !f.deleted && under(f.path, path))) keepFolder(dirOf(path));
+			next = stageDelete(current, next, path);
+			forgetFolder(path);
+		}
+		staged = next;
 	}
 
-	async function deleteFolder() {
-		const folder = deletingFolder;
-		deletingOpen = false;
-		if (!folder) return;
-		try {
-			await removePackConfigFolder({ id, path: folder.path });
-			forgetFolder(folder.path);
-			keepFolder(dirOf(folder.path));
-			toast.success(`Deleted ${folder.path}`);
-		} catch (e) {
-			toast.error(message(e, 'Could not delete the folder'));
+	/**
+	 * Stages moving files and folders (by where they show), all or none: a name that is taken or a
+	 * folder going into itself refuses the lot. What is only here (a new file, an empty folder) just
+	 * changes its path.
+	 */
+	function movePaths(moves: { from: string; to: string }[]) {
+		let next = staged;
+		const onServer: string[] = [];
+		for (const { from, to } of moves) {
+			const current = viewOf(files, next);
+			const here = current.some((f) => !f.deleted && under(f.path, from));
+			const heldHere =
+				Object.keys(drafts).some((path) => under(path, from)) ||
+				emptyFolders.some((folder) => under(folder, from));
+			if (!here && !heldHere) {
+				toast.error(`${from} not found`);
+				return false;
+			}
+			const taken = Object.entries(drafts).find(
+				([path, d]) =>
+					d.isNew &&
+					under(path, from) &&
+					current.some((f) => f.path === rebase(path, from, to) && !under(f.path, from))
+			);
+			if (taken) {
+				toast.error(`${rebase(taken[0], from, to)} already exists`);
+				return false;
+			}
+			if (!here) continue;
+			const result = stageMove(current, next, from, to);
+			if ('error' in result) {
+				toast.error(result.error);
+				return false;
+			}
+			next = result.staged;
+			onServer.push(from);
 		}
+		staged = next;
+		for (const { from, to } of moves) {
+			if (onServer.includes(from)) keepFolder(dirOf(from));
+			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
+			targetDir = rebase(targetDir, from, to);
+			rekeyDrafts(from, to);
+		}
+		return true;
+	}
+
+	/** Takes one staged move or delete away, by where the file is on the server. */
+	function undoChange(original: string | undefined) {
+		const item = view.find((f) => f.original === original);
+		if (!original || !item) return;
+		if (item.moved) {
+			if (listed.some((f) => f.path === original)) {
+				toast.error(`${original} is taken now`);
+				return;
+			}
+			rekeyDrafts(item.path, original);
+		}
+		staged = undoStaged(staged, original);
+	}
+
+	/** A drop on a folder: each dragged file or folder keeps its name and goes into it. */
+	function moveInto(from: string[], folder: string) {
+		if (!canMoveInto(from, folder)) return;
+		const moves = from
+			.map((path) => ({ from: path, to: joinPath(folder, nameOf(path)) }))
+			.filter((move) => move.from !== move.to);
+		if (movePaths(moves) && from.length > 1) selection = new Set();
 	}
 
 	// a new file or folder is named inside `dir` (the folder picked when it was asked for); a rename takes a whole path
@@ -384,7 +496,7 @@
 		if (path === naming.from) return undefined;
 		if (naming.kind === 'folder' && naming.from && path.startsWith(`${naming.from}/`))
 			return 'A folder cannot be moved into itself';
-		const asFile = files.find((f) => f.path === path || path.startsWith(`${f.path}/`));
+		const asFile = listed.find((f) => f.path === path || path.startsWith(`${f.path}/`));
 		if (asFile) return `${asFile.path} is a file`;
 		if (naming.kind === 'folder') {
 			if (folderPaths.has(path)) return `${path} already exists`;
@@ -412,82 +524,40 @@
 		namingOpen = true;
 	}
 
-	async function moveFile(from: string, to: string) {
-		if (from === to) return;
-		// a new file that is not saved yet is not on the server
-		if (drafts[from]?.isNew) {
-			rekeyDrafts(from, to);
-			return;
-		}
-		try {
-			await movePackConfig({ id, from, to });
-			keepFolder(dirOf(from));
-			rekeyDrafts(from, to);
-			toast.success(`Moved ${from} to ${to}`);
-		} catch (e) {
-			toast.error(message(e, 'Could not move the file'));
-		}
-	}
-
-	async function moveFolder(from: string, to: string) {
-		if (from === to) return;
-		try {
-			// a folder made here that is still empty is not on the server
-			if (files.some((f) => under(f.path, from))) await movePackConfigFolder({ id, from, to });
-			keepFolder(dirOf(from));
-			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
-			targetDir = rebase(targetDir, from, to);
-			rekeyDrafts(from, to);
-			toast.success(`Moved ${from} to ${to}`);
-		} catch (e) {
-			toast.error(message(e, 'Could not move the folder'));
-		}
-	}
-
-	/** A drop on a folder: each dragged file or folder keeps its name and goes into it. */
-	function moveInto(from: string[], folder: string) {
-		if (!canMoveInto(from, folder)) return;
-		if (from.length > 1) {
-			void moveMany(from, folder);
-			return;
-		}
-		const [only] = from;
-		const to = movedPath(only, folder);
-		if (!to) return;
-		void (folderPaths.has(only) ? moveFolder(only, to) : moveFile(only, to));
-	}
-
-	async function confirmName() {
+	function confirmName() {
 		if (!naming || nameError) return;
 		const { kind, from } = naming;
 		const to = namedPath;
 		namingOpen = false;
+		if (from) {
+			movePaths([{ from, to }]);
+			return;
+		}
 		if (kind === 'folder') {
-			if (from) return moveFolder(from, to);
 			emptyFolders = [...emptyFolders, to];
 			targetDir = to;
 			return;
 		}
-		if (from) return moveFile(from, to);
 		targetDir = dirOf(to);
 		show(to, true);
 	}
 
-	// Rows chosen with the checkboxes. A file made here, or a folder that holds no file yet, is not on
-	// the server, so there is nothing to delete, move or download: those get no checkbox.
+	// Rows chosen with the checkboxes. A deleted file, and a folder that holds nothing, get no checkbox.
 	let selection = $state<ReadonlySet<string>>(new Set());
-	const onServer = (path: string) => files.some((f) => under(f.path, path));
+	const choosable = (path: string) => listed.some((f) => !f.deleted && under(f.path, path));
 
 	$effect(() => {
-		const kept = [...selection].filter(onServer);
+		const kept = [...selection].filter(choosable);
 		if (kept.length !== selection.size) selection = new Set(kept);
 	});
 
 	const chosen = $derived(topLevelPaths(selection));
-	const chosenFiles = $derived(files.filter((f) => chosen.some((path) => under(f.path, path))));
+	const chosenItems = $derived(
+		listed.filter((f) => !f.deleted && chosen.some((path) => under(f.path, path)))
+	);
 	/** What these paths are, such as "1 folder and 2 files". */
 	function labelOf(paths: string[]) {
-		const folders = paths.filter((path) => !files.some((f) => f.path === path)).length;
+		const folders = paths.filter((path) => !listed.some((f) => f.path === path)).length;
 		const loose = paths.length - folders;
 		return [
 			folders ? `${folders} ${folders === 1 ? 'folder' : 'folders'}` : '',
@@ -497,11 +567,9 @@
 			.join(' and ');
 	}
 	const chosenLabel = $derived(labelOf(chosen));
-	const chosenUnsaved = $derived(
-		unsavedPaths.filter((path) => chosen.some((c) => under(path, c)) && !drafts[path]?.isNew)
-	);
+	// the zip is made from what is on the server, so a file that is new or waiting to move is not in it yet
+	const canDownload = $derived(chosenItems.every((f) => !f.pending && !f.moved));
 
-	let bulkDeleteOpen = $state(false);
 	let bulkMoveOpen = $state(false);
 	let moveTo = $state('');
 	const moveOptions = $derived([
@@ -512,47 +580,19 @@
 			.map((folder) => ({ value: folder, label: folder }))
 	]);
 
-	async function bulkDelete() {
-		bulkDeleteOpen = false;
-		const paths = chosen;
-		try {
-			await removePackConfigs({ id, paths });
-			for (const path of paths) {
-				emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
-				if (under(targetDir, path)) targetDir = dirOf(path);
-				dropDrafts(path);
-				keepFolder(dirOf(path));
-			}
-			selection = new Set();
-			toast.success(`Deleted ${chosenLabel}`);
-		} catch (e) {
-			toast.error(message(e, 'Could not delete them'));
-		}
-	}
-
-	/** Moves several items into a folder together: one revision, and nothing moves if any is refused. */
-	async function moveMany(paths: string[], folder: string) {
-		const label = labelOf(paths);
-		try {
-			await movePackConfigs({ id, paths, folder });
-			for (const from of paths) {
-				const to = joinPath(folder, nameOf(from));
-				if (to === from) continue;
-				keepFolder(dirOf(from));
-				emptyFolders = emptyFolders.map((empty) => rebase(empty, from, to));
-				targetDir = rebase(targetDir, from, to);
-				rekeyDrafts(from, to);
-			}
-			selection = new Set();
-			toast.success(`Moved ${label} to ${folder || 'the server folder'}`);
-		} catch (e) {
-			toast.error(message(e, 'Could not move them'));
-		}
+	function bulkDelete() {
+		const label = chosenLabel;
+		deletePaths(chosen);
+		selection = new Set();
+		toast(`${label} will be deleted when you save`);
 	}
 
 	function bulkMove() {
 		bulkMoveOpen = false;
-		void moveMany(chosen, moveTo);
+		const moves = chosen
+			.map((path) => ({ from: path, to: joinPath(moveTo, nameOf(path)) }))
+			.filter((move) => move.from !== move.to);
+		if (movePaths(moves)) selection = new Set();
 	}
 
 	let downloading = $state(false);
@@ -767,16 +807,23 @@
 						nodes={tree}
 						selected={open}
 						selectedFolder={target || null}
-						selectable={(file) => isEditable(file.path)}
-						unselectableTitle="Not a text file"
+						selectable={(file) => !file.deleted && isEditable(file.path)}
+						unselectableTitle={(file) =>
+							file.deleted ? 'Deleted when you save' : 'Not a text file'}
+						nameClass={(file) => (file.deleted ? 'line-through' : undefined)}
+						dragDisabled={(file) => !!file.deleted}
 						status={(file) =>
 							file.pending
 								? { tone: 'info', label: 'New file, not saved yet' }
 								: file.path === failedPath
 									? { tone: 'danger', label: 'Stopped the save' }
-									: drafts[file.path] && isDirty(drafts[file.path])
-										? { tone: 'warning', label: 'Unsaved changes' }
-										: undefined}
+									: file.deleted
+										? { tone: 'danger', label: 'Deleted when you save' }
+										: drafts[file.path] && isDirty(drafts[file.path])
+											? { tone: 'warning', label: 'Unsaved changes' }
+											: file.moved
+												? { tone: 'info', label: `Moved from ${file.original} when you save` }
+												: undefined}
 						folderStatus={(folder) =>
 							emptyFolders.includes(folder.path) && !listed.some((f) => under(f.path, folder.path))
 								? { tone: 'info', label: 'Empty folder, not kept in the pack' }
@@ -787,7 +834,7 @@
 						}}
 						{selection}
 						onselection={(next) => (selection = next)}
-						checkable={onServer}
+						checkable={choosable}
 						onselectfolder={(path) => (targetDir = path)}
 						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
 						onmove={canWrite ? moveInto : undefined}
@@ -806,43 +853,71 @@
 									variant="ghost"
 									size="icon"
 									aria-label="Delete the folder {folder.path}"
-									onclick={() => askDeleteFolder(folder.path)}
+									onclick={() => deletePaths([folder.path])}
 								>
 									<TrashIcon />
 								</Button>
 							{/if}
 						{/snippet}
 						{#snippet trailing(file)}
-							{#if file.pending}
-								<Button
-									variant="ghost"
-									size="icon"
-									class="ms-auto"
-									aria-label="Discard the new file {file.path}"
-									onclick={() => askDiscard([file.path])}
+							{#if file.deleted}
+								<span class="ms-auto shrink-0 text-xs text-muted-foreground"
+									>{formatBytes(file.size)}</span
 								>
-									<TrashIcon />
-								</Button>
+								{#if canWrite}
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label="Keep {file.path}"
+										onclick={() => undoChange(file.original)}
+									>
+										<ArrowBackUpIcon />
+									</Button>
+								{/if}
 							{:else}
-								<span class="shrink-0 text-xs text-muted-foreground">{formatBytes(file.size)}</span>
-							{/if}
-							{#if canWrite && !file.pending}
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label="Rename {file.path}"
-									onclick={() => startNaming('file', file.path)}
-								>
-									<PencilIcon />
-								</Button>
-								<Button
-									variant="ghost"
-									size="icon"
-									aria-label="Remove {file.path}"
-									onClickPromise={() => remove(file.path)}
-								>
-									<TrashIcon />
-								</Button>
+								{#if file.pending}
+									<Button
+										variant="ghost"
+										size="icon"
+										class="ms-auto"
+										aria-label="Discard the new file {file.path}"
+										onclick={() => askDiscard([file.path])}
+									>
+										<TrashIcon />
+									</Button>
+								{:else}
+									<span class="shrink-0 text-xs text-muted-foreground"
+										>{formatBytes(file.size)}</span
+									>
+								{/if}
+								{#if canWrite && !file.pending}
+									{#if file.moved}
+										<Button
+											variant="ghost"
+											size="icon"
+											aria-label="Undo moving {file.original}"
+											onclick={() => undoChange(file.original)}
+										>
+											<ArrowBackUpIcon />
+										</Button>
+									{/if}
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label="Rename {file.path}"
+										onclick={() => startNaming('file', file.path)}
+									>
+										<PencilIcon />
+									</Button>
+									<Button
+										variant="ghost"
+										size="icon"
+										aria-label="Delete {file.path}"
+										onclick={() => deletePaths([file.path])}
+									>
+										<TrashIcon />
+									</Button>
+								{/if}
 							{/if}
 						{/snippet}
 					</FileTree>
@@ -969,25 +1044,6 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<AlertDialog.Root bind:open={deletingOpen}>
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {deletingFolder?.path}?</AlertDialog.Title>
-			<AlertDialog.Description>
-				This removes the folder and its {deletingFolder?.count}
-				{deletingFolder?.count === 1 ? 'file' : 'files'} from the pack. It cannot be undone.
-				{#if deletingFolder && open && unsaved && under(open, deletingFolder.path)}
-					Your unsaved edits to {open} are lost too.
-				{/if}
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Keep it</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={deleteFolder}>Delete</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
-
 <AlertDialog.Root
 	bind:open={discardOpen}
 	onOpenChange={(isOpen) => {
@@ -998,7 +1054,11 @@
 		<AlertDialog.Header>
 			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>
 			<AlertDialog.Description>
-				{#if discarding && discarding.paths.length > 1}
+				{#if discarding?.all}
+					{changeCount}
+					{changeCount === 1 ? 'file has' : 'files have'} changes that have not been saved: edits, new
+					files, moves or deletes. All of them are dropped.
+				{:else if discarding && discarding.paths.length > 1}
 					{discarding.paths.length} files have changes that have not been saved.
 				{:else if discarding && drafts[discarding.paths[0]]?.isNew}
 					This new file has not been saved yet.
@@ -1010,27 +1070,6 @@
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>
 			<AlertDialog.Action onclick={discard}>Discard</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
-
-<AlertDialog.Root bind:open={bulkDeleteOpen}>
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {chosenLabel}?</AlertDialog.Title>
-			<AlertDialog.Description>
-				This removes {chosenFiles.length}
-				{chosenFiles.length === 1 ? 'file' : 'files'} from the pack. It cannot be undone.
-				{#if chosenUnsaved.length}
-					Your unsaved edits to {chosenUnsaved.length === 1
-						? 'one of them'
-						: `${chosenUnsaved.length} of them`} are lost too.
-				{/if}
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Keep them</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={bulkDelete}>Delete</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
@@ -1054,28 +1093,28 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-{#if canWrite && unsavedPaths.length}
+{#if canWrite && changeCount}
 	<SaveBar
-		changeCount={unsavedPaths.length}
+		{changeCount}
 		noun={['file', 'files']}
 		error={saveError}
 		{saving}
 		canSave={!saving}
 		saveLabel="Save all"
 		discardLabel="Discard all"
-		onsave={() => saveAll(unsavedPaths)}
-		ondiscard={() => askDiscard(unsavedPaths)}
+		onsave={() => saveAll()}
+		ondiscard={() => askDiscardAll()}
 	/>
 {/if}
 
 {#if chosen.length}
 	<SelectionBar
 		label={chosenLabel}
-		raised={canWrite && unsavedPaths.length > 0}
+		raised={canWrite && changeCount > 0}
 		onclear={() => (selection = new Set())}
 	>
 		{#if canWrite}
-			<Button variant="ghost" size="sm" onclick={() => (bulkDeleteOpen = true)}>
+			<Button variant="ghost" size="sm" onclick={bulkDelete}>
 				<TrashIcon />Delete
 			</Button>
 			<Button
@@ -1089,7 +1128,14 @@
 				<ArrowsMoveIcon />Move
 			</Button>
 		{/if}
-		<Button variant="ghost" size="sm" loading={downloading} onclick={download}>
+		<Button
+			variant="ghost"
+			size="sm"
+			loading={downloading}
+			disabled={!canDownload}
+			title={canDownload ? undefined : 'Save first: new and moved files are not in the pack yet'}
+			onclick={download}
+		>
 			<DownloadIcon />Download
 		</Button>
 	</SelectionBar>

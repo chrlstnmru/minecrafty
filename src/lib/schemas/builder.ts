@@ -47,38 +47,39 @@ export const packSearchSchema = v.object({
 const overridePath = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
 
 export const overridePathSchema = v.object({ id: idSchema, path: overridePath });
-export const savePackConfigsSchema = v.object({
-	id: idSchema,
-	files: v.pipe(
-		v.array(
-			v.object({
-				path: overridePath,
-				content: v.pipe(v.string(), v.maxLength(2_200_000)),
-				baseHash: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)))
-			})
-		),
-		v.minLength(1),
-		v.maxLength(200),
-		v.check(
-			(files) => files.reduce((sum, f) => sum + f.content.length, 0) <= 16_000_000,
-			'Too much text to save at once'
+const configPath = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
+
+export const savePackChangesSchema = v.pipe(
+	v.object({
+		id: idSchema,
+		moves: v.pipe(v.array(v.object({ from: configPath, to: configPath })), v.maxLength(2000)),
+		deletes: v.pipe(v.array(configPath), v.maxLength(2000)),
+		writes: v.pipe(
+			v.array(
+				v.object({
+					path: configPath,
+					content: v.pipe(v.string(), v.maxLength(2_200_000)),
+					original: v.optional(configPath),
+					baseHash: v.optional(v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/)))
+				})
+			),
+			v.maxLength(200)
 		)
+	}),
+	v.check(
+		(change) => change.moves.length + change.deletes.length + change.writes.length > 0,
+		'There is nothing to save'
+	),
+	v.check(
+		(change) => change.writes.reduce((sum, w) => sum + w.content.length, 0) <= 16_000_000,
+		'Too much text to save at once'
+	),
+	v.check(
+		(change) =>
+			change.writes.every((w) => (w.original === undefined) === (w.baseHash === undefined)),
+		'A file that exists says where it was and what it read as'
 	)
-});
-export const overridePathsSchema = v.object({
-	id: idSchema,
-	paths: v.pipe(v.array(overridePath), v.minLength(1), v.maxLength(500))
-});
-export const movePackConfigsSchema = v.object({
-	id: idSchema,
-	paths: v.pipe(v.array(overridePath), v.minLength(1), v.maxLength(500)),
-	folder: v.pipe(v.string(), v.maxLength(512))
-});
-export const movePackConfigSchema = v.object({
-	id: idSchema,
-	from: overridePath,
-	to: overridePath
-});
+);
 export const installFromPackSchema = v.object({
 	id: idSchema,
 	name: v.pipe(v.string(), v.trim(), v.minLength(1), v.maxLength(60)),
