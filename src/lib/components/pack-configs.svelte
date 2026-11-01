@@ -18,8 +18,8 @@
 	import { getLocalPack, readPackConfig, savePackChanges } from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import FileTree from '#lib/components/file-tree.svelte';
+	import FolderPicker from '#lib/components/folder-picker.svelte';
 	import SaveBar from '#lib/components/save-bar.svelte';
-	import SelectMenu from '#lib/components/select-menu.svelte';
 	import SelectionBar from '#lib/components/selection-bar.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -39,6 +39,7 @@
 		TREE_DRAG_TYPE,
 		topLevelPaths
 	} from '#lib/file-tree.js';
+	import { childFolders, insideAny } from '#lib/folder-picker.js';
 	import { formatBytes } from '#lib/format.js';
 	import {
 		changesOf,
@@ -572,13 +573,6 @@
 
 	let bulkMoveOpen = $state(false);
 	let moveTo = $state('');
-	const moveOptions = $derived([
-		{ value: '', label: 'overrides (the server folder)' },
-		...[...folderPaths]
-			.filter((folder) => !chosen.some((path) => under(folder, path)))
-			.sort((a, b) => a.localeCompare(b))
-			.map((folder) => ({ value: folder, label: folder }))
-	]);
 
 	function bulkDelete() {
 		const label = chosenLabel;
@@ -1079,16 +1073,21 @@
 		<Dialog.Header>
 			<Dialog.Title>Move {chosenLabel}</Dialog.Title>
 			<Dialog.Description>
-				Into the folder you choose, each keeping its name. Nothing moves if a name is already there.
+				Open the folder to move into. Each item keeps its name, and nothing moves if a name is
+				already there.
 			</Dialog.Description>
 		</Dialog.Header>
-		<Field.Field>
-			<Field.Label for="move-to">Move to</Field.Label>
-			<SelectMenu id="move-to" bind:value={moveTo} options={moveOptions} />
-		</Field.Field>
+		<FolderPicker
+			bind:folder={moveTo}
+			list={(folder) => childFolders(folderPaths, folder)}
+			exclude={(folder) => insideAny(folder, chosen)}
+			rootLabel="overrides"
+		/>
 		<Dialog.Footer>
 			<Button type="button" variant="ghost" onclick={() => (bulkMoveOpen = false)}>Cancel</Button>
-			<Button onclick={bulkMove}>Move</Button>
+			<Button class="min-w-0" disabled={!canMoveInto(chosen, moveTo)} onclick={bulkMove}>
+				<span class="truncate">Move to {moveTo || 'the server folder'}</span>
+			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
@@ -1121,7 +1120,7 @@
 				variant="ghost"
 				size="sm"
 				onclick={() => {
-					moveTo = '';
+					moveTo = target;
 					bulkMoveOpen = true;
 				}}
 			>

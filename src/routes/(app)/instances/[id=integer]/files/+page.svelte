@@ -36,6 +36,7 @@
 
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
+	import FolderPicker from '#lib/components/folder-picker.svelte';
 	import Notice from '#lib/components/notice.svelte';
 	import SaveBar from '#lib/components/save-bar.svelte';
 	import SelectionBar from '#lib/components/selection-bar.svelte';
@@ -54,6 +55,7 @@
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { DragMove } from '#lib/drag-move.svelte.js';
 	import { isEditable } from '#lib/editable.js';
+	import { canMoveInto } from '#lib/file-tree.js';
 	import {
 		listFiles,
 		newFile,
@@ -65,6 +67,7 @@
 		renameFile,
 		saveFiles
 	} from '#lib/files.remote.js';
+	import { insideAny } from '#lib/folder-picker.js';
 	import { formatBytes } from '#lib/format.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
@@ -439,8 +442,15 @@
 
 	async function moveSelected() {
 		moveOpen = false;
-		const folder = moveTo.trim().replace(/^\/+|\/+$/g, '');
-		if (await moveInto(chosen, folder)) table.resetRowSelection(true);
+		if (await moveInto(chosen, moveTo)) table.resetRowSelection(true);
+	}
+
+	/** The folders in a folder that can take a move: not the install's, nor a running server's world. */
+	async function foldersIn(folder: string) {
+		const { entries, running: busy } = await listFiles({ id, path: folder });
+		return entries
+			.filter((e) => e.kind === 'dir' && !e.locked && !(busy && e.inWorld))
+			.map((e) => joinIn(folder, e.name));
 	}
 
 	// Dragging rows onto a folder row, a crumb or the back button moves them like the Move dialog does.
@@ -897,32 +907,25 @@
 
 <Dialog.Root bind:open={moveOpen}>
 	<Dialog.Content>
-		<form
-			class="grid gap-4"
-			onsubmit={(e) => {
-				e.preventDefault();
-				void moveSelected();
-			}}
-		>
-			<Dialog.Header>
-				<Dialog.Title>Move {chosenLabel}</Dialog.Title>
-				<Dialog.Description>
-					Into the folder you name, each keeping its name. Nothing moves if a name is already there.
-					Leave it empty for the server folder.
-				</Dialog.Description>
-			</Dialog.Header>
-			<Input
-				bind:value={moveTo}
-				placeholder="Folder, such as config/sodium"
-				aria-label="Folder to move into"
-				autocomplete="off"
-				spellcheck="false"
-			/>
-			<Dialog.Footer>
-				<Button type="button" variant="ghost" onclick={() => (moveOpen = false)}>Cancel</Button>
-				<Button type="submit">Move</Button>
-			</Dialog.Footer>
-		</form>
+		<Dialog.Header>
+			<Dialog.Title>Move {chosenLabel}</Dialog.Title>
+			<Dialog.Description>
+				Open the folder to move into. Each item keeps its name, and nothing moves if a name is
+				already there.
+			</Dialog.Description>
+		</Dialog.Header>
+		<FolderPicker
+			bind:folder={moveTo}
+			list={foldersIn}
+			exclude={(folder) => insideAny(folder, chosen)}
+			rootLabel="server"
+		/>
+		<Dialog.Footer>
+			<Button type="button" variant="ghost" onclick={() => (moveOpen = false)}>Cancel</Button>
+			<Button class="min-w-0" disabled={!canMoveInto(chosen, moveTo)} onclick={moveSelected}>
+				<span class="truncate">Move to {moveTo || 'the server folder'}</span>
+			</Button>
+		</Dialog.Footer>
 	</Dialog.Content>
 </Dialog.Root>
 
