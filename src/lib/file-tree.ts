@@ -64,6 +64,10 @@ export const canMoveInto = (paths: string[], folder: string) =>
 	!paths.some((path) => intoItself(path, folder)) &&
 	paths.some((path) => movedPath(path, folder) !== null);
 
+/** What dragging the row at `path` carries: everything chosen when the row is one of several chosen, else the row alone. */
+export const carriedBy = (path: string, chosen: ReadonlySet<string>) =>
+	chosen.has(path) && chosen.size > 1 ? topLevelPaths(chosen) : [path];
+
 /** The paths a drag carries, as the drag data. */
 export const encodeDrag = (paths: string[]) => JSON.stringify(paths);
 

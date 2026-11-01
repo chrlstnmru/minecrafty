@@ -52,6 +52,7 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
+	import { DragMove } from '#lib/drag-move.svelte.js';
 	import { isEditable } from '#lib/editable.js';
 	import {
 		listFiles,
@@ -419,22 +420,47 @@
 		}
 	}
 
-	async function moveSelected() {
-		moveOpen = false;
-		const paths = chosen;
-		const folder = moveTo.trim().replace(/^\/+|\/+$/g, '');
+	/** Moves these paths into `folder`, each keeping its name; false when it was refused. */
+	async function moveInto(paths: string[], folder: string) {
 		try {
 			await moveFiles({ id, paths, folder });
 			for (const from of paths) {
 				const to = joinIn(folder, nameOf(from));
 				if (to !== from) rekeyDrafts(from, to);
 			}
-			table.resetRowSelection(true);
-			toast.success(`Moved ${chosenLabel} to ${folder || 'the server folder'}`);
+			const what = paths.length === 1 ? nameOf(paths[0]) : `${paths.length} items`;
+			toast.success(`Moved ${what} to ${folder || 'the server folder'}`);
+			return true;
 		} catch (e) {
 			toast.error(message(e, 'Move failed'));
+			return false;
 		}
 	}
+
+	async function moveSelected() {
+		moveOpen = false;
+		const folder = moveTo.trim().replace(/^\/+|\/+$/g, '');
+		if (await moveInto(chosen, folder)) table.resetRowSelection(true);
+	}
+
+	// Dragging rows onto a folder row, a crumb or the back button moves them like the Move dialog does.
+	const chosenSet = $derived(new Set(chosen));
+	const drag = new DragMove({
+		onmove: () => (paths, folder) => {
+			const carriedSelection = paths.some((moved) => chosen.includes(moved));
+			void moveInto(paths, folder).then((moved) => {
+				if (moved && carriedSelection) table.resetRowSelection(true);
+			});
+		}
+	});
+
+	/** The handlers that make an element take dragged rows into `folder`, lit up as `lit`. */
+	const takes = (folder: string, lit = folder) => ({
+		ondragover: (event: DragEvent) => void drag.over(event, folder, lit),
+		ondragleave: (event: DragEvent) => drag.leave(event),
+		ondrop: (event: DragEvent) => void drag.drop(event, folder)
+	});
+	const litClass = 'bg-accent ring-2 ring-ring/50';
 
 	async function downloadSelected() {
 		downloading = true;
@@ -492,6 +518,8 @@
 				title="Back"
 				disabled={!path}
 				onclick={() => open(parent)}
+				class={drag.target === 'back' ? litClass : undefined}
+				{...takes(parent, 'back')}
 			>
 				<ArrowLeftIcon />
 			</Button>
@@ -502,6 +530,8 @@
 							<Breadcrumb.Link
 								href="/instances/{id}/files"
 								onclick={(e) => (e.preventDefault(), open(''))}
+								class={['-mx-1 rounded-sm px-1', drag.target === '' && litClass]}
+								{...takes('')}
 							>
 								server
 							</Breadcrumb.Link>
@@ -515,9 +545,10 @@
 						<Breadcrumb.Item class="min-w-0">
 							{#if i < crumbs.length - 1}
 								<Breadcrumb.Link
-									class="truncate"
+									class={['-mx-1 truncate rounded-sm px-1', drag.target === to && litClass]}
 									href="/instances/{id}/files?path={encodeURIComponent(to)}"
 									onclick={(e) => (e.preventDefault(), open(to))}
+									{...takes(to)}
 								>
 									{crumb}
 								</Breadcrumb.Link>
@@ -580,7 +611,15 @@
 					{@const entry = row.original}
 					{@const to = join(entry.name)}
 					{@const editable = entry.kind === 'file' && isEditable(entry.name)}
-					<Table.Row data-state={row.getIsSelected() ? 'selected' : undefined}>
+					{@const droppable = entry.kind === 'dir' && !blocked(entry)}
+					<Table.Row
+						data-state={row.getIsSelected() ? 'selected' : undefined}
+						draggable={!blocked(entry)}
+						ondragstart={(event) => drag.start(event, to, chosenSet)}
+						ondragend={() => drag.end()}
+						class={droppable && drag.target === to ? `${litClass} hover:bg-accent` : undefined}
+						{...droppable ? takes(to) : {}}
+					>
 						<Table.Cell class="ps-6">
 							<Checkbox
 								aria-label="Select {entry.name}"
