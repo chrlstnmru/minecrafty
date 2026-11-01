@@ -26,6 +26,8 @@
 		selectedFolder = null,
 		selectable = () => true,
 		unselectableTitle,
+		nameClass,
+		dragDisabled,
 		status,
 		folderStatus,
 		onselect,
@@ -48,7 +50,11 @@
 		/** A file that is not selectable is listed but cannot be picked. */
 		selectable?: (item: T) => boolean;
 		/** Says why, as a tooltip on an unselectable file's name. */
-		unselectableTitle?: string;
+		unselectableTitle?: string | ((item: T) => string | undefined);
+		/** Classes for a file's name, such as a strikethrough for one waiting to be deleted. */
+		nameClass?: (item: T) => string | undefined;
+		/** Rows that cannot be dragged (with `onmove` on, every other row can). */
+		dragDisabled?: (item: T) => boolean;
 		/** A coloured dot after a name, with what it means (also read out to screen readers). */
 		status?: (item: T) => Status | undefined;
 		folderStatus?: (folder: FolderNode<T>) => Status | undefined;
@@ -290,7 +296,7 @@
 			<div
 				role="presentation"
 				data-tree-row
-				draggable={onmove ? 'true' : undefined}
+				draggable={onmove && !dragDisabled?.(node.item) ? 'true' : undefined}
 				ondragstart={(event) => dragStart(event, node.path)}
 				ondragend={dragEnd}
 				onpointerdown={(event) => pressStart(event, node)}
@@ -312,7 +318,9 @@
 				{#if selectable(node.item)}
 					<button
 						type="button"
-						class="min-w-0 flex-1 truncate py-1.5 ps-1 text-start font-mono text-sm"
+						class="min-w-0 flex-1 truncate py-1.5 ps-1 text-start font-mono text-sm {nameClass?.(
+							node.item
+						) ?? ''}"
 						title={node.name}
 						aria-current={selected === node.path}
 						onclick={() => onselect?.(node.item)}
@@ -321,8 +329,16 @@
 					</button>
 				{:else}
 					<span
-						class="min-w-0 flex-1 truncate py-1.5 ps-1 font-mono text-sm text-muted-foreground"
-						title={unselectableTitle ? `${node.name} (${unselectableTitle})` : node.name}
+						class="min-w-0 flex-1 truncate py-1.5 ps-1 font-mono text-sm text-muted-foreground {nameClass?.(
+							node.item
+						) ?? ''}"
+						title={(() => {
+							const why =
+								typeof unselectableTitle === 'function'
+									? unselectableTitle(node.item)
+									: unselectableTitle;
+							return why ? `${node.name} (${why})` : node.name;
+						})()}
 					>
 						{node.name}
 					</span>
