@@ -28,3 +28,30 @@ export const uploadBatchSchema = v.object({
 		v.maxLength(2000)
 	)
 });
+
+const pathList = v.pipe(
+	v.array(v.pipe(v.string(), v.minLength(1), v.maxLength(1024))),
+	v.minLength(1),
+	v.maxLength(500)
+);
+
+export const saveFilesSchema = v.object({
+	id: idSchema,
+	files: v.pipe(
+		v.array(
+			v.object({
+				path: v.pipe(v.string(), v.minLength(1), v.maxLength(1024)),
+				content: v.pipe(v.string(), v.maxLength(2_200_000)),
+				baseHash: v.pipe(v.string(), v.regex(/^[0-9a-f]{40}$/))
+			})
+		),
+		v.minLength(1),
+		v.maxLength(200),
+		v.check(
+			(list) => list.reduce((sum, f) => sum + f.content.length, 0) <= 16_000_000,
+			'Too much text to save at once'
+		)
+	)
+});
+export const removeFilesSchema = v.object({ id: idSchema, paths: pathList });
+export const moveFilesSchema = v.object({ id: idSchema, paths: pathList, folder: filePathSchema });

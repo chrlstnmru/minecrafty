@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { goto } from '$app/navigation';
+	import { beforeNavigate, goto } from '$app/navigation';
 	import { page } from '$app/state';
 	import ArrowDownIcon from '@tabler/icons-svelte/icons/arrow-down';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import ArrowUpIcon from '@tabler/icons-svelte/icons/arrow-up';
+	import ArrowsMoveIcon from '@tabler/icons-svelte/icons/arrows-move';
 	import DotsIcon from '@tabler/icons-svelte/icons/dots';
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import FileIcon from '@tabler/icons-svelte/icons/file';
@@ -28,7 +29,7 @@
 		tableFeatures,
 		type SortingState
 	} from '@tanstack/svelte-table';
-	import { untrack } from 'svelte';
+	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import type { FileEntry } from '#lib/server/files.js';
@@ -36,6 +37,8 @@
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import UploadDialog from '#lib/components/files/upload-dialog.svelte';
 	import Notice from '#lib/components/notice.svelte';
+	import SaveBar from '#lib/components/save-bar.svelte';
+	import SelectionBar from '#lib/components/selection-bar.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
@@ -55,9 +58,11 @@
 		newFile,
 		newFolder,
 		readFile,
+		moveFiles,
 		removeFile,
+		removeFiles,
 		renameFile,
-		saveFile
+		saveFiles
 	} from '#lib/files.remote.js';
 	import { formatBytes } from '#lib/format.js';
 
@@ -98,13 +103,93 @@
 			const name = prompt.value.trim();
 			if (prompt.kind === 'folder') await newFolder({ id, path, name });
 			else if (prompt.kind === 'file') await newFile({ id, path, name });
-			else await renameFile({ id, path: prompt.target!, name });
+			else {
+				await renameFile({ id, path: prompt.target!, name });
+				rekeyDrafts(prompt.target!, joinIn(parentOf(prompt.target!), name));
+			}
 			promptOpen = false;
 		} catch (err) {
 			toast.error(message(err, 'That did not work'));
 		} finally {
 			promptBusy = false;
 		}
+	}
+
+	const under = (candidate: string, folder: string) =>
+		candidate === folder || candidate.startsWith(`${folder}/`);
+	/** `candidate` as it reads once the path `from` has become `to`. */
+	const rebase = (candidate: string, from: string, to: string) =>
+		under(candidate, from) ? `${to}${candidate.slice(from.length)}` : candidate;
+	const parentOf = (full: string) => full.split('/').slice(0, -1).join('/');
+	const nameOf = (full: string) => full.slice(full.lastIndexOf('/') + 1);
+	const joinIn = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
+
+	// Every file opened here keeps its own text, so closing the editor or opening another file never
+	// loses an edit. `loaded` is what the server had when it was read (or last saved) and `hash` is
+	// what a save builds on.
+	type Draft = { content: string; loaded: string; hash?: string };
+	let editing = $state<string | null>(null);
+	let editorOpen = $state(false);
+	let drafts = $state<Record<string, Draft>>({});
+	const openDraft = $derived(editing ? drafts[editing] : undefined);
+	const isDirty = (d: Draft) => d.content !== d.loaded;
+	const unsavedPaths = $derived(
+		Object.entries(drafts)
+			.filter(([, d]) => isDirty(d))
+			.map(([path]) => path)
+	);
+	const dirty = $derived(openDraft ? isDirty(openDraft) : false);
+	const file = $derived(editing ? readFile({ id, path: editing }) : null);
+	let editorShown = false;
+
+	// load the file into the editor when it is opened, and again after a save
+	$effect(() => {
+		const current = file?.current;
+		const target = editing;
+		if (!current || !target) return;
+		untrack(() => {
+			const draft = drafts[target];
+			if (!draft) return;
+			if (draft.content === draft.loaded) draft.content = current.content;
+			draft.loaded = current.content;
+			draft.hash = current.hash;
+		});
+	});
+
+	// the editor keeps each file's text and undo history; free them when the page goes
+	onDestroy(() => {
+		if (editorShown)
+			void import('#lib/components/config-editor/monaco.js').then((editor) =>
+				editor.disposeModels(`instance-${id}/`)
+			);
+	});
+
+	function openEditor(to: string) {
+		editing = to;
+		editorOpen = true;
+		editorShown = true;
+		drafts[to] ??= { content: '', loaded: '' };
+	}
+
+	const closeEditor = () => (editorOpen = false);
+
+	/** Drops the texts held for a file, or for everything in a folder; closes the editor if it was on one. */
+	function dropDrafts(path: string) {
+		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
+		if (editing && under(editing, path)) {
+			editing = null;
+			editorOpen = false;
+		}
+	}
+
+	/** Moves the texts held for a file, or for everything in a folder, to where it went. */
+	function rekeyDrafts(from: string, to: string) {
+		for (const key of Object.keys(drafts)) {
+			if (!under(key, from)) continue;
+			drafts[rebase(key, from, to)] = drafts[key];
+			delete drafts[key];
+		}
+		if (editing && under(editing, from)) editing = rebase(editing, from, to);
 	}
 
 	let deleting = $state({ path: '', name: '', kind: '' });
@@ -115,57 +200,125 @@
 		deleteOpen = false;
 		try {
 			await removeFile({ id, path: target.path });
+			dropDrafts(target.path);
 			toast.success(`Deleted ${target.name}`);
 		} catch (e) {
 			toast.error(message(e, 'Delete failed'));
 		}
 	}
 
-	let editing = $state<string | null>(null);
-	let editorOpen = $state(false);
-	let draft = $state('');
-	let loaded = $state('');
-	let confirmDiscard = $state(false);
-	const file = $derived(editing ? readFile({ id, path: editing }) : null);
-	const dirty = $derived(editorOpen && draft !== loaded);
+	let saving = $state(false);
+	let saveError = $state<string>();
+	// the file a failed save names, marked in the list
+	let failedPath = $state<string>();
 
-	// load the file into the editor when it is opened, and again after a save
 	$effect(() => {
-		const content = file?.current?.content;
-		if (content === undefined) return;
-		if (draft === loaded) draft = content;
-		loaded = content;
+		if (unsavedPaths.length) return;
+		saveError = undefined;
+		failedPath = undefined;
 	});
 
-	function openEditor(to: string) {
-		draft = '';
-		loaded = '';
-		editing = to;
-		editorOpen = true;
-	}
-
-	function closeEditor(force = false) {
-		if (dirty && !force) {
-			confirmDiscard = true;
-			return;
-		}
-		editorOpen = false;
-	}
-
-	async function save() {
-		if (!editing || !dirty) return;
+	/** Saves these files together; one that fails stops them all. */
+	async function saveAll(paths: string[]) {
+		if (saving) return;
+		const sent = paths.flatMap((path) => {
+			const draft = drafts[path];
+			return draft?.hash && isDirty(draft)
+				? [{ path, content: draft.content, baseHash: draft.hash }]
+				: [];
+		});
+		if (!sent.length) return;
+		saving = true;
+		saveError = undefined;
+		failedPath = undefined;
 		try {
-			await saveFile({ id, path: editing, content: draft });
-			toast.success('Saved');
+			const { hashes } = await saveFiles({ id, files: sent });
+			for (const { path, content } of sent) {
+				const draft = drafts[path];
+				if (!draft) continue;
+				// edits made while the save was going out stay unsaved
+				draft.loaded = content;
+				draft.hash = hashes[path];
+			}
+			toast.success(sent.length === 1 ? 'Saved' : `Saved ${sent.length} files`);
 		} catch (e) {
-			toast.error(message(e, 'Save failed'));
+			const text = message(e, 'Save failed');
+			saveError = text;
+			failedPath = sent.find((f) => text.startsWith(`${f.path}: `))?.path;
+			if (failedPath && text.includes('changed since you opened it')) {
+				const path = failedPath;
+				toast.error(text, {
+					action: { label: 'Reload', onClick: () => askDiscard([path], () => void refetch(path)) }
+				});
+			} else toast.error(text);
+		} finally {
+			saving = false;
 		}
 	}
+
+	const save = () => (editing ? saveAll([editing]) : undefined);
+
+	/** Reads a file again, as the server has it now, replacing what was in the editor. */
+	async function refetch(path: string) {
+		try {
+			await readFile({ id, path }).refresh();
+			const fresh = await readFile({ id, path });
+			const draft = drafts[path];
+			if (draft) {
+				draft.content = draft.loaded = fresh.content;
+				draft.hash = fresh.hash;
+			}
+			if (failedPath === path) {
+				failedPath = undefined;
+				saveError = undefined;
+			}
+		} catch (e) {
+			toast.error(message(e, 'Could not read the file again'));
+		}
+	}
+
+	/** Puts a file back to its saved text (undo brings the edits back). */
+	function revert(path: string) {
+		const draft = drafts[path];
+		if (!draft) return;
+		draft.content = draft.loaded;
+		// a save refused this file as out of date, so what it was read as is stale too
+		if (path === failedPath) void refetch(path);
+	}
+
+	let discarding = $state<{ paths: string[]; then?: () => void } | null>(null);
+	let discardOpen = $state(false);
+
+	function askDiscard(paths: string[], then?: () => void) {
+		discarding = { paths, then };
+		discardOpen = true;
+	}
+
+	/** The dialog's Discard: close it first, so nothing the action does can leave it open. */
+	function discard() {
+		discardOpen = false;
+		const asked = discarding;
+		discarding = null;
+		if (!asked) return;
+		for (const path of asked.paths) revert(path);
+		asked.then?.();
+	}
+
+	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
+	beforeNavigate((navigation) => {
+		// moving between folders only changes the query; the drafts stay
+		if (navigation.to?.url.pathname === page.url.pathname) return;
+		if (!unsavedPaths.length) return;
+		navigation.cancel();
+		if (navigation.type === 'leave' || !navigation.to) return;
+		const { url } = navigation.to;
+		askDiscard(unsavedPaths, () => void goto(url));
+	});
 
 	async function format() {
-		if (!editing) return;
+		if (!editing || !openDraft) return;
 		try {
-			draft = await formatConfig(editing, draft);
+			openDraft.content = await formatConfig(editing, openDraft.content);
 		} catch (e) {
 			toast.error(e instanceof Error ? e.message : 'Could not format this file');
 		}
@@ -243,17 +396,66 @@
 		setSorting([{ id: column, desc: active?.id === column && !active.desc }]);
 	};
 
+	// The rows chosen with the checkboxes, as paths in the server folder.
+	const chosen = $derived(table.getSelectedRowModel().rows.map((row) => join(row.original.name)));
+	const chosenLabel = $derived(`${chosen.length} ${chosen.length === 1 ? 'item' : 'items'}`);
+	const chosenUnsaved = $derived(unsavedPaths.filter((path) => chosen.some((c) => under(path, c))));
+
 	let bulkOpen = $state(false);
+	let moveOpen = $state(false);
+	let moveTo = $state('');
+	let downloading = $state(false);
+
 	async function removeSelected() {
 		bulkOpen = false;
-		const names = table.getSelectedRowModel().rows.map((row) => row.original.name);
-		const results = await Promise.allSettled(
-			names.map((name) => removeFile({ id, path: join(name) }))
-		);
-		const failed = results.filter((r) => r.status === 'rejected');
-		table.resetRowSelection(true);
-		if (failed.length) toast.error(`${failed.length} of ${names.length} could not be deleted`);
-		else toast.success(`Deleted ${names.length} ${names.length === 1 ? 'item' : 'items'}`);
+		const paths = chosen;
+		try {
+			await removeFiles({ id, paths });
+			for (const removed of paths) dropDrafts(removed);
+			table.resetRowSelection(true);
+			toast.success(`Deleted ${paths.length} ${paths.length === 1 ? 'item' : 'items'}`);
+		} catch (e) {
+			toast.error(message(e, 'Delete failed'));
+		}
+	}
+
+	async function moveSelected() {
+		moveOpen = false;
+		const paths = chosen;
+		const folder = moveTo.trim().replace(/^\/+|\/+$/g, '');
+		try {
+			await moveFiles({ id, paths, folder });
+			for (const from of paths) {
+				const to = joinIn(folder, nameOf(from));
+				if (to !== from) rekeyDrafts(from, to);
+			}
+			table.resetRowSelection(true);
+			toast.success(`Moved ${chosenLabel} to ${folder || 'the server folder'}`);
+		} catch (e) {
+			toast.error(message(e, 'Move failed'));
+		}
+	}
+
+	async function downloadSelected() {
+		downloading = true;
+		try {
+			const body = new FormData();
+			for (const selected of chosen) body.append('path', selected);
+			const res = await fetch(`/instances/${id}/files/download`, { method: 'POST', body });
+			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
+			const name = /filename\*=UTF-8''([^;]+)/.exec(
+				res.headers.get('Content-Disposition') ?? ''
+			)?.[1];
+			const link = document.createElement('a');
+			link.href = URL.createObjectURL(await res.blob());
+			link.download = name ? decodeURIComponent(name) : 'files.zip';
+			link.click();
+			setTimeout(() => URL.revokeObjectURL(link.href), 10_000);
+		} catch (e) {
+			toast.error(e instanceof Error && e.message ? e.message : 'Could not make the zip');
+		} finally {
+			downloading = false;
+		}
 	}
 
 	let uploadOpen = $state(false);
@@ -328,15 +530,6 @@
 			</Breadcrumb.Root>
 		</div>
 		<Card.Action class="flex flex-wrap gap-2">
-			{#if selectedCount}
-				<span class="self-center text-sm text-muted-foreground">{selectedCount} selected</span>
-				<Button variant="outline" size="sm" onclick={() => table.resetRowSelection(true)}>
-					Clear
-				</Button>
-				<Button variant="destructive" size="sm" onclick={() => (bulkOpen = true)}>
-					<TrashIcon />Delete
-				</Button>
-			{/if}
 			<Button variant="outline" size="sm" onclick={() => (uploadOpen = true)}>
 				<UploadIcon />Upload
 			</Button>
@@ -411,6 +604,17 @@
 									<FileIcon class="size-4 shrink-0 text-muted-foreground" />
 								{/if}
 								<span class="truncate">{entry.name}</span>
+								{#if drafts[to] && isDirty(drafts[to])}
+									<span
+										class="size-2 shrink-0 rounded-full {to === failedPath
+											? 'bg-destructive'
+											: 'bg-warning'}"
+										title={to === failedPath ? 'Stopped the save' : 'Unsaved changes'}
+									></span>
+									<span class="sr-only"
+										>{to === failedPath ? 'Stopped the save' : 'Unsaved changes'}</span
+									>
+								{/if}
 								{#if entry.kind === 'link'}
 									<span class="text-xs text-muted-foreground">(link)</span>
 								{/if}
@@ -563,9 +767,14 @@
 <AlertDialog.Root bind:open={bulkOpen}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {selectedCount} selected?</AlertDialog.Title>
+			<AlertDialog.Title>Delete {chosenLabel}?</AlertDialog.Title>
 			<AlertDialog.Description>
 				Folders are deleted with everything in them. This cannot be undone.
+				{#if chosenUnsaved.length}
+					Your unsaved edits to {chosenUnsaved.length === 1
+						? 'one of them'
+						: `${chosenUnsaved.length} of them`} are lost too.
+				{/if}
 			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
@@ -594,11 +803,12 @@
 				<p class="text-sm text-destructive" role="alert">
 					{message(file.error, 'Could not open this file.')}
 				</p>
-			{:else if file?.current}
+			{:else if openDraft && file?.current}
 				{#key editing}
 					<CodeEditor
-						bind:value={draft}
+						bind:value={openDraft.content}
 						filename={editing ?? ''}
+						modelKey="instance-{id}/{editing}"
 						onsave={save}
 						onformat={format}
 						class="min-h-0 flex-1"
@@ -614,22 +824,104 @@
 						<WandIcon />Format
 					</Button>
 				{/if}
-				<Button variant="ghost" onclick={() => closeEditor()}>Close</Button>
-				<Button onClickPromise={save} disabled={!dirty}>Save</Button>
+				<Button variant="ghost" onclick={closeEditor}>Close</Button>
+				<Button variant="ghost" onclick={() => editing && revert(editing)} disabled={!dirty}>
+					Discard
+				</Button>
+				<Button onclick={save} loading={saving} disabled={!dirty}>Save</Button>
 			</div>
 		</div>
 	</Sheet.Content>
 </Sheet.Root>
 
-<AlertDialog.Root bind:open={confirmDiscard}>
+<AlertDialog.Root
+	bind:open={discardOpen}
+	onOpenChange={(isOpen) => {
+		if (!isOpen) discarding = null;
+	}}
+>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
 			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>
-			<AlertDialog.Description>The edits to this file have not been saved.</AlertDialog.Description>
+			<AlertDialog.Description>
+				{discarding && discarding.paths.length > 1
+					? `${discarding.paths.length} files have changes that have not been saved.`
+					: 'The edits to this file have not been saved.'}
+			</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={() => closeEditor(true)}>Discard</AlertDialog.Action>
+			<AlertDialog.Action onclick={discard}>Discard</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
+
+<Dialog.Root bind:open={moveOpen}>
+	<Dialog.Content>
+		<form
+			class="grid gap-4"
+			onsubmit={(e) => {
+				e.preventDefault();
+				void moveSelected();
+			}}
+		>
+			<Dialog.Header>
+				<Dialog.Title>Move {chosenLabel}</Dialog.Title>
+				<Dialog.Description>
+					Into the folder you name, each keeping its name. Nothing moves if a name is already there.
+					Leave it empty for the server folder.
+				</Dialog.Description>
+			</Dialog.Header>
+			<Input
+				bind:value={moveTo}
+				placeholder="Folder, such as config/sodium"
+				aria-label="Folder to move into"
+				autocomplete="off"
+				spellcheck="false"
+			/>
+			<Dialog.Footer>
+				<Button type="button" variant="ghost" onclick={() => (moveOpen = false)}>Cancel</Button>
+				<Button type="submit">Move</Button>
+			</Dialog.Footer>
+		</form>
+	</Dialog.Content>
+</Dialog.Root>
+
+{#if unsavedPaths.length}
+	<SaveBar
+		changeCount={unsavedPaths.length}
+		noun={['file', 'files']}
+		error={saveError}
+		{saving}
+		canSave={!saving}
+		saveLabel="Save all"
+		discardLabel="Discard all"
+		onsave={() => saveAll(unsavedPaths)}
+		ondiscard={() => askDiscard(unsavedPaths)}
+	/>
+{/if}
+
+{#if chosen.length}
+	<SelectionBar
+		label={chosenLabel}
+		raised={unsavedPaths.length > 0}
+		onclear={() => table.resetRowSelection(true)}
+	>
+		<Button variant="ghost" size="sm" onclick={() => (bulkOpen = true)}>
+			<TrashIcon />Delete
+		</Button>
+		<Button
+			variant="ghost"
+			size="sm"
+			onclick={() => {
+				moveTo = path;
+				moveOpen = true;
+			}}
+		>
+			<ArrowsMoveIcon />Move
+		</Button>
+		<Button variant="ghost" size="sm" loading={downloading} onclick={downloadSelected}>
+			<DownloadIcon />Download
+		</Button>
+	</SelectionBar>
+{/if}

@@ -131,6 +131,161 @@ describe('removeEntry', () => {
 	});
 });
 
+describe('saveFiles', () => {
+	const hashOf = (rel: string) => F.readTextFile(id, rel).hash;
+
+	it('saves several files together and hands back what each reads as now', async () => {
+		writeFileSync(join(root, 'config/b.toml'), 'k = 1');
+		const result = await F.saveFiles(member, id, [
+			{ rel: 'a.txt', content: 'a!', baseHash: hashOf('a.txt') },
+			{ rel: 'config/b.toml', content: 'k = 1', baseHash: hashOf('config/b.toml') }
+		]);
+		expect(result.changed).toBe(1);
+		expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a!');
+		expect(result.hashes['a.txt']).toBe(hashOf('a.txt'));
+		expect(result.hashes['config/b.toml']).toBe(hashOf('config/b.toml'));
+	});
+
+	it('writes nothing when one file changed since it was opened, and says which', async () => {
+		const a = hashOf('a.txt');
+		writeFileSync(join(root, 'config/b.toml'), 'k = 1');
+		const b = hashOf('config/b.toml');
+		writeFileSync(join(root, 'config/b.toml'), 'changed by someone else');
+		await expect(
+			F.saveFiles(owner, id, [
+				{ rel: 'a.txt', content: 'a!', baseHash: a },
+				{ rel: 'config/b.toml', content: 'mine', baseHash: b }
+			])
+		).rejects.toThrow('config/b.toml: This file changed since you opened it');
+		expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a');
+	});
+
+	it('refuses a code file for a member, a missing file, a type it cannot edit and a repeat, before writing', async () => {
+		writeFileSync(join(root, 'user_jvm_args.txt'), '-Xmx1G');
+		const a = hashOf('a.txt');
+		await expect(
+			F.saveFiles(member, id, [
+				{ rel: 'a.txt', content: 'a!', baseHash: a },
+				{ rel: 'user_jvm_args.txt', content: '-Xmx9G', baseHash: hashOf('user_jvm_args.txt') }
+			])
+		).rejects.toThrow(/user_jvm_args.txt: Only the owner/);
+		await expect(
+			F.saveFiles(owner, id, [{ rel: 'gone.txt', content: 'x', baseHash: a }])
+		).rejects.toThrow('gone.txt: This file changed since you opened it');
+		await expect(
+			F.saveFiles(owner, id, [{ rel: 'server.jar', content: 'x', baseHash: a }])
+		).rejects.toThrow('server.jar: This file type cannot be edited');
+		await expect(
+			F.saveFiles(owner, id, [
+				{ rel: 'a.txt', content: '1', baseHash: a },
+				{ rel: 'a.txt', content: '2', baseHash: a }
+			])
+		).rejects.toThrow('a.txt: is in the list twice');
+		expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a');
+		expect(readFileSync(join(root, 'user_jvm_args.txt'), 'utf8')).toBe('-Xmx1G');
+	});
+
+	it('is refused while the folder is being restored', async () => {
+		const release = claim(id, 'restore');
+		try {
+			await expect(
+				F.saveFiles(owner, id, [{ rel: 'a.txt', content: 'x', baseHash: hashOf('a.txt') }])
+			).rejects.toThrow(/restore is in progress/);
+		} finally {
+			release();
+		}
+	});
+});
+
+describe('removeEntries', () => {
+	it('deletes files and folders together, a file in a chosen folder counted with it', async () => {
+		writeFileSync(join(root, 'config/b.toml'), 'k');
+		expect(await F.removeEntries(id, ['config', 'config/b.toml', 'a.txt'])).toBe(2);
+		expect(existsSync(join(root, 'config'))).toBe(false);
+		expect(existsSync(join(root, 'a.txt'))).toBe(false);
+		expect(existsSync(join(root, 'world/level.dat'))).toBe(true);
+	});
+
+	it('deletes nothing when one is protected, missing or in a world a running server keeps', async () => {
+		await expect(F.removeEntries(id, ['a.txt', 'server.jar'])).rejects.toThrow(
+			/server.jar: .*cannot be deleted/
+		);
+		await expect(F.removeEntries(id, ['a.txt', 'nope.txt'])).rejects.toThrow('nope.txt: not found');
+		await expect(F.removeEntries(id, [])).rejects.toThrow('Choose');
+		state.running = true;
+		await expect(F.removeEntries(id, ['a.txt', 'world/level.dat'])).rejects.toThrow(
+			/world\/level.dat: .*Stop the server/
+		);
+		expect(existsSync(join(root, 'a.txt'))).toBe(true);
+		expect(existsSync(join(root, 'world/level.dat'))).toBe(true);
+	});
+});
+
+describe('moveEntries', () => {
+	it('moves files and folders into a folder, and to the server folder, as one step', async () => {
+		mkdirSync(join(root, 'mods'), { recursive: true });
+		writeFileSync(join(root, 'config/b.toml'), 'k');
+		expect(await F.moveEntries(member, id, ['a.txt', 'config'], 'mods')).toBe(2);
+		expect(existsSync(join(root, 'mods/a.txt'))).toBe(true);
+		expect(existsSync(join(root, 'mods/config/b.toml'))).toBe(true);
+		expect(existsSync(join(root, 'a.txt'))).toBe(false);
+		expect(await F.moveEntries(member, id, ['mods/a.txt'], '')).toBe(1);
+		expect(existsSync(join(root, 'a.txt'))).toBe(true);
+		// already there: nothing to do
+		expect(await F.moveEntries(member, id, ['a.txt'], '')).toBe(0);
+	});
+
+	it('moves nothing when a name is taken, an item goes into itself, or one is protected or missing', async () => {
+		mkdirSync(join(root, 'mods'), { recursive: true });
+		writeFileSync(join(root, 'mods/a.txt'), 'other');
+		await expect(F.moveEntries(member, id, ['a.txt', 'config'], 'mods')).rejects.toThrow(
+			/a.txt: mods\/a.txt already exists/
+		);
+		await expect(F.moveEntries(member, id, ['config'], 'config/sub')).rejects.toThrow(
+			'config: cannot be moved into itself'
+		);
+		await expect(F.moveEntries(member, id, ['server.jar'], 'mods')).rejects.toThrow(
+			/server.jar: .*cannot be moved/
+		);
+		await expect(F.moveEntries(member, id, ['nope'], 'mods')).rejects.toThrow('nope: not found');
+		await expect(F.moveEntries(member, id, ['a.txt'], 'server.jar')).rejects.toThrow('is a file');
+		expect(existsSync(join(root, 'a.txt'))).toBe(true);
+		expect(existsSync(join(root, 'config'))).toBe(true);
+	});
+
+	it('keeps the code rule for what is inside a folder that moves, and the running world', async () => {
+		mkdirSync(join(root, 'staging'), { recursive: true });
+		mkdirSync(join(root, 'mods'), { recursive: true });
+		writeFileSync(join(root, 'staging/evil.jar'), 'JAR');
+		await expect(F.moveEntries(member, id, ['staging'], 'mods')).rejects.toThrow(
+			/staging: Only the owner/
+		);
+		expect(existsSync(join(root, 'staging/evil.jar'))).toBe(true);
+		await F.moveEntries(owner, id, ['staging'], 'mods');
+		expect(existsSync(join(root, 'mods/staging/evil.jar'))).toBe(true);
+
+		state.running = true;
+		await expect(F.moveEntries(owner, id, ['world'], 'mods')).rejects.toThrow(/Stop the server/);
+		await expect(F.moveEntries(owner, id, ['a.txt'], 'world')).rejects.toThrow(/Stop the server/);
+	});
+});
+
+describe('describeSelection', () => {
+	it('names each entry by its path in the server folder, folders with their contents', () => {
+		writeFileSync(join(root, 'config/b.toml'), 'k');
+		const { entries, name } = F.describeSelection(id, ['config', 'a.txt', 'config/b.toml']);
+		expect(name).toBe('files.zip');
+		expect(entries.map((e) => `${e.kind}:${e.name}`).sort()).toEqual([
+			'dir:config',
+			'file:a.txt',
+			'file:config/b.toml'
+		]);
+		expect(() => F.describeSelection(id, ['nope'])).toThrow('nope not found');
+		expect(() => F.describeSelection(id, [])).toThrow('Choose');
+		expect(() => F.describeSelection(id, ['../x'])).toThrow(/not allowed/);
+	});
+});
+
 describe('uploadFiles', () => {
 	it('refuses a batch with a code file before writing any of it', async () => {
 		const saved: string[] = [];
