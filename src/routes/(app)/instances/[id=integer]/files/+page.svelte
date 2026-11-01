@@ -178,6 +178,14 @@
 
 	const closeEditor = () => (editorOpen = false);
 
+	// the editor keeps undo history by path, so a file made later at this path would inherit it
+	function forgetHistory(path: string) {
+		if (editorShown)
+			void import('#lib/components/config-editor/monaco.js').then((editor) =>
+				editor.disposeModelsAt(`instance-${id}/`, path)
+			);
+	}
+
 	/** Drops the texts held for a file, or for everything in a folder; closes the editor if it was on one. */
 	function dropDrafts(path: string) {
 		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
@@ -185,6 +193,7 @@
 			editing = null;
 			editorOpen = false;
 		}
+		forgetHistory(path);
 	}
 
 	/** Moves the texts held for a file, or for everything in a folder, to where it went. */
@@ -195,6 +204,7 @@
 			delete drafts[key];
 		}
 		if (editing && under(editing, from)) editing = rebase(editing, from, to);
+		forgetHistory(from);
 	}
 
 	let deleting = $state({ path: '', name: '', kind: '' });

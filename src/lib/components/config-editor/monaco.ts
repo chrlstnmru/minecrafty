@@ -62,6 +62,17 @@ export function disposeModels(prefix: string) {
 			model.dispose();
 }
 
+/** Frees the text kept for `path` under `prefix`, and for everything inside it when it is a folder. */
+export function disposeModelsAt(prefix: string, path: string) {
+	const at = `/${prefix}${path}`;
+	for (const model of monaco.editor.getModels())
+		if (
+			model.uri.scheme === MODEL_SCHEME &&
+			(model.uri.path === at || model.uri.path.startsWith(`${at}/`))
+		)
+			model.dispose();
+}
+
 export const languageFor = (name: string) =>
 	LANGUAGES[name.toLowerCase().match(/\.([^./]+)$/)?.[1] ?? ''] ?? 'plaintext';
 

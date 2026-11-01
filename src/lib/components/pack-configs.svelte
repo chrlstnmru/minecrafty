@@ -186,6 +186,14 @@
 			void import('./config-editor/monaco.js').then((editor) => editor.disposeModels(`${id}/`));
 	});
 
+	// the editor keeps undo history by path, so a file made later at this path would inherit it
+	function forgetHistory(path: string) {
+		if (editorShown)
+			void import('./config-editor/monaco.js').then((editor) =>
+				editor.disposeModelsAt(`${id}/`, path)
+			);
+	}
+
 	/** Puts a file back to its saved text; a file made here is dropped. */
 	function revert(path: string) {
 		const draft = drafts[path];
@@ -193,6 +201,7 @@
 		if (draft.isNew) {
 			delete drafts[path];
 			if (open === path) open = null;
+			forgetHistory(path);
 		} else {
 			draft.content = draft.loaded;
 			// a save refused this file as out of date, so what it was read as is stale too
@@ -362,6 +371,7 @@
 	function dropDrafts(path: string) {
 		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
 		if (open && under(open, path)) open = null;
+		forgetHistory(path);
 	}
 
 	/** Moves the texts held for a file, or for everything in a folder, to where it went. */
@@ -372,6 +382,7 @@
 			delete drafts[key];
 		}
 		if (open && under(open, from)) open = rebase(open, from, to);
+		forgetHistory(from);
 	}
 
 	/** Forgets what the page held for a folder that goes: its empty-folder marks, the target and the texts. */
