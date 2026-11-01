@@ -1,6 +1,16 @@
 import { describe, expect, it } from 'vitest';
 
-import { buildFileTree, movedPath, nodeState, toggleNode, topLevelPaths } from './file-tree';
+import {
+	buildFileTree,
+	canMoveInto,
+	decodeDrag,
+	encodeDrag,
+	intoItself,
+	movedPath,
+	nodeState,
+	toggleNode,
+	topLevelPaths
+} from './file-tree';
 
 describe('buildFileTree', () => {
 	it('nests files in their folders, folders first, then by name', () => {
@@ -141,5 +151,34 @@ describe('topLevelPaths', () => {
 		).toEqual(['config', 'options.txt']);
 		expect(topLevelPaths(['config2', 'config'])).toEqual(['config2', 'config']);
 		expect(topLevelPaths([])).toEqual([]);
+	});
+});
+
+describe('dragging several items', () => {
+	it('allows a drop that moves at least one item and puts no folder inside itself', () => {
+		expect(canMoveInto(['a.toml', 'config/b.toml'], 'other')).toBe(true);
+		// one is already there, the other is not: the drop moves the other
+		expect(canMoveInto(['config/a.toml', 'b.toml'], 'config')).toBe(true);
+		expect(canMoveInto(['config/a.toml', 'config/b.toml'], 'config')).toBe(false);
+		expect(canMoveInto(['config', 'a.toml'], 'config/sodium')).toBe(false);
+		expect(canMoveInto(['config', 'a.toml'], 'config')).toBe(false);
+		expect(canMoveInto([], 'config')).toBe(false);
+	});
+
+	it('knows when a folder would go into itself, but not for a name that only shares a prefix', () => {
+		expect(intoItself('config', 'config')).toBe(true);
+		expect(intoItself('config', 'config/sodium')).toBe(true);
+		expect(intoItself('config', 'config2')).toBe(false);
+	});
+
+	it('carries the paths as drag data and reads them back, and reads nonsense as none', () => {
+		expect(decodeDrag(encodeDrag(['a.toml', 'config/sodium']))).toEqual([
+			'a.toml',
+			'config/sodium'
+		]);
+		expect(decodeDrag('not json')).toEqual([]);
+		expect(decodeDrag('{"a":1}')).toEqual([]);
+		expect(decodeDrag('[1,2]')).toEqual([]);
+		expect(decodeDrag(undefined)).toEqual([]);
 	});
 });

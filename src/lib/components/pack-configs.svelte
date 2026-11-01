@@ -41,7 +41,14 @@
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatConfig, formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
-	import { buildFileTree, movedPath, TREE_DRAG_TYPE, topLevelPaths } from '#lib/file-tree.js';
+	import {
+		buildFileTree,
+		canMoveInto,
+		decodeDrag,
+		movedPath,
+		TREE_DRAG_TYPE,
+		topLevelPaths
+	} from '#lib/file-tree.js';
 	import { formatBytes } from '#lib/format.js';
 	import {
 		batches,
@@ -437,11 +444,17 @@
 		}
 	}
 
-	/** A drop on a folder: the dragged file or folder keeps its name and goes into it. */
-	function moveInto(from: string, folder: string) {
-		const to = movedPath(from, folder);
+	/** A drop on a folder: each dragged file or folder keeps its name and goes into it. */
+	function moveInto(from: string[], folder: string) {
+		if (!canMoveInto(from, folder)) return;
+		if (from.length > 1) {
+			void moveMany(from, folder);
+			return;
+		}
+		const [only] = from;
+		const to = movedPath(only, folder);
 		if (!to) return;
-		void (folderPaths.has(from) ? moveFolder(from, to) : moveFile(from, to));
+		void (folderPaths.has(only) ? moveFolder(only, to) : moveFile(only, to));
 	}
 
 	async function confirmName() {
@@ -472,16 +485,18 @@
 
 	const chosen = $derived(topLevelPaths(selection));
 	const chosenFiles = $derived(files.filter((f) => chosen.some((path) => under(f.path, path))));
-	const chosenLabel = $derived.by(() => {
-		const folders = chosen.filter((path) => !files.some((f) => f.path === path)).length;
-		const loose = chosen.length - folders;
+	/** What these paths are, such as "1 folder and 2 files". */
+	function labelOf(paths: string[]) {
+		const folders = paths.filter((path) => !files.some((f) => f.path === path)).length;
+		const loose = paths.length - folders;
 		return [
 			folders ? `${folders} ${folders === 1 ? 'folder' : 'folders'}` : '',
 			loose ? `${loose} ${loose === 1 ? 'file' : 'files'}` : ''
 		]
 			.filter(Boolean)
 			.join(' and ');
-	});
+	}
+	const chosenLabel = $derived(labelOf(chosen));
 	const chosenUnsaved = $derived(
 		unsavedPaths.filter((path) => chosen.some((c) => under(path, c)) && !drafts[path]?.isNew)
 	);
@@ -515,10 +530,9 @@
 		}
 	}
 
-	async function bulkMove() {
-		bulkMoveOpen = false;
-		const paths = chosen;
-		const folder = moveTo;
+	/** Moves several items into a folder together: one revision, and nothing moves if any is refused. */
+	async function moveMany(paths: string[], folder: string) {
+		const label = labelOf(paths);
 		try {
 			await movePackConfigs({ id, paths, folder });
 			for (const from of paths) {
@@ -530,10 +544,15 @@
 				rekeyDrafts(from, to);
 			}
 			selection = new Set();
-			toast.success(`Moved ${chosenLabel} to ${folder || 'the server folder'}`);
+			toast.success(`Moved ${label} to ${folder || 'the server folder'}`);
 		} catch (e) {
 			toast.error(message(e, 'Could not move them'));
 		}
+	}
+
+	function bulkMove() {
+		bulkMoveOpen = false;
+		void moveMany(chosen, moveTo);
 	}
 
 	let downloading = $state(false);
@@ -737,8 +756,8 @@
 				ondragend={() => (rootDrop = false)}
 				ondrop={(event) => {
 					rootDrop = false;
-					const from = event.dataTransfer?.getData(TREE_DRAG_TYPE);
-					if (!canWrite || !from) return;
+					const from = decodeDrag(event.dataTransfer?.getData(TREE_DRAG_TYPE));
+					if (!canWrite || !from.length) return;
 					event.preventDefault();
 					moveInto(from, '');
 				}}

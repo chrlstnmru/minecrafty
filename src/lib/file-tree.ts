@@ -51,6 +51,32 @@ export function buildFileTree<T extends { path: string }>(
 	return sorted(root.children);
 }
 
+/** Whether dropping `from` on `folder` would put a folder inside itself. */
+export const intoItself = (from: string, folder: string) =>
+	folder === from || folder.startsWith(`${from}/`);
+
+/**
+ * Whether a drop of these items on `folder` is allowed and does something: none of them may go into
+ * itself (that refuses the lot), and at least one must not be there already.
+ */
+export const canMoveInto = (paths: string[], folder: string) =>
+	paths.length > 0 &&
+	!paths.some((path) => intoItself(path, folder)) &&
+	paths.some((path) => movedPath(path, folder) !== null);
+
+/** The paths a drag carries, as the drag data. */
+export const encodeDrag = (paths: string[]) => JSON.stringify(paths);
+
+/** The paths in drag data; anything that is not a list of paths reads as no paths. */
+export function decodeDrag(data: string | undefined): string[] {
+	try {
+		const parsed: unknown = JSON.parse(data ?? '');
+		return Array.isArray(parsed) && parsed.every((p) => typeof p === 'string') ? parsed : [];
+	} catch {
+		return [];
+	}
+}
+
 /** What a dragged tree item carries, so a drop can tell it from files dragged in from the desktop. */
 export const TREE_DRAG_TYPE = 'application/x-minecrafty-tree-item';
 

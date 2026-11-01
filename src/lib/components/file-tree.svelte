@@ -8,8 +8,10 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import {
-		movedPath,
+		canMoveInto,
+		encodeDrag,
 		nodeState,
+		topLevelPaths,
 		toggleNode,
 		TREE_DRAG_TYPE,
 		type FolderNode,
@@ -56,11 +58,12 @@
 		/** Files from the desktop were dropped on a folder. Without this, folders are not drop targets. */
 		ondropfiles?: (folder: string, transfer: DataTransfer) => void;
 		/**
-		 * A file or folder was dragged onto a folder (or onto a file, meaning the folder it is in). The
-		 * root is not a row here: whoever holds the tree takes drops on the space around it.
-		 * Without this, rows cannot be dragged.
+		 * Files or folders were dragged onto a folder (or onto a file, meaning the folder it is in).
+		 * Dragging a row that is chosen carries everything chosen (the top-level paths); any other row
+		 * goes alone. The root is not a row here: whoever holds the tree takes drops on the space
+		 * around it. Without this, rows cannot be dragged.
 		 */
-		onmove?: (from: string, folder: string) => void;
+		onmove?: (from: string[], folder: string) => void;
 		/**
 		 * The paths chosen with the checkboxes, files and folders (a folder chosen with all it holds).
 		 * A checkbox shows in place of a row's icon on hover and, once anything is chosen, on every
@@ -113,8 +116,8 @@
 		event.stopPropagation();
 		if (event.type === 'click') swallowClick = false;
 	}
-	// the path being dragged: a drop target cannot read the data until the drop, but needs to know now
-	let dragged = $state<string | null>(null);
+	// the paths being dragged: a drop target cannot read the data until the drop, but needs to know now
+	let dragged = $state<string[] | null>(null);
 
 	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
 	const isTreeDrag = (event: DragEvent) =>
@@ -123,9 +126,20 @@
 
 	function dragStart(event: DragEvent, path: string) {
 		if (!event.dataTransfer) return;
-		event.dataTransfer.setData(TREE_DRAG_TYPE, path);
+		const carried = selection?.has(path) && selection.size > 1 ? topLevelPaths(selection) : [path];
+		event.dataTransfer.setData(TREE_DRAG_TYPE, encodeDrag(carried));
 		event.dataTransfer.effectAllowed = 'move';
-		dragged = path;
+		dragged = carried;
+		if (carried.length > 1) {
+			// the browser's picture of the row would say nothing about the others
+			const badge = document.createElement('div');
+			badge.textContent = `${carried.length} items`;
+			badge.className =
+				'fixed -top-96 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow';
+			document.body.append(badge);
+			event.dataTransfer.setDragImage(badge, 12, 12);
+			setTimeout(() => badge.remove());
+		}
 	}
 
 	function dragEnd() {
@@ -141,7 +155,7 @@
 		if (!onmove || !isTreeDrag(event)) return false;
 		// stopped either way: the space behind the tree would read it as a drop on the root
 		event.stopPropagation();
-		if (dragged === null || movedPath(dragged, folder) === null) return true;
+		if (dragged === null || !canMoveInto(dragged, folder)) return true;
 		event.preventDefault();
 		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
 		dropOn = highlight;
@@ -154,7 +168,7 @@
 		event.stopPropagation();
 		const from = dragged;
 		dragEnd();
-		if (from !== null && movedPath(from, folder) !== null) {
+		if (from !== null && canMoveInto(from, folder)) {
 			event.preventDefault();
 			onmove(from, folder);
 		}
