@@ -69,6 +69,7 @@
 	} from '#lib/files.remote.js';
 	import { insideAny } from '#lib/folder-picker.js';
 	import { formatBytes } from '#lib/format.js';
+	import { readDropped, type UploadItem } from '#lib/upload-entries.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
@@ -495,6 +496,40 @@
 	}
 
 	let uploadOpen = $state(false);
+	// where the upload dialog puts things, and what it starts with: the folder shown, or one that files were dropped on
+	let uploadFolder = $state('');
+	let uploadInitial = $state.raw<UploadItem[]>([]);
+
+	function openUpload(folder: string, initial: UploadItem[] = []) {
+		uploadFolder = folder;
+		uploadInitial = initial;
+		uploadOpen = true;
+	}
+
+	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
+
+	/** A folder row takes dragged rows into it and files dragged in from the desktop. */
+	const takesRowsAndFiles = (folder: string) => ({
+		ondragover: (event: DragEvent) => {
+			if (drag.over(event, folder) || !hasFiles(event)) return;
+			event.preventDefault();
+			drag.target = folder;
+		},
+		ondragleave: (event: DragEvent) => drag.leave(event),
+		ondrop: (event: DragEvent) => {
+			if (drag.drop(event, folder)) return;
+			if (!event.dataTransfer || !hasFiles(event)) return;
+			event.preventDefault();
+			drag.target = null;
+			// read now, not after the first wait: the browser empties the drop once this returns
+			void readDropped(event.dataTransfer).then(
+				(items) => {
+					if (items.length) openUpload(folder, items);
+				},
+				() => toast.error('Could not read what was dropped')
+			);
+		}
+	});
 
 	function activate(entry: { name: string; kind: string }) {
 		if (entry.kind === 'dir') void open(join(entry.name));
@@ -571,7 +606,7 @@
 			</Breadcrumb.Root>
 		</div>
 		<Card.Action class="flex flex-wrap gap-2">
-			<Button variant="outline" size="sm" onclick={() => (uploadOpen = true)}>
+			<Button variant="outline" size="sm" onclick={() => openUpload(path)}>
 				<UploadIcon />Upload
 			</Button>
 			<Button variant="outline" size="sm" onclick={() => ask({ kind: 'folder', value: '' })}>
@@ -628,7 +663,7 @@
 						ondragstart={(event) => drag.start(event, to, chosenSet)}
 						ondragend={() => drag.end()}
 						class={droppable && drag.target === to ? `${litClass} hover:bg-accent` : undefined}
-						{...droppable ? takes(to) : {}}
+						{...droppable ? takesRowsAndFiles(to) : {}}
 					>
 						<Table.Cell class="ps-6">
 							<Checkbox
@@ -769,7 +804,7 @@
 	</Card.Content>
 </Card.Root>
 
-<UploadDialog bind:open={uploadOpen} instanceId={id} {path} />
+<UploadDialog bind:open={uploadOpen} instanceId={id} path={uploadFolder} initial={uploadInitial} />
 
 <Dialog.Root bind:open={promptOpen}>
 	<Dialog.Content>

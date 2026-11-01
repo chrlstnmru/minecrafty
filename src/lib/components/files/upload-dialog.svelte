@@ -2,6 +2,8 @@
 	import { untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
+	import type { UploadItem } from '#lib/upload-entries.js';
+
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import Uploader from '#lib/components/uploader/uploader.svelte';
 	import { uploadFiles } from '#lib/files.remote.js';
@@ -11,8 +13,15 @@
 	let {
 		open = $bindable(false),
 		instanceId,
-		path
-	}: { open?: boolean; instanceId: number; path: string } = $props();
+		path,
+		initial = []
+	}: {
+		open?: boolean;
+		instanceId: number;
+		path: string;
+		/** files already chosen when it opens, such as ones dropped on a folder */
+		initial?: UploadItem[];
+	} = $props();
 
 	// leaving mid-upload would hide the progress
 	let busy = $state(false);
@@ -40,6 +49,7 @@
 		{#key visit}
 			<Uploader
 				bind:busy
+				{initial}
 				maxFileBytes={MAX_FILE_BYTES}
 				upload={(items) => uploadFiles({ id: instanceId, path, items })}
 				uploadLarge={(item, onBytes, signal) =>

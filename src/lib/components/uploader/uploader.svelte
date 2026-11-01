@@ -5,7 +5,7 @@
 	import FolderIcon from '@tabler/icons-svelte/icons/folder';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
 	import XIcon from '@tabler/icons-svelte/icons/x';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
 	import * as Attachment from '#lib/components/ui/attachment/index.js';
@@ -15,10 +15,9 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import {
 		batches,
-		collectEntries,
 		fromFileList,
 		MAX_ITEMS,
-		type FsEntry,
+		readDropped,
 		type UploadItem
 	} from '#lib/upload-entries.js';
 	import { SMALL_FILE_BYTES } from '#lib/upload-limits.js';
@@ -37,7 +36,8 @@
 		busy = $bindable(false),
 		onDone,
 		folders = true,
-		noun = 'files'
+		noun = 'files',
+		initial = []
 	}: {
 		/** sends a batch of small files */
 		upload: (batch: UploadItem[]) => Promise<void>;
@@ -62,6 +62,8 @@
 		/** offer "Choose a folder" and accept dropped folders */
 		folders?: boolean;
 		noun?: string;
+		/** files already chosen when it opens, such as ones dropped on a folder */
+		initial?: UploadItem[];
 	} = $props();
 
 	type Status = { state: Attachment.AttachmentState; message?: string; sent?: number };
@@ -147,21 +149,17 @@
 		queue = queue.filter((item) => item.path !== path);
 	}
 
+	onMount(() => {
+		if (initial.length) add(initial);
+	});
+
 	async function onDrop(event: DragEvent) {
 		event.preventDefault();
 		dragging = false;
 		const transfer = event.dataTransfer;
 		if (!transfer) return;
-		// the entries must be taken synchronously: the list is emptied once this handler returns
-		const entries = Array.from(transfer.items)
-			.map((item) => item.webkitGetAsEntry?.())
-			.filter((entry): entry is FileSystemEntry => !!entry);
 		try {
-			add(
-				folders && entries.length
-					? await collectEntries(entries as unknown as FsEntry[])
-					: fromFileList(transfer.files)
-			);
+			add(await readDropped(transfer, folders));
 		} catch {
 			toast.error('Could not read what was dropped');
 		}

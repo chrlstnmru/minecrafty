@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { batches, collectEntries, fromFileList, type FsEntry } from './upload-entries';
+import { batches, collectEntries, fromFileList, readDropped, type FsEntry } from './upload-entries';
 
 const file = (name: string, text: string, fullPath: string): FsEntry => ({
 	isFile: true,
@@ -74,6 +74,40 @@ describe('collectEntries', () => {
 		);
 		const items = await collectEntries([many]);
 		expect(items.length).toBeLessThan(6000);
+	});
+});
+
+describe('readDropped', () => {
+	/** What a drop hands over: items that can say what entry they are, and the plain file list. */
+	const dropOf = (entries: (FsEntry | null)[], files: File[] = []) => ({
+		items: entries.map((entry) => ({ webkitGetAsEntry: () => entry })),
+		files
+	});
+
+	it('walks dropped folders and keeps their names', async () => {
+		const pack = dir('pack', '/pack', [file('a.txt', 'A', '/pack/a.txt')]);
+		const items = await readDropped(dropOf([pack, file('b.txt', 'B', '/b.txt')]) as never);
+		expect(items.map((i) => i.path).sort()).toEqual(['b.txt', 'pack/a.txt']);
+	});
+
+	it('takes the entries before the first wait, since the browser empties the drop after the handler', async () => {
+		const transfer = dropOf([file('a.txt', 'A', '/a.txt')]);
+		const read = readDropped(transfer as never);
+		// what a browser does once the handler returns
+		transfer.items.length = 0;
+		expect((await read).map((i) => i.path)).toEqual(['a.txt']);
+	});
+
+	it('uses the plain files when folders are off or no entry can be read', async () => {
+		const plain = new File(['x'], 'plain.txt');
+		expect(
+			(await readDropped(dropOf([file('a.txt', 'A', '/a.txt')], [plain]) as never, false)).map(
+				(i) => i.path
+			)
+		).toEqual(['plain.txt']);
+		expect((await readDropped(dropOf([null], [plain]) as never)).map((i) => i.path)).toEqual([
+			'plain.txt'
+		]);
 	});
 });
 
