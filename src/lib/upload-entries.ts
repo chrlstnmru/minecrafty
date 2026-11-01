@@ -50,6 +50,23 @@ export async function collectEntries(entries: FsEntry[]): Promise<UploadItem[]> 
 export const fromFileList = (files: Iterable<File>): UploadItem[] =>
 	Array.from(files, (file) => ({ file, path: file.webkitRelativePath || file.name }));
 
+/**
+ * The files of a drop (loose files, and whole folders when `folders` is on). Call it straight from
+ * the drop handler: the entries are taken before the first wait, because the browser empties the
+ * list once the handler returns.
+ */
+export async function readDropped(
+	transfer: Pick<DataTransfer, 'items' | 'files'>,
+	folders = true
+): Promise<UploadItem[]> {
+	const entries = Array.from(transfer.items)
+		.map((item) => item.webkitGetAsEntry?.())
+		.filter((entry): entry is FileSystemEntry => !!entry);
+	return folders && entries.length
+		? collectEntries(entries as unknown as FsEntry[])
+		: fromFileList(transfer.files);
+}
+
 /** Splits a queue into requests that each stay well under the server's body limit. */
 export function batches(items: UploadItem[], maxBytes = BATCH_BYTES, maxFiles = BATCH_FILES) {
 	const out: UploadItem[][] = [];
