@@ -2,7 +2,14 @@ import { command, query } from '$app/server';
 import * as v from 'valibot';
 
 import { idSchema } from '#lib/schemas/common.js';
-import { fileNameSchema, filePathSchema, uploadBatchSchema } from '#lib/schemas/files.js';
+import {
+	fileNameSchema,
+	filePathSchema,
+	moveFilesSchema,
+	removeFilesSchema,
+	saveFilesSchema,
+	uploadBatchSchema
+} from '#lib/schemas/files.js';
 import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import * as files from '#lib/server/files.js';
@@ -26,15 +33,30 @@ export const readFile = query(location, async ({ id: instanceId, path }) => {
 	return userFacing(async () => files.readTextFile(instanceId, path));
 });
 
-export const saveFile = command(
-	v.object({ id, path: filePathSchema, content: v.pipe(v.string(), v.maxLength(2_200_000)) }),
-	async ({ id: instanceId, path, content }) => {
-		const user = requirePermission(instanceId, 'files');
-		await userFacing(async () => files.saveFile(user, instanceId, path, content));
-		record({ action: 'file.save', summary: `Edited ${path}`, instanceId });
-		await readFile({ id: instanceId, path }).refresh();
-	}
-);
+const listedPaths = (paths: string[]) =>
+	paths.length > 3
+		? `${paths.slice(0, 3).join(', ')} and ${paths.length - 3} more`
+		: paths.join(', ');
+
+/** Saves every edited file together; one that fails stops them all. */
+export const saveFiles = command(saveFilesSchema, async ({ id: instanceId, files: list }) => {
+	const user = requirePermission(instanceId, 'files');
+	const { changed, hashes } = await userFacing(() =>
+		files.saveFiles(
+			user,
+			instanceId,
+			list.map((f) => ({ rel: f.path, content: f.content, baseHash: f.baseHash }))
+		)
+	);
+	if (changed)
+		record({
+			action: 'file.save',
+			summary: `Edited ${listedPaths(list.map((f) => f.path))}`,
+			instanceId
+		});
+	await Promise.all(list.map((f) => readFile({ id: instanceId, path: f.path }).refresh()));
+	return { hashes };
+});
 
 // the folder that holds the entry, so the listing on screen can be refreshed after a change
 const joinPath = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
@@ -175,3 +197,31 @@ export const abortUpload = command(
 		await userFacing(async () => uploads.abortUpload(uploadId, instanceId, user.id));
 	}
 );
+
+const refreshListings = (instanceId: number, paths: string[]) =>
+	Promise.all(
+		[...new Set(paths.map(parentOf))].map((path) => listFiles({ id: instanceId, path }).refresh())
+	);
+
+export const removeFiles = command(removeFilesSchema, async ({ id: instanceId, paths }) => {
+	requirePermission(instanceId, 'files');
+	const removed = await userFacing(() => files.removeEntries(instanceId, paths));
+	record({
+		action: 'file.delete',
+		summary: `Deleted ${removed} ${removed === 1 ? 'item' : 'items'}: ${listedPaths(paths)}`,
+		instanceId
+	});
+	await refreshListings(instanceId, paths);
+});
+
+export const moveFiles = command(moveFilesSchema, async ({ id: instanceId, paths, folder }) => {
+	const user = requirePermission(instanceId, 'files');
+	const moved = await userFacing(() => files.moveEntries(user, instanceId, paths, folder));
+	if (moved)
+		record({
+			action: 'file.rename',
+			summary: `Moved ${moved} ${moved === 1 ? 'item' : 'items'} to ${folder || 'the server folder'}: ${listedPaths(paths)}`,
+			instanceId
+		});
+	await refreshListings(instanceId, [...paths, joinPath(folder, 'x')]);
+});
