@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import {
 	buildFileTree,
 	canMoveInto,
+	carriedBy,
 	decodeDrag,
 	encodeDrag,
 	intoItself,
@@ -169,6 +170,15 @@ describe('dragging several items', () => {
 		expect(intoItself('config', 'config')).toBe(true);
 		expect(intoItself('config', 'config/sodium')).toBe(true);
 		expect(intoItself('config', 'config2')).toBe(false);
+	});
+
+	it('carries everything chosen when the dragged row is one of several, else the row alone', () => {
+		const chosen = new Set(['a.toml', 'config', 'config/b.toml']);
+		expect(carriedBy('a.toml', chosen)).toEqual(['a.toml', 'config']);
+		// a row that is not chosen drags alone, and so does the only row chosen
+		expect(carriedBy('c.toml', chosen)).toEqual(['c.toml']);
+		expect(carriedBy('a.toml', new Set(['a.toml']))).toEqual(['a.toml']);
+		expect(carriedBy('a.toml', new Set())).toEqual(['a.toml']);
 	});
 
 	it('carries the paths as drag data and reads them back, and reads nonsense as none', () => {

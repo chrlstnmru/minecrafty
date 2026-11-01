@@ -7,16 +7,8 @@
 
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
-	import {
-		canMoveInto,
-		encodeDrag,
-		nodeState,
-		topLevelPaths,
-		toggleNode,
-		TREE_DRAG_TYPE,
-		type FolderNode,
-		type TreeNode
-	} from '#lib/file-tree.js';
+	import { DragMove } from '#lib/drag-move.svelte.js';
+	import { nodeState, toggleNode, type FolderNode, type TreeNode } from '#lib/file-tree.js';
 
 	type Status = { tone: 'info' | 'warning' | 'danger'; label: string };
 
@@ -86,8 +78,6 @@
 		open?: boolean;
 	} = $props();
 
-	let dropOn = $state<string | null>(null);
-
 	const selecting = $derived((selection?.size ?? 0) > 0);
 	const toggle = (node: TreeNode<T>, on: boolean) =>
 		onselection?.(toggleNode(selection ?? new Set(), node, on));
@@ -122,64 +112,17 @@
 		event.stopPropagation();
 		if (event.type === 'click') swallowClick = false;
 	}
-	// the paths being dragged: a drop target cannot read the data until the drop, but needs to know now
-	let dragged = $state<string[] | null>(null);
-
 	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
-	const isTreeDrag = (event: DragEvent) =>
-		event.dataTransfer?.types.includes(TREE_DRAG_TYPE) ?? false;
 	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
 
-	function dragStart(event: DragEvent, path: string) {
-		if (!event.dataTransfer) return;
-		const carried = selection?.has(path) && selection.size > 1 ? topLevelPaths(selection) : [path];
-		event.dataTransfer.setData(TREE_DRAG_TYPE, encodeDrag(carried));
-		event.dataTransfer.effectAllowed = 'move';
-		dragged = carried;
-		if (carried.length > 1) {
-			// the browser's picture of the row would say nothing about the others
-			const badge = document.createElement('div');
-			badge.textContent = `${carried.length} items`;
-			badge.className =
-				'fixed -top-96 rounded-md border bg-popover px-2 py-1 text-xs text-popover-foreground shadow';
-			document.body.append(badge);
-			event.dataTransfer.setDragImage(badge, 12, 12);
-			setTimeout(() => badge.remove());
+	const drag = new DragMove({
+		onmove: () => onmove,
+		onend: () => {
+			// pressing a row focused its checkbox; a drag should not leave it showing
+			const focused = document.activeElement;
+			if (focused instanceof HTMLElement && focused.closest('[data-tree-row]')) focused.blur();
 		}
-	}
-
-	function dragEnd() {
-		dragged = null;
-		dropOn = null;
-		// pressing a row focused its checkbox; a drag should not leave it showing
-		const focused = document.activeElement;
-		if (focused instanceof HTMLElement && focused.closest('[data-tree-row]')) focused.blur();
-	}
-
-	/** Takes a dragged tree item hovering over `folder`; false when it is not one. */
-	function dragOverFolder(event: DragEvent, folder: string, highlight: string | null) {
-		if (!onmove || !isTreeDrag(event)) return false;
-		// stopped either way: the space behind the tree would read it as a drop on the root
-		event.stopPropagation();
-		if (dragged === null || !canMoveInto(dragged, folder)) return true;
-		event.preventDefault();
-		if (event.dataTransfer) event.dataTransfer.dropEffect = 'move';
-		dropOn = highlight;
-		return true;
-	}
-
-	/** Takes a dragged tree item dropped on `folder`; false when it is not one. */
-	function dropOnFolder(event: DragEvent, folder: string) {
-		if (!onmove || !isTreeDrag(event)) return false;
-		event.stopPropagation();
-		const from = dragged;
-		dragEnd();
-		if (from !== null && canMoveInto(from, folder)) {
-			event.preventDefault();
-			onmove(from, folder);
-		}
-		return true;
-	}
+	});
 </script>
 
 {#snippet dot(mark: Status | undefined)}
@@ -237,8 +180,8 @@
 					role="presentation"
 					data-tree-row
 					draggable={onmove ? 'true' : undefined}
-					ondragstart={(event) => dragStart(event, node.path)}
-					ondragend={dragEnd}
+					ondragstart={(event) => drag.start(event, node.path, selection)}
+					ondragend={() => drag.end()}
 					onpointerdown={(event) => pressStart(event, node)}
 					onpointermove={pressMove}
 					onpointerup={pressEnd}
@@ -247,25 +190,23 @@
 					onclickcapture={swallow}
 					class="group/row flex items-center gap-1 rounded-md hover:bg-accent/50 {onselection
 						? 'select-none'
-						: ''} {selectedFolder === node.path ? 'bg-accent' : ''} {dropOn === node.path
+						: ''} {selectedFolder === node.path ? 'bg-accent' : ''} {drag.target === node.path
 						? 'bg-accent ring-2 ring-ring/50'
 						: ''}"
 					ondragover={(event) => {
-						if (dragOverFolder(event, node.path, node.path)) return;
+						if (drag.over(event, node.path)) return;
 						if (!ondropfiles || !hasFiles(event)) return;
 						event.preventDefault();
 						event.stopPropagation();
-						dropOn = node.path;
+						drag.target = node.path;
 					}}
-					ondragleave={(event) => {
-						if (!event.currentTarget.contains(event.relatedTarget as Node)) dropOn = null;
-					}}
+					ondragleave={(event) => drag.leave(event)}
 					ondrop={(event) => {
-						if (dropOnFolder(event, node.path)) return;
+						if (drag.drop(event, node.path)) return;
 						if (!ondropfiles || !event.dataTransfer || !hasFiles(event)) return;
 						event.preventDefault();
 						event.stopPropagation();
-						dropOn = null;
+						drag.target = null;
 						ondropfiles(node.path, event.dataTransfer);
 					}}
 				>
@@ -297,19 +238,17 @@
 				role="presentation"
 				data-tree-row
 				draggable={onmove && !dragDisabled?.(node.item) ? 'true' : undefined}
-				ondragstart={(event) => dragStart(event, node.path)}
-				ondragend={dragEnd}
+				ondragstart={(event) => drag.start(event, node.path, selection)}
+				ondragend={() => drag.end()}
 				onpointerdown={(event) => pressStart(event, node)}
 				onpointermove={pressMove}
 				onpointerup={pressEnd}
 				onpointercancel={pressEnd}
 				oncontextmenu={swallow}
 				onclickcapture={swallow}
-				ondragover={(event) => dragOverFolder(event, dirOf(node.path), dirOf(node.path) || null)}
-				ondragleave={(event) => {
-					if (!event.currentTarget.contains(event.relatedTarget as Node)) dropOn = null;
-				}}
-				ondrop={(event) => dropOnFolder(event, dirOf(node.path))}
+				ondragover={(event) => drag.over(event, dirOf(node.path), dirOf(node.path) || null)}
+				ondragleave={(event) => drag.leave(event)}
+				ondrop={(event) => drag.drop(event, dirOf(node.path))}
 				class="group/row flex items-center gap-1 rounded-md ps-2 {onselection
 					? 'select-none'
 					: ''} {selected === node.path ? 'bg-accent' : ''}"
