@@ -2,6 +2,7 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { sha1 } from '#lib/server/change-set.js';
 import { javaOverride } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
 import { installedMods } from '#lib/server/db/schema.js';
@@ -15,17 +16,8 @@ import { mergeStaged, removeStale } from '#lib/server/staged-install.js';
 import { lastOutcome } from '#lib/server/update-outcome.js';
 
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
-import {
-	downloadFiles,
-	overrideEntries,
-	packFileHashes,
-	safeJoin,
-	sha1Of,
-	trackMods,
-	wantsOnServer,
-	type IndexFile,
-	type LoadedPack
-} from './modpacks';
+import { downloadFiles, packFileHashes, trackMods, type LoadedPack } from './modpacks';
+import { safeJoin, type IndexFile } from './mrpack';
 import { decide } from './pack-diff';
 import { packSourceOf, type ModpackInfo } from './pack-source';
 
@@ -107,7 +99,7 @@ export async function planModpackUpdate(
 
 	const hashOf = async (rel: string | null) => (rel === null ? null : hashFile(join(server, rel)));
 
-	const newFiles = new Map(pack.index.files.filter(wantsOnServer).map((f) => [f.path, f]));
+	const newFiles = new Map(pack.mrpack.serverFiles.map((f) => [f.path, f]));
 	for (const [path, file] of newFiles) {
 		safeJoin(server, path);
 		const wanted = file.hashes.sha1;
@@ -130,8 +122,8 @@ export async function planModpackUpdate(
 	}
 
 	const newConfigs = new Map<string, string>();
-	for (const [path, entry] of overrideEntries(pack.zip))
-		newConfigs.set(path, sha1Of(pack.zip.read(entry)));
+	for (const [path, entry] of pack.mrpack.overrides)
+		newConfigs.set(path, sha1(pack.mrpack.read(entry)));
 	const configOnDisk = (path: string) => (existsSync(join(server, path)) ? path : null);
 	for (const [path, wanted] of newConfigs) {
 		const installed = manifest.overrides[path];
@@ -234,11 +226,11 @@ export async function startModpackUpdate(
 				staging,
 				plan.download.map((d) => d.file)
 			);
-			const configs = overrideEntries(pack.zip);
+			const configs = pack.mrpack.overrides;
 			for (const path of plan.writeConfigs) {
 				const dest = safeJoin(staging, path);
 				mkdirSync(dirname(dest), { recursive: true });
-				await Bun.write(dest, pack.zip.read(configs.get(path)!));
+				await Bun.write(dest, pack.mrpack.read(configs.get(path)!));
 			}
 
 			progress('Replacing the old files');
@@ -275,9 +267,9 @@ export async function startModpackUpdate(
 			}
 
 			const manifest: PackManifest = {
-				files: await packFileHashes(server, pack.index.files),
+				files: await packFileHashes(server, pack.mrpack.serverFiles),
 				overrides: Object.fromEntries(
-					[...configs].map(([path, entry]) => [path, sha1Of(pack.zip.read(entry))])
+					[...configs].map(([path, entry]) => [path, sha1(pack.mrpack.read(entry))])
 				)
 			};
 			writeManifest(instanceId, manifest);

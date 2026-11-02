@@ -135,7 +135,7 @@ const C = {
 	}
 };
 const { Zip } = await import('#lib/server/zip.js');
-const { overrideEntries, parseIndex } = await import('./modpacks');
+const { readMrpack } = await import('./mrpack');
 const { assertMayWriteCode } = await import('#lib/server/host-code.js');
 
 beforeEach(() => {
@@ -602,11 +602,11 @@ describe('the three config folders', () => {
 	const files = (packId: number) => P.listOverrides(packId).map((f) => f.path);
 	/** What a server made from the pack gets, by path in the server folder. */
 	async function serverGets(packId: number) {
-		const zip = new Zip((await P.exportBytes(packId)).bytes);
+		const mrpack = readMrpack((await P.exportBytes(packId)).bytes);
 		return Object.fromEntries(
-			[...overrideEntries(zip)].map(([path, entry]) => [
+			[...mrpack.overrides].map(([path, entry]) => [
 				path,
-				new TextDecoder().decode(zip.read(entry))
+				new TextDecoder().decode(mrpack.read(entry))
 			])
 		);
 	}
@@ -723,7 +723,7 @@ describe('the .mrpack', () => {
 		expect(filename).toMatch(/^My-pack-\d+\.mrpack$/);
 
 		const zip = new Zip(bytes);
-		expect(parseIndex(zip).files).toHaveLength(2);
+		expect(readMrpack(bytes).files).toHaveLength(2);
 		expect(zip.entries.map((e) => e.name)).toContain('overrides/config/a.toml');
 
 		const copy = await P.importMrpack(bytes);

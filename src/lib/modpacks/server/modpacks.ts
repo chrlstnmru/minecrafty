@@ -1,10 +1,10 @@
 import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
-import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
+import { dirname, join } from 'node:path';
 
 import type { Loader } from '#lib/server/loaders.js';
 
-import { safeEntryName } from '#lib/safe-entry-name.js';
+import { sha1 } from '#lib/server/change-set.js';
 import { dataDir } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
 import { installedMods, instances } from '#lib/server/db/schema.js';
@@ -12,17 +12,14 @@ import { downloadFile } from '#lib/server/download.js';
 import { runInstall, setProgress } from '#lib/server/install-progress.js';
 import { installBase, insertInstance, serverDir, type NewInstance } from '#lib/server/instances.js';
 import * as modrinth from '#lib/server/modrinth.js';
-import { Zip, type ZipEntry } from '#lib/server/zip.js';
 
 import { writeManifest } from './modpack-manifest';
+import { readMrpack, safeJoin, type IndexFile, type Mrpack } from './mrpack';
 
-// Modrinth modpacks (.mrpack): a zip with modrinth.index.json (what to download), plus
-// overrides/ and server-overrides/ folders that are copied into the server as they are.
+// Modpacks from Modrinth: finding them, fetching a version's .mrpack, and making an instance
+// from a pack (a Modrinth one, or a builder pack read the same way).
 
 const MAX_PACK_BYTES = 600 * 1024 * 1024;
-const MAX_INDEX_BYTES = 8 * 1024 * 1024;
-const MAX_EXTRACT_BYTES = 2 * 1024 * 1024 * 1024;
-const MAX_FILE_BYTES = 1024 * 1024 * 1024;
 const DOWNLOAD_CONCURRENCY = 6;
 
 // the hosts the .mrpack format allows downloads from
@@ -32,24 +29,6 @@ const ALLOWED_HOSTS = new Set([
 	'raw.githubusercontent.com',
 	'gitlab.com'
 ]);
-
-export type IndexFile = {
-	path: string;
-	hashes: { sha1?: string; sha512?: string };
-	env?: { client?: string; server?: string };
-	downloads: string[];
-	fileSize?: number;
-};
-
-export type PackIndex = {
-	formatVersion: number;
-	game: string;
-	name: string;
-	versionId: string;
-	summary?: string;
-	files: IndexFile[];
-	dependencies: Record<string, string>;
-};
 
 export type ModpackSummary = {
 	projectId: string;
@@ -70,28 +49,24 @@ export type ModpackSummary = {
 	overrides: number;
 };
 
-export type LoadedPack = { summary: ModpackSummary; index: PackIndex; zip: Zip };
+export type LoadedPack = { summary: ModpackSummary; mrpack: Mrpack };
 
-export const LOADER_KEYS: [string, Loader][] = [
-	['fabric-loader', 'fabric'],
-	['quilt-loader', 'quilt'],
-	['neoforge', 'neoforge'],
-	['forge', 'forge']
-];
-
-/** Joins an untrusted relative path onto `base`, refusing anything that would leave it. */
-export function safeJoin(base: string, rel: string) {
-	const clean = rel.replaceAll('\\', '/');
-	if (
-		!clean ||
-		clean.startsWith('/') ||
-		/^[a-zA-Z]:/.test(clean) ||
-		clean.split('/').includes('..')
-	)
-		throw new Error(`Refusing unsafe path "${rel}"`);
-	const full = resolve(base, clean);
-	if (!full.startsWith(resolve(base) + sep)) throw new Error(`Refusing unsafe path "${rel}"`);
-	return full;
+/** What a pack is, for the pages: the counts come from the pack, the names from where it was found. */
+export function summarize(
+	mrpack: Mrpack,
+	origin: Pick<ModpackSummary, 'projectId' | 'versionId' | 'versionNumber' | 'name' | 'iconUrl'>
+): ModpackSummary {
+	return {
+		...origin,
+		summary: mrpack.summary,
+		mcVersion: mrpack.mcVersion,
+		loader: mrpack.loader,
+		loaderVersion: mrpack.loaderVersion,
+		files: mrpack.serverFiles.length,
+		clientOnly: mrpack.files.length - mrpack.serverFiles.length,
+		downloadBytes: mrpack.serverFiles.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
+		overrides: mrpack.overrides.size
+	};
 }
 
 const cacheDir = join(dataDir, 'tmp', 'modpacks');
@@ -129,20 +104,6 @@ async function fetchPack(versionId: string) {
 	return { version, path };
 }
 
-export function parseIndex(zip: Zip): PackIndex {
-	const entry = zip.find('modrinth.index.json');
-	if (!entry) throw new Error('This is not a Modrinth modpack (modrinth.index.json is missing)');
-	if (entry.size > MAX_INDEX_BYTES) throw new Error('The modpack index is too large');
-	const index = JSON.parse(new TextDecoder().decode(zip.read(entry))) as PackIndex;
-	if (index.formatVersion !== 1 || index.game !== 'minecraft')
-		throw new Error('Unsupported modpack format');
-	if (!index.dependencies?.minecraft || !Array.isArray(index.files))
-		throw new Error('The modpack index is incomplete');
-	return index;
-}
-
-export const wantsOnServer = (f: IndexFile) => f.env?.server !== 'unsupported';
-
 /**
  * The pack's name and icon on Modrinth. The index's own `name` is whatever the author typed into
  * their build tool, and for some packs it is just the version number.
@@ -158,33 +119,17 @@ export async function projectInfo(projectId: string, fallbackName: string) {
 
 export async function loadModpack(versionId: string): Promise<LoadedPack> {
 	const { version, path } = await fetchPack(versionId);
-	const zip = new Zip(new Uint8Array(await Bun.file(path).arrayBuffer()));
-	const index = parseIndex(zip);
-
-	const info = await projectInfo(version.project_id, index.name);
-	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
-	const files = index.files.filter(wantsOnServer);
+	const mrpack = readMrpack(new Uint8Array(await Bun.file(path).arrayBuffer()));
+	const info = await projectInfo(version.project_id, mrpack.name);
 	return {
-		index,
-		zip,
-		summary: {
+		mrpack,
+		summary: summarize(mrpack, {
 			projectId: version.project_id,
 			versionId: version.id,
+			versionNumber: mrpack.versionNumber,
 			name: info.name,
-			iconUrl: info.iconUrl,
-			summary: index.summary ?? '',
-			versionNumber: index.versionId,
-			mcVersion: index.dependencies.minecraft,
-			loader: found?.[1] ?? 'vanilla',
-			loaderVersion: found ? index.dependencies[found[0]] : null,
-			files: files.length,
-			clientOnly: index.files.length - files.length,
-			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
-			overrides: zip.entries.filter(
-				(e) =>
-					!e.isDir && (e.name.startsWith('overrides/') || e.name.startsWith('server-overrides/'))
-			).length
-		}
+			iconUrl: info.iconUrl
+		})
 	};
 }
 
@@ -246,14 +191,17 @@ function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack) {
 		setProgress(row.id, { label: 'Installing the server', done: 0, total: 1 });
 		await installBase(row);
 
-		await downloadFiles(row.id, server, pack.index.files.filter(wantsOnServer));
+		await downloadFiles(row.id, server, pack.mrpack.serverFiles);
 
 		setProgress(row.id, { label: 'Copying configuration', done: 0, total: 1 });
-		const overrides = await extractOverrides(pack.zip, server);
+		const overrides = await extractOverrides(pack.mrpack, server);
 
 		setProgress(row.id, { label: 'Recording mods', done: 0, total: 1 });
-		await trackMods(row.id, pack.index.files.filter(wantsOnServer));
-		writeManifest(row.id, { files: await packFileHashes(server, pack.index.files), overrides });
+		await trackMods(row.id, pack.mrpack.serverFiles);
+		writeManifest(row.id, {
+			files: await packFileHashes(server, pack.mrpack.serverFiles),
+			overrides
+		});
 	});
 }
 
@@ -300,65 +248,30 @@ export async function downloadWithFallback(dest: string, file: IndexFile) {
 	);
 }
 
-/** The config files in these folders of the pack, each by its path inside its folder, a later folder winning. */
-function entriesIn(
-	zip: Zip,
-	folders: readonly string[],
-	keep: (folder: string, rel: string) => string
-) {
-	const found = new Map<string, ZipEntry>();
-	let total = 0;
-	for (const folder of folders) {
-		const prefix = `${folder}/`;
-		for (const entry of zip.entries) {
-			if (entry.isDir || !entry.name.startsWith(prefix)) continue;
-			if (entry.size > MAX_FILE_BYTES) throw new Error(`${entry.name} is too large`);
-			total += entry.size;
-			if (total > MAX_EXTRACT_BYTES) throw new Error('The modpack unpacks to too much data');
-			const rel = entry.name.slice(prefix.length);
-			const safe = safeEntryName(rel.replaceAll('\\', '/'));
-			if (isAbsolute(rel) || !safe) throw new Error(`Refusing unsafe path "${rel}"`);
-			found.set(keep(folder, safe), entry);
-		}
-	}
-	return found;
-}
-
-/** The pack's config files by their path in the server, `server-overrides/` winning over `overrides/`. */
-export const overrideEntries = (zip: Zip) =>
-	entriesIn(zip, ['overrides', 'server-overrides'], (_, rel) => rel);
-
-/** All of the pack's config files, each by its path with its folder (`client-overrides/options.txt`). */
-export const configEntries = (zip: Zip, folders: readonly string[]) =>
-	entriesIn(zip, folders, (folder, rel) => `${folder}/${rel}`);
-
-export const sha1Of = (bytes: Uint8Array) =>
-	new Bun.CryptoHasher('sha1').update(bytes).digest('hex');
-
 /** Copies the pack's config files into the server folder; returns the SHA-1 of each. */
-async function extractOverrides(zip: Zip, server: string) {
+async function extractOverrides(mrpack: Mrpack, server: string) {
 	const hashes: Record<string, string> = {};
-	for (const [rel, entry] of overrideEntries(zip)) {
-		const bytes = zip.read(entry);
+	for (const [rel, entry] of mrpack.overrides) {
+		const bytes = mrpack.read(entry);
 		const dest = safeJoin(server, rel);
 		mkdirSync(dirname(dest), { recursive: true });
 		await Bun.write(dest, bytes);
-		hashes[rel] = sha1Of(bytes);
+		hashes[rel] = sha1(bytes);
 	}
+	return hashes;
+}
+
+/** SHA-1 of each file the pack installs, from the index or, when it lists none, from the file itself. */
+export async function packFileHashes(server: string, files: IndexFile[]) {
+	const hashes: Record<string, string> = {};
+	for (const file of files)
+		hashes[file.path] =
+			file.hashes.sha1 ??
+			sha1(new Uint8Array(await Bun.file(safeJoin(server, file.path)).arrayBuffer()));
 	return hashes;
 }
 
 /** Records the pack's mods that Modrinth knows, so they show up (and can update) like any other. */
-/** SHA-1 of each file the pack installs, from the index or, when it lists none, from the file itself. */
-export async function packFileHashes(server: string, files: IndexFile[]) {
-	const hashes: Record<string, string> = {};
-	for (const file of files.filter(wantsOnServer))
-		hashes[file.path] =
-			file.hashes.sha1 ??
-			sha1Of(new Uint8Array(await Bun.file(safeJoin(server, file.path)).arrayBuffer()));
-	return hashes;
-}
-
 export async function trackMods(instanceId: number, files: IndexFile[]) {
 	const jars = files.filter(
 		(f) => /^(mods|plugins)\//.test(f.path) && f.path.endsWith('.jar') && f.hashes.sha512
@@ -366,10 +279,12 @@ export async function trackMods(instanceId: number, files: IndexFile[]) {
 	if (!jars.length) return;
 
 	const known = await modrinth.versionsByHashes(jars.map((f) => f.hashes.sha512!));
-	const projectIds = [...new Set(Object.values(known).map((v) => v.project_id))];
-	const projects = new Map<string, modrinth.ModrinthProject>();
-	for (let i = 0; i < projectIds.length; i += 100)
-		for (const p of await modrinth.getProjects(projectIds.slice(i, i + 100))) projects.set(p.id, p);
+	const projects = new Map(
+		(await modrinth.getProjects(Object.values(known).map((v) => v.project_id))).map((p) => [
+			p.id,
+			p
+		])
+	);
 
 	const seen = new Set<string>();
 	const rows: (typeof installedMods.$inferInsert)[] = [];

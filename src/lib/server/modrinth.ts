@@ -127,7 +127,15 @@ export function getVersion(versionId: string) {
 	return get<ModrinthVersion>(`/version/${encodeURIComponent(versionId)}`);
 }
 
+const PROJECTS_PER_REQUEST = 100;
+
+/** The projects with these ids, any number of them; ids Modrinth does not know are left out. */
 export async function getProjects(ids: string[]) {
-	if (!ids.length) return [];
-	return get<ModrinthProject[]>('/projects', { ids: JSON.stringify(ids) });
+	const unique = [...new Set(ids)];
+	const projects: ModrinthProject[] = [];
+	for (let i = 0; i < unique.length; i += PROJECTS_PER_REQUEST) {
+		const batch = unique.slice(i, i + PROJECTS_PER_REQUEST);
+		projects.push(...(await get<ModrinthProject[]>('/projects', { ids: JSON.stringify(batch) })));
+	}
+	return projects;
 }

@@ -16,9 +16,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { db } from '#lib/server/db/index.js';
 import { installedMods, instances } from '#lib/server/db/schema.js';
 import { zipStream, type ZipEntry } from '#lib/server/zip-writer.js';
-import { Zip } from '#lib/server/zip.js';
 import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
+
+import type { LoadedPack } from './modpacks';
+import type { IndexFile } from './mrpack';
 
 // Modrinth, the downloads, the runner and the installer are replaced: what matters is what an
 // update does to the server folder, the Mods tab and the instance, given two versions of a pack.
@@ -106,11 +108,12 @@ vi.mock('./modpacks', async (original) => ({
 }));
 
 const U = await import('./modpack-update');
+const { summarize } = await import('./modpacks');
+const { readMrpack, writeIndex } = await import('./mrpack');
 const { writeManifest, readManifest } = await import('./modpack-manifest');
 const { lastOutcome } = await import('#lib/server/update-outcome.js');
 const { listBackups } = await import('#lib/server/backups.js');
 const { getInstance, serverDir } = await import('#lib/server/instances.js');
-type LoadedPack = Awaited<ReturnType<typeof import('./modpacks').loadModpack>>;
 
 const sha1 = (text: string) => createHash('sha1').update(text).digest('hex');
 const sha512 = (text: string) => createHash('sha512').update(text).digest('hex');
@@ -127,21 +130,7 @@ type PackSpec = {
 };
 
 async function makePack(spec: PackSpec): Promise<LoadedPack> {
-	const work = mkdtempSync(join(tmpdir(), 'pack-'));
-	const entries: ZipEntry[] = [];
-	const overrides = { 'readme.txt': 'hello', ...spec.overrides };
-	for (const [path, content] of Object.entries(overrides)) {
-		writeFileSync(join(work, path.replaceAll('/', '_')), content);
-		entries.push({
-			kind: 'file',
-			name: `overrides/${path}`,
-			path: join(work, path.replaceAll('/', '_')),
-			modified: new Date()
-		});
-	}
-	const bytes = new Uint8Array(await new Response(zipStream(entries)).arrayBuffer());
-
-	const files = Object.entries(spec.files).map(([path, content]) => {
+	const files: IndexFile[] = Object.entries(spec.files).map(([path, content]) => {
 		const url = `https://cdn.modrinth.com/data/${spec.versionId}/${path}`;
 		fake.content.set(url, content);
 		fake.known.set(sha512(content), {
@@ -157,32 +146,49 @@ async function makePack(spec: PackSpec): Promise<LoadedPack> {
 			env: { server: 'required' }
 		};
 	});
-	const pack = {
-		zip: new Zip(bytes),
-		index: {
-			formatVersion: 1,
-			game: 'minecraft',
+	const index = writeIndex(
+		{
 			name: 'Test Pack',
-			versionId: spec.versionNumber,
-			files,
-			dependencies: {}
-		},
-		summary: {
-			projectId: spec.projectId ?? 'PACK',
-			versionId: spec.versionId,
-			name: 'Test Pack',
-			iconUrl: null,
 			summary: '',
 			versionNumber: spec.versionNumber,
 			mcVersion: spec.mc ?? '1.21.4',
 			loader: spec.loader ?? 'fabric',
-			loaderVersion: spec.loaderVersion ?? '0.16.0',
-			files: files.length,
-			clientOnly: 0,
-			downloadBytes: 0,
-			overrides: Object.keys(overrides).length
+			loaderVersion: spec.loaderVersion ?? '0.16.0'
+		},
+		files
+	);
+
+	const work = mkdtempSync(join(tmpdir(), 'pack-'));
+	writeFileSync(join(work, 'index.json'), JSON.stringify(index));
+	const entries: ZipEntry[] = [
+		{
+			kind: 'file',
+			name: 'modrinth.index.json',
+			path: join(work, 'index.json'),
+			modified: new Date()
 		}
-	} as unknown as LoadedPack;
+	];
+	const overrides = { 'readme.txt': 'hello', ...spec.overrides };
+	for (const [path, content] of Object.entries(overrides)) {
+		writeFileSync(join(work, path.replaceAll('/', '_')), content);
+		entries.push({
+			kind: 'file',
+			name: `overrides/${path}`,
+			path: join(work, path.replaceAll('/', '_')),
+			modified: new Date()
+		});
+	}
+	const mrpack = readMrpack(new Uint8Array(await new Response(zipStream(entries)).arrayBuffer()));
+	const pack: LoadedPack = {
+		mrpack,
+		summary: summarize(mrpack, {
+			projectId: spec.projectId ?? 'PACK',
+			versionId: spec.versionId,
+			versionNumber: spec.versionNumber,
+			name: 'Test Pack',
+			iconUrl: null
+		})
+	};
 	fake.packs.set(spec.versionId, pack);
 	return pack;
 }

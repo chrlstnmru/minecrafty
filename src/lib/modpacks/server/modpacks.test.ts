@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import { zipOf } from '#test/zip.js';
+
 const projects = vi.hoisted(() => ({
 	list: [] as { title: string; icon_url?: string }[],
 	fail: false
@@ -13,38 +15,8 @@ vi.mock('#lib/server/modrinth.js', async (original) => ({
 	}
 }));
 
-const { projectInfo, safeJoin } = await import('./modpacks');
-
-// A modpack names the files it wants, and those names are data from a stranger.
-describe('safeJoin', () => {
-	const base = '/srv/instance/server';
-
-	it('joins an ordinary relative path', () => {
-		expect(safeJoin(base, 'mods/sodium.jar')).toBe('/srv/instance/server/mods/sodium.jar');
-		expect(safeJoin(base, 'config/a/b/c.toml')).toBe('/srv/instance/server/config/a/b/c.toml');
-	});
-
-	it('treats backslashes as separators', () => {
-		expect(safeJoin(base, 'mods\\a.jar')).toBe('/srv/instance/server/mods/a.jar');
-	});
-
-	it.each([
-		'../escape.txt',
-		'mods/../../escape.txt',
-		'/etc/passwd',
-		'C:\\Windows\\x',
-		'c:/x',
-		'..',
-		'a/../../b',
-		''
-	])('refuses %j', (path) => {
-		expect(() => safeJoin(base, path)).toThrow(/unsafe path/);
-	});
-
-	it('allows ".." inside a name that is not a path segment', () => {
-		expect(safeJoin(base, 'mods/a..b.jar')).toBe('/srv/instance/server/mods/a..b.jar');
-	});
-});
+const { projectInfo, summarize } = await import('./modpacks');
+const { readMrpack, writeIndex } = await import('./mrpack');
 
 describe('projectInfo', () => {
 	it('names the pack by its Modrinth title, not by what the index says, and gives its icon', async () => {
@@ -66,5 +38,50 @@ describe('projectInfo', () => {
 		expect(await projectInfo('P', 'index name')).toEqual({ name: 'index name', iconUrl: null });
 		projects.fail = true;
 		expect(await projectInfo('P', 'index name')).toEqual({ name: 'index name', iconUrl: null });
+	});
+});
+
+describe('summarize', () => {
+	it('counts a config file in both overrides/ and server-overrides/ once', async () => {
+		const index = writeIndex(
+			{
+				name: 'Pack',
+				summary: '',
+				versionNumber: '1',
+				mcVersion: '1.21.4',
+				loader: 'fabric',
+				loaderVersion: '0.16.0'
+			},
+			[
+				{ path: 'mods/a.jar', hashes: {}, downloads: [], fileSize: 10 },
+				{
+					path: 'mods/b.jar',
+					hashes: {},
+					downloads: [],
+					fileSize: 5,
+					env: { server: 'unsupported' }
+				}
+			]
+		);
+		const mrpack = readMrpack(
+			await zipOf({
+				'modrinth.index.json': JSON.stringify(index),
+				'overrides/config/a.toml': 'both',
+				'server-overrides/config/a.toml': 'server'
+			})
+		);
+		const origin = {
+			projectId: 'P',
+			versionId: 'V',
+			versionNumber: '1',
+			name: 'Pack',
+			iconUrl: null
+		};
+		expect(summarize(mrpack, origin)).toMatchObject({
+			files: 1,
+			clientOnly: 1,
+			downloadBytes: 10,
+			overrides: 1
+		});
 	});
 });
