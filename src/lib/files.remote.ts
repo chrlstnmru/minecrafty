@@ -43,11 +43,14 @@ const listedPaths = (paths: string[]) =>
 export const saveFiles = command(saveFilesSchema, async ({ id: instanceId, files: list }) => {
 	const user = requirePermission(instanceId, 'files');
 	const { changed, hashes } = await userFacing(() =>
-		files.saveFiles(
-			user,
-			instanceId,
-			list.map((f) => ({ rel: f.path, content: f.content, baseHash: f.baseHash }))
-		)
+		files.applyFileChanges(user, instanceId, {
+			writes: list.map((f) => ({
+				path: f.path,
+				content: f.content,
+				original: f.path,
+				baseHash: f.baseHash
+			}))
+		})
 	);
 	if (changed)
 		record({
@@ -96,7 +99,11 @@ export const newFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
 		const user = requirePermission(instanceId, 'files');
-		await userFacing(async () => files.addFile(user, instanceId, path, name));
+		await userFacing(() =>
+			files.applyFileChanges(user, instanceId, {
+				writes: [{ path: files.entryPath(path, name), content: '' }]
+			})
+		);
 		record({
 			action: 'file.create',
 			summary: `Created ${joinPath(path, name)}`,
@@ -111,7 +118,11 @@ export const renameFile = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
 		const user = requirePermission(instanceId, 'files');
-		await userFacing(() => files.moveEntry(user, instanceId, path, name));
+		await userFacing(() =>
+			files.applyFileChanges(user, instanceId, {
+				moves: [{ from: path, to: files.entryPath(parentOf(path), name) }]
+			})
+		);
 		record({
 			action: 'file.rename',
 			summary: `Renamed ${path} to ${name}`,
@@ -125,8 +136,8 @@ export const renameFile = command(
 export const removeFile = command(
 	v.object({ id, path: filePathSchema }),
 	async ({ id: instanceId, path }) => {
-		requirePermission(instanceId, 'files');
-		await userFacing(() => files.removeEntry(instanceId, path));
+		const user = requirePermission(instanceId, 'files');
+		await userFacing(() => files.applyFileChanges(user, instanceId, { deletes: [path] }));
 		record({ action: 'file.delete', summary: `Deleted ${path}`, instanceId });
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
 	}
@@ -226,8 +237,12 @@ const refreshListings = (instanceId: number, paths: string[]) =>
 	);
 
 export const removeFiles = command(removeFilesSchema, async ({ id: instanceId, paths }) => {
-	requirePermission(instanceId, 'files');
-	const removed = await userFacing(() => files.removeEntries(instanceId, paths));
+	const user = requirePermission(instanceId, 'files');
+	const removed = await userFacing(async () => {
+		const chosen = files.chosenPaths(paths);
+		await files.applyFileChanges(user, instanceId, { deletes: chosen });
+		return chosen.length;
+	});
 	record({
 		action: 'file.delete',
 		summary: `Deleted ${removed} ${removed === 1 ? 'item' : 'items'}: ${listedPaths(paths)}`,
@@ -238,7 +253,11 @@ export const removeFiles = command(removeFilesSchema, async ({ id: instanceId, p
 
 export const moveFiles = command(moveFilesSchema, async ({ id: instanceId, paths, folder }) => {
 	const user = requirePermission(instanceId, 'files');
-	const moved = await userFacing(() => files.moveEntries(user, instanceId, paths, folder));
+	const moved = await userFacing(async () => {
+		const moves = files.movesInto(paths, folder);
+		await files.applyFileChanges(user, instanceId, { moves });
+		return moves.length;
+	});
 	if (moved)
 		record({
 			action: 'file.rename',

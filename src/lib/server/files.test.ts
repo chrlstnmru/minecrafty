@@ -11,6 +11,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { addFile, moveEntry, owner, removeEntry, saveFile } from '#test/file-changes.js';
 import { makeInstance } from '#test/instance.js';
 
 import * as F from './files';
@@ -47,11 +48,11 @@ describe('paths that must be refused', () => {
 		expect(() => F.listDirectory(id, path)).toThrow();
 	});
 
-	it('read, write, mkdir and delete outside the folder', () => {
+	it('read, write, mkdir and delete outside the folder', async () => {
 		expect(() => F.readTextFile(id, '../../../etc/passwd')).toThrow();
-		expect(() => F.writeTextFile(id, '../escape.txt', 'x')).toThrow();
+		await expect(saveFile(owner, id, '../escape.txt', 'x')).rejects.toThrow();
 		expect(() => F.makeDirectory(id, '..', 'escape')).toThrow();
-		expect(() => F.deleteEntry(id, '../..')).toThrow();
+		await expect(removeEntry(id, '../..')).rejects.toThrow();
 	});
 });
 
@@ -59,23 +60,23 @@ describe('symlinks pointing outside the instance', () => {
 	beforeEach(() => symlinkSync(outside, join(root, 'link')));
 
 	it('cannot be listed, read, written, created in, deleted from or uploaded into', async () => {
-		expect(() => F.listDirectory(id, 'link')).toThrow(/leaves the instance/);
-		expect(() => F.readTextFile(id, 'link/secret.txt')).toThrow(/leaves the instance/);
-		expect(() => F.writeTextFile(id, 'link/new.txt', 'x')).toThrow(/leaves the instance/);
-		expect(() => F.makeDirectory(id, 'link', 'sub')).toThrow(/leaves the instance/);
-		expect(() => F.deleteEntry(id, 'link/secret.txt')).toThrow(/leaves the instance/);
+		expect(() => F.listDirectory(id, 'link')).toThrow(/leaves the folder/);
+		expect(() => F.readTextFile(id, 'link/secret.txt')).toThrow(/leaves the folder/);
+		await expect(saveFile(owner, id, 'link/new.txt', 'x')).rejects.toThrow(/leaves the folder/);
+		expect(() => F.makeDirectory(id, 'link', 'sub')).toThrow(/leaves the folder/);
+		await expect(removeEntry(id, 'link/secret.txt')).rejects.toThrow(/leaves the folder/);
 		await expect(F.saveUpload(id, 'link', new File(['x'], 'u.txt'))).rejects.toThrow(
-			/leaves the instance/
+			/leaves the folder/
 		);
 	});
 
-	it('leaves the outside folder untouched', () => {
-		expect(() => F.deleteEntry(id, 'link/secret.txt')).toThrow();
+	it('leaves the outside folder untouched', async () => {
+		await expect(removeEntry(id, 'link/secret.txt')).rejects.toThrow();
 		expect(readdirSync(outside)).toEqual(['secret.txt']);
 		expect(readFileSync(join(outside, 'secret.txt'), 'utf8')).toBe('SECRET');
 	});
 
-	it('shows up in a listing as a link and is skipped by a folder download', () => {
+	it('shows up in a listing as a link and is skipped by a folder download', async () => {
 		writeFileSync(join(root, 'real.txt'), 'inside');
 		const link = F.listDirectory(id, '').entries.find((e) => e.name === 'link');
 		expect(link?.kind).toBe('link');
@@ -86,7 +87,7 @@ describe('symlinks pointing outside the instance', () => {
 			expect(download.entries.map((e) => e.name)).toEqual(['real.txt']);
 	});
 
-	it('a link that stays inside the instance is fine', () => {
+	it('a link that stays inside the instance is fine', async () => {
 		mkdirSync(join(root, 'target'));
 		writeFileSync(join(root, 'target', 'a.txt'), 'ok');
 		symlinkSync(join(root, 'target'), join(root, 'inner'));
@@ -95,7 +96,7 @@ describe('symlinks pointing outside the instance', () => {
 });
 
 describe('listing', () => {
-	it('puts folders first, then sorts names naturally and case-insensitively', () => {
+	it('puts folders first, then sorts names naturally and case-insensitively', async () => {
 		mkdirSync(join(root, 'zdir'));
 		mkdirSync(join(root, 'Adir'));
 		for (const name of ['b.txt', 'A.txt', 'file10.txt', 'file2.txt'])
@@ -104,14 +105,14 @@ describe('listing', () => {
 		expect(names).toEqual(['Adir', 'zdir', 'A.txt', 'b.txt', 'file2.txt', 'file10.txt']);
 	});
 
-	it('reports kind, size and a modified time', () => {
+	it('reports kind, size and a modified time', async () => {
 		writeFileSync(join(root, 'a.txt'), '12345');
 		const [entry] = F.listDirectory(id, '').entries;
 		expect(entry).toMatchObject({ name: 'a.txt', kind: 'file', size: 5 });
 		expect(entry.modified).toBeGreaterThan(0);
 	});
 
-	it('normalises the path it returns and refuses a file as a folder', () => {
+	it('normalises the path it returns and refuses a file as a folder', async () => {
 		mkdirSync(join(root, 'a'));
 		writeFileSync(join(root, 'f.txt'), '');
 		expect(F.listDirectory(id, 'a/').path).toBe('a');
@@ -120,14 +121,14 @@ describe('listing', () => {
 });
 
 describe('text files', () => {
-	it('round-trips through write and read', () => {
-		F.writeTextFile(id, 'config/a.toml', 'key = "value"\n');
+	it('round-trips through write and read', async () => {
+		await saveFile(owner, id, 'config/a.toml', 'key = "value"\n');
 		expect(F.readTextFile(id, 'config/a.toml').content).toBe('key = "value"\n');
 	});
 
-	it('only edits known text types', () => {
-		expect(() => F.writeTextFile(id, 'run.sh', 'x')).toThrow(/cannot be edited/);
-		expect(() => F.writeTextFile(id, 'mod.jar', 'x')).toThrow(/cannot be edited/);
+	it('only edits known text types', async () => {
+		await expect(saveFile(owner, id, 'run.sh', 'x')).rejects.toThrow(/cannot be edited/);
+		await expect(saveFile(owner, id, 'mod.jar', 'x')).rejects.toThrow(/cannot be edited/);
 		for (const name of [
 			'a.properties',
 			'a.json',
@@ -142,64 +143,66 @@ describe('text files', () => {
 			expect(F.isEditable(name)).toBe(true);
 	});
 
-	it('refuses binary content and files over the size limit', () => {
+	it('refuses binary content and files over the size limit', async () => {
 		writeFileSync(join(root, 'blob.json'), Buffer.from([1, 2, 0, 3]));
 		expect(() => F.readTextFile(id, 'blob.json')).toThrow(/binary/);
 		writeFileSync(join(root, 'big.txt'), 'x'.repeat(F.MAX_EDIT_BYTES + 1));
 		expect(() => F.readTextFile(id, 'big.txt')).toThrow(/too large/);
-		expect(() => F.writeTextFile(id, 'big.txt', 'x'.repeat(F.MAX_EDIT_BYTES + 1))).toThrow(
+		await expect(saveFile(owner, id, 'big.txt', 'x'.repeat(F.MAX_EDIT_BYTES + 1))).rejects.toThrow(
 			/too large/
 		);
 	});
 });
 
 describe('creating, renaming and deleting', () => {
-	it('creates folders and refuses duplicates', () => {
+	it('creates folders and refuses duplicates', async () => {
 		F.makeDirectory(id, '', 'config');
 		expect(existsSync(join(root, 'config'))).toBe(true);
 		expect(() => F.makeDirectory(id, '', 'config')).toThrow(/already exists/);
 	});
 
-	it('creates empty text files only for editable types', () => {
-		F.createTextFile(id, '', 'notes.txt');
+	it('creates empty text files only for editable types', async () => {
+		await addFile(owner, id, '', 'notes.txt');
 		expect(readFileSync(join(root, 'notes.txt'), 'utf8')).toBe('');
-		expect(() => F.createTextFile(id, '', 'start.sh')).toThrow(/cannot be edited/);
-		expect(() => F.createTextFile(id, '', 'notes.txt')).toThrow(/already exists/);
+		await expect(addFile(owner, id, '', 'start.sh')).rejects.toThrow(/cannot be edited/);
+		await expect(addFile(owner, id, '', 'notes.txt')).rejects.toThrow(/already exists/);
 	});
 
 	it.each(['../b.txt', 'a/b.txt', 'a\\b.txt', '..', '.', '', 'x'.repeat(256)])(
 		'a new name is one plain name, not %j',
-		(name) => {
+		async (name) => {
 			writeFileSync(join(root, 'a.txt'), '');
-			expect(() => F.renameEntry(id, 'a.txt', name)).toThrow();
+			await expect(moveEntry(owner, id, 'a.txt', name)).rejects.toThrow();
 			expect(() => F.makeDirectory(id, '', name)).toThrow();
 		}
 	);
 
-	it('renames within the folder and refuses to overwrite', () => {
+	it('renames within the folder and refuses to overwrite', async () => {
 		mkdirSync(join(root, 'config'));
 		writeFileSync(join(root, 'config', 'a.toml'), 'k');
 		writeFileSync(join(root, 'config', 'taken.toml'), '');
-		F.renameEntry(id, 'config/a.toml', 'b.toml');
+		await moveEntry(owner, id, 'config/a.toml', 'b.toml');
 		expect(existsSync(join(root, 'config', 'b.toml'))).toBe(true);
 		expect(existsSync(join(root, 'config', 'a.toml'))).toBe(false);
-		expect(() => F.renameEntry(id, 'config/b.toml', 'taken.toml')).toThrow(/already exists/);
+		await expect(moveEntry(owner, id, 'config/b.toml', 'taken.toml')).rejects.toThrow(
+			/already exists/
+		);
 	});
 
-	it('deletes files and whole folders', () => {
+	it('deletes files and whole folders', async () => {
 		mkdirSync(join(root, 'world', 'region'), { recursive: true });
 		writeFileSync(join(root, 'world', 'region', 'r.mca'), 'x');
-		F.deleteEntry(id, 'world');
+		await removeEntry(id, 'world');
 		expect(existsSync(join(root, 'world'))).toBe(false);
 	});
 
-	it('never renames or deletes the instance folder itself', () => {
-		expect(() => F.renameEntry(id, '', 'x')).toThrow(/cannot be renamed/);
-		expect(() => F.deleteEntry(id, '')).toThrow(/cannot be deleted/);
+	it('never renames or deletes the instance folder itself', async () => {
+		await expect(moveEntry(owner, id, '', 'x')).rejects.toThrow(/cannot be moved/);
+		await expect(removeEntry(id, '')).rejects.toThrow(/cannot be deleted/);
 		expect(existsSync(root)).toBe(true);
 	});
 
-	it('refuses an instance that does not exist', () => {
+	it('refuses an instance that does not exist', async () => {
 		expect(() => F.listDirectory(999_999, '')).toThrow(/not found/i);
 	});
 });
@@ -254,7 +257,7 @@ describe('small uploads', () => {
 });
 
 describe('downloads', () => {
-	it('describes a file as a file and a folder as a zip of its contents', () => {
+	it('describes a file as a file and a folder as a zip of its contents', async () => {
 		mkdirSync(join(root, 'world', 'region'), { recursive: true });
 		writeFileSync(join(root, 'world', 'level.dat'), 'x');
 		writeFileSync(join(root, 'world', 'region', 'r.mca'), 'y');
@@ -275,7 +278,7 @@ describe('downloads', () => {
 		}
 	});
 
-	it('names a whole-instance download "server.zip" and refuses paths outside', () => {
+	it('names a whole-instance download "server.zip" and refuses paths outside', async () => {
 		const all = F.describeDownload(id, '');
 		expect(all.kind === 'folder' && all.name).toBe('server.zip');
 		expect(() => F.describeDownload(id, '../..')).toThrow();
