@@ -244,7 +244,7 @@
 							<dd>
 								{s.files} files{s.downloadBytes ? `, ${megabytes(s.downloadBytes)}` : ''}
 								{#if s.clientOnly}
-									<span class="text-muted-foreground">({s.clientOnly} client-only skipped)</span>
+									<span class="text-muted-foreground">({s.clientOnly} client only)</span>
 								{/if}
 							</dd>
 							{#if s.overrides}

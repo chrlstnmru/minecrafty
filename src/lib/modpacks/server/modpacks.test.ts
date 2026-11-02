@@ -42,7 +42,7 @@ describe('projectInfo', () => {
 });
 
 describe('summarize', () => {
-	it('counts a config file in both overrides/ and server-overrides/ once', async () => {
+	it('counts every file, says how many are client only, and counts a config file in both overrides/ and server-overrides/ once', async () => {
 		const index = writeIndex(
 			{
 				name: 'Pack',
@@ -78,9 +78,9 @@ describe('summarize', () => {
 			iconUrl: null
 		};
 		expect(summarize(mrpack, origin)).toMatchObject({
-			files: 1,
+			files: 2,
 			clientOnly: 1,
-			downloadBytes: 10,
+			downloadBytes: 15,
 			overrides: 1
 		});
 	});

@@ -101,17 +101,3 @@ export const refreshModSides = command(id, async (instanceId) => {
 	if (filled) await installedMods(instanceId).refresh();
 	return filled;
 });
-
-/** Disables every mod that does not run on a server; they stay installed and can be enabled again. */
-export const disableClientOnlyMods = command(id, async (instanceId) => {
-	requirePermission(instanceId, 'mods');
-	const titles = await userFacing(async () => mods.disableClientOnly(instanceId));
-	if (titles.length)
-		record({
-			action: 'mod.toggle',
-			summary: `Disabled ${titles.length} client-only ${titles.length === 1 ? 'mod' : 'mods'}`,
-			instanceId
-		});
-	await installedMods(instanceId).refresh();
-	return titles;
-});

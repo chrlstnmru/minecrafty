@@ -49,10 +49,8 @@ export type PackFields = {
 };
 
 export type Mrpack = PackFields & {
-	/** every file the index lists */
+	/** every file the index lists; a server installs them all, client-only ones too */
 	files: IndexFile[];
-	/** the files a server installs: all but the client-only ones */
-	serverFiles: IndexFile[];
 	/** the config files a server gets, by their path in the server; `server-overrides/` wins over `overrides/` */
 	overrides: Map<string, ZipEntry>;
 	/** the config files in these folders, each by its path with its folder (`client-overrides/options.txt`) */
@@ -127,7 +125,6 @@ export function readMrpack(bytes: Uint8Array): Mrpack {
 		loader: found?.[1] ?? 'vanilla',
 		loaderVersion: found ? index.dependencies[found[0]] : null,
 		files: index.files,
-		serverFiles: index.files.filter((f) => f.env?.server !== 'unsupported'),
 		overrides: entriesIn(zip, ['overrides', 'server-overrides'], (_, rel) => rel),
 		configs: (folders) => entriesIn(zip, folders, (folder, rel) => `${folder}/${rel}`),
 		read: (entry) => zip.read(entry)

@@ -806,8 +806,7 @@ describe('searching mods', () => {
 		expect(searches.at(-1)).toMatchObject({
 			query: 'sodium',
 			loaders: ['fabric'],
-			mc: '1.21.1',
-			serverSide: false
+			mc: '1.21.1'
 		});
 	});
 });

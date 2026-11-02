@@ -40,7 +40,6 @@ export async function search(instanceId: number, query: string, limit: number) {
 		query,
 		loaders: [],
 		type: 'resourcepack',
-		serverSide: false, // resource packs are used by the client
 		mc: inst.mcVersion,
 		limit
 	});

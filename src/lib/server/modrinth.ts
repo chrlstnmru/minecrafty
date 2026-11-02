@@ -67,17 +67,13 @@ export async function searchProjects(opts: {
 	type?: string;
 	/** plugins have no `mod` project type on Modrinth, so the type facet is left out for them */
 	plugins?: boolean;
-	/** false for projects used on the client side (resource packs, shaders) */
-	serverSide?: boolean;
 	offset?: number;
 	limit?: number;
 }) {
 	const facets = [
 		...(opts.plugins ? [] : [[`project_type:${opts.type ?? 'mod'}`]]),
 		...(opts.loaders.length ? [opts.loaders.map((l) => `categories:${l}`)] : []),
-		...(opts.mc ? [[`versions:${opts.mc}`]] : []),
-		// skip projects that only work on the client
-		...(opts.serverSide === false ? [] : [['server_side:required', 'server_side:optional']])
+		...(opts.mc ? [[`versions:${opts.mc}`]] : [])
 	];
 	return get<{ hits: ModrinthHit[]; total_hits: number }>('/search', {
 		query: opts.query,

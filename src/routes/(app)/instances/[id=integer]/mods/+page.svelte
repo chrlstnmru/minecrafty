@@ -18,7 +18,6 @@
 	import { modSupport } from '#lib/mod-support.js';
 	import {
 		installMod,
-		disableClientOnlyMods,
 		installedMods,
 		modUpdates,
 		refreshModSides,
@@ -154,10 +153,6 @@
 		] as const;
 	}
 
-	const clientOnly = $derived(
-		installed.filter((m) => m.enabled && m.serverSide === 'unsupported').length
-	);
-
 	// mods recorded before this was kept learn where they run, once per server
 	let askedSides: number | null = null;
 	$effect(() => {
@@ -167,20 +162,6 @@
 			void refreshModSides(id).catch(() => undefined);
 		}
 	});
-
-	async function disableClientSide() {
-		try {
-			const titles = await disableClientOnlyMods(id);
-			toast.success(
-				`Disabled ${titles.length} client-only ${titles.length === 1 ? 'mod' : 'mods'}`,
-				{
-					description: 'Restart the server to apply.'
-				}
-			);
-		} catch (e) {
-			toast.error(message(e, 'Could not disable them'));
-		}
-	}
 
 	async function toggle(modId: number, title: string, enabled: boolean) {
 		try {
@@ -224,18 +205,11 @@
 					Files in <code class="font-mono">{info.folder}/</code>. Changes apply the next time the
 					server starts.
 				</Card.Description>
-				{#if updates.current?.length || clientOnly}
-					<Card.Action class="flex flex-wrap gap-2">
-						{#if clientOnly}
-							<Button variant="outline" size="sm" onClickPromise={disableClientSide}>
-								Disable client-only ({clientOnly})
-							</Button>
-						{/if}
-						{#if updates.current?.length}
-							<Button size="sm" onClickPromise={updateAll}>
-								Update all ({updates.current.length})
-							</Button>
-						{/if}
+				{#if updates.current?.length}
+					<Card.Action>
+						<Button size="sm" onClickPromise={updateAll}>
+							Update all ({updates.current.length})
+						</Button>
 					</Card.Action>
 				{/if}
 			</Card.Header>
@@ -309,8 +283,8 @@
 			<Card.Header>
 				<Card.Title>Add {info.noun}s</Card.Title>
 				<Card.Description>
-					From Modrinth, filtered to {info.loader} and Minecraft {info.mcVersion}. Client-only {info.noun}s
-					are hidden.
+					From Modrinth, filtered to {info.loader} and Minecraft {info.mcVersion}. Those marked
+					Client only may stop the server from starting.
 				</Card.Description>
 			</Card.Header>
 			<Card.Content class="grid gap-4">
@@ -344,6 +318,11 @@
 							<div class="min-w-0 flex-1">
 								<div class="flex items-baseline gap-2">
 									<span class="truncate text-sm font-medium">{hit.title}</span>
+									{#if hit.server_side === 'unsupported'}
+										<Badge variant="warning" title="Modrinth says it does not run on a server">
+											Client only
+										</Badge>
+									{/if}
 									<span class="shrink-0 text-xs text-muted-foreground">
 										by {hit.author} · {number.format(hit.downloads)} downloads
 									</span>
