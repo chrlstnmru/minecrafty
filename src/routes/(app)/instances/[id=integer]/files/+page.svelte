@@ -779,7 +779,6 @@
 						<WandIcon />Format
 					</Button>
 				{/if}
-				<Button variant="ghost" onclick={closeEditor}>Close</Button>
 				<Button
 					variant="ghost"
 					onclick={() => editing && drafts.revert(editing)}
