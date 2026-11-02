@@ -2,6 +2,7 @@ import { command, form, query } from '$app/server';
 import { error, invalid } from '@sveltejs/kit';
 import * as v from 'valibot';
 
+import { framesFrom } from '#lib/console-frames.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
@@ -155,67 +156,10 @@ export const restartInstance = command(id, async (instanceId) => {
 	record({ action: 'instance.restart', summary: 'Restarted the server', instanceId });
 });
 
-export type ConsoleLine = { seq: number; line: string };
-
-export type ConsoleFrame = {
-	state: instances.InstanceState;
-	/** identifies one runner process; sequence numbers restart when it changes */
-	run: number | null;
-	/** recent lines, overlapping with earlier frames so a skipped frame loses nothing */
-	lines: ConsoleLine[];
-};
-
-const OVERLAP_LINES = 200;
-
-/**
- * Live console for one instance. Live queries only keep the latest pending value, so every
- * frame repeats the most recent lines and clients merge them by sequence number.
- */
+/** Live console for one instance (see `console-frames.ts`). */
 export const consoleStream = query.live(id, async function* (instanceId) {
 	requirePermission(instanceId, 'console');
-
-	let state: ConsoleFrame['state'] = 'stopped';
-	let run: number | null = null;
-	let after = 0;
-	let tail: ConsoleLine[] = [];
-
-	yield { state, run, lines: tail } satisfies ConsoleFrame;
-
-	// the runner may not exist yet (or exit and be replaced), so keep looking for one
-	while (true) {
-		const sub = await live.subscribe(instanceId, { after, run: run ?? undefined });
-		if (!sub) {
-			if (state !== 'stopped') {
-				state = 'stopped';
-				yield { state, run, lines: tail } satisfies ConsoleFrame;
-			}
-			await Bun.sleep(1000);
-			continue;
-		}
-		try {
-			let batch;
-			while ((batch = await sub.nextBatch())) {
-				const fresh: ConsoleLine[] = [];
-				for (const msg of batch) {
-					if (msg.type === 'log') {
-						fresh.push({ seq: msg.seq, line: msg.line });
-						after = msg.seq;
-					} else {
-						state = msg.state;
-						if (msg.startedAt !== run) {
-							run = msg.startedAt;
-							tail = [];
-						}
-					}
-				}
-				tail = [...tail, ...fresh].slice(-OVERLAP_LINES - fresh.length);
-				yield { state, run, lines: tail } satisfies ConsoleFrame;
-				tail = tail.slice(-OVERLAP_LINES);
-			}
-		} finally {
-			sub.close();
-		}
-	}
+	yield* framesFrom((resume) => live.subscribe(instanceId, resume), Bun.sleep);
 });
 
 export const sendCommand = command(

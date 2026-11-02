@@ -7,37 +7,22 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
+	import {
+		freshMerge,
+		mergeFrame,
+		type ConsoleFrame,
+		type ConsoleRow
+	} from '#lib/console-frames.js';
 	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
 
 	let { id, status = $bindable('stopped') }: { id: number; status?: string } = $props();
 
 	const MAX_LINES = 5000;
-	// oxlint-disable-next-line no-control-regex
-	const ANSI = /\x1b\[[0-9;]*[A-Za-z]/g;
+	let rows = $state<ConsoleRow[]>([]);
+	let merging = freshMerge();
 
-	type Row = { key: number; text: string; marker?: boolean };
-
-	let rows = $state<Row[]>([]);
-	let lastRun: number | null = null;
-	let lastSeq = 0;
-	let nextKey = 0;
-
-	// live frames overlap (a skipped frame must not lose lines), so merge them by sequence number
-	function merge(frame: { run: number | null; lines: { seq: number; line: string }[] }) {
-		const add: Row[] = [];
-		if (frame.run !== null && frame.run !== lastRun) {
-			if (lastRun !== null)
-				add.push({ key: nextKey++, text: '— server restarted —', marker: true });
-			lastRun = frame.run;
-			lastSeq = 0;
-		}
-		for (const { seq, line } of frame.lines) {
-			if (seq <= lastSeq) continue;
-			if (lastSeq > 0 && seq > lastSeq + 1)
-				add.push({ key: nextKey++, text: '— some output was skipped —', marker: true });
-			lastSeq = seq;
-			add.push({ key: nextKey++, text: line.replace(ANSI, '') });
-		}
+	function merge(frame: ConsoleFrame) {
+		const add = mergeFrame(merging, frame);
 		if (add.length) rows = [...rows, ...add].slice(-MAX_LINES);
 	}
 
@@ -47,8 +32,7 @@
 		// restart the view when switching instances
 		void id;
 		rows = [];
-		lastRun = null;
-		lastSeq = 0;
+		merging = freshMerge();
 		pinned = true;
 		lastTop = 0;
 	});
