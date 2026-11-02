@@ -309,17 +309,14 @@
 			toast.success(count === 1 ? 'Saved' : `Saved ${count} changes`);
 		} catch (e) {
 			const text = message(e, 'Could not save the changes');
+			const refused = (e as { body?: App.Error }).body;
 			saveError = text;
-			// the message starts with the path it is about, as the server knows it
-			const named = [
-				...changes.moves.flatMap((m) => [m.from, m.to]),
-				...changes.deletes,
-				...changes.writes.flatMap((w) => [w.path, w.original ?? ''])
-			].find((path) => path && text.startsWith(`${path}: `));
+			// the server names the path as it knows it: where the file is now, or where it goes
+			const named = refused?.path;
 			failedPath = named
 				? (view.find((f) => f.original === named || f.path === named)?.path ?? named)
 				: undefined;
-			const stale = failedPath && text.includes('changed since you opened it');
+			const stale = failedPath && refused?.reason === 'stale';
 			if (stale) {
 				const path = failedPath!;
 				toast.error(text, {

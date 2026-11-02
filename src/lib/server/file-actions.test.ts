@@ -160,6 +160,23 @@ describe('saveFiles', () => {
 		expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a');
 	});
 
+	it('names the refused path, and says when a file changed since it was opened', async () => {
+		await expect(
+			F.saveFiles(owner, id, [{ rel: 'a.txt', content: 'a!', baseHash: 'f'.repeat(40) }])
+		).rejects.toMatchObject({ path: 'a.txt', kind: 'stale' });
+		await expect(F.removeEntries(id, ['a.txt', 'gone.txt'])).rejects.toMatchObject({
+			path: 'gone.txt',
+			kind: 'refused'
+		});
+		await expect(F.moveEntries(owner, id, ['config'], 'config')).rejects.toMatchObject({
+			path: 'config',
+			kind: 'refused'
+		});
+		await expect(F.moveEntries(owner, id, ['a.txt', 'server.jar'], 'config')).rejects.toMatchObject(
+			{ path: 'server.jar', kind: 'refused' }
+		);
+	});
+
 	it('refuses a code file for a member, a missing file, a type it cannot edit and a repeat, before writing', async () => {
 		writeFileSync(join(root, 'user_jvm_args.txt'), '-Xmx1G');
 		const a = hashOf('a.txt');

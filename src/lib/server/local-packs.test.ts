@@ -379,6 +379,25 @@ describe('config files', () => {
 			expect(existsSync(P.overridesDir(pack.id))).toBe(true);
 		});
 
+		it('names the refused path, and says when a file changed since it was opened', async () => {
+			const pack = await make();
+			await put(pack.id, { 'a.txt': 'A', 'b.txt': 'B' });
+			const stale = { path: 'a.txt', original: 'a.txt', baseHash: 'f'.repeat(40), content: 'A!' };
+			await expect(
+				P.applyOverrideChanges(pack.id, { moves: [], deletes: [], writes: [stale] })
+			).rejects.toMatchObject({ path: 'a.txt', kind: 'stale' });
+			await expect(
+				P.applyOverrideChanges(pack.id, {
+					moves: [{ from: 'b.txt', to: 'a.txt' }],
+					deletes: [],
+					writes: []
+				})
+			).rejects.toMatchObject({ path: 'a.txt', kind: 'refused' });
+			await expect(
+				P.applyOverrideChanges(pack.id, { moves: [], deletes: ['nope.txt'], writes: [] })
+			).rejects.toMatchObject({ path: 'nope.txt', kind: 'refused' });
+		});
+
 		it('changes nothing, and adds no revision, when one part is refused', async () => {
 			const pack = await make();
 			await put(pack.id, { 'a.txt': 'A', 'b.txt': 'B', 'dir/c.txt': 'C' });

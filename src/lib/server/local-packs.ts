@@ -20,6 +20,7 @@ import { dataDir } from './config';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
 import { isHostCode } from './host-code';
+import { ChangeRefused, refusal, StaleFile } from './http';
 import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
 import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
@@ -565,7 +566,7 @@ export async function applyOverrideChanges(
 		try {
 			return run();
 		} catch (e) {
-			throw new Error(`${rel}: ${e instanceof Error ? e.message : 'not allowed'}`);
+			throw refusal(rel, e);
 		}
 	};
 
@@ -579,14 +580,14 @@ export async function applyOverrideChanges(
 	const gone = new Set<string>();
 	for (const { from } of moves) {
 		named(from, () => abs(from));
-		if (!existing.has(from)) throw new Error(`${from}: not found`);
-		if (gone.has(from)) throw new Error(`${from}: is moved twice`);
+		if (!existing.has(from)) throw new ChangeRefused(from, 'not found');
+		if (gone.has(from)) throw new ChangeRefused(from, 'is moved twice');
 		gone.add(from);
 	}
 	for (const path of deletes) {
 		named(path, () => abs(path));
-		if (!existing.has(path)) throw new Error(`${path}: not found`);
-		if (gone.has(path)) throw new Error(`${path}: is moved and deleted`);
+		if (!existing.has(path)) throw new ChangeRefused(path, 'not found');
+		if (gone.has(path)) throw new ChangeRefused(path, 'is moved and deleted');
 		gone.add(path);
 	}
 	const final = new Map<string, string>();
@@ -595,9 +596,9 @@ export async function applyOverrideChanges(
 		named(path, () => abs(path));
 		if (!path) throw new Error('A file needs a name');
 		for (const other of final.keys()) {
-			if (other === path) throw new Error(`${path}: already exists`);
-			if (other.startsWith(`${path}/`)) throw new Error(`${path}: is a folder`);
-			if (path.startsWith(`${other}/`)) throw new Error(`${other}: is a file`);
+			if (other === path) throw new ChangeRefused(path, 'already exists');
+			if (other.startsWith(`${path}/`)) throw new ChangeRefused(path, 'is a folder');
+			if (path.startsWith(`${other}/`)) throw new ChangeRefused(other, 'is a file');
 		}
 		final.set(path, origin);
 	};
@@ -624,14 +625,11 @@ export async function applyOverrideChanges(
 					return { path, abs: abs(path), bytes, changed: true };
 				}
 				const original = clean(write.original);
-				const stale = new Error(
-					'This file changed since you opened it. Reload it to see the new version.'
-				);
-				if (!existing.has(original) || deletes.includes(original)) throw stale;
+				if (!existing.has(original) || deletes.includes(original)) throw new StaleFile();
 				const target = moves.find((m) => m.from === original)?.to ?? original;
 				if (target !== path) throw new Error('does not go where it was moved to');
 				const current = readFileSync(abs(original));
-				if (sha1(current) !== write.baseHash) throw stale;
+				if (sha1(current) !== write.baseHash) throw new StaleFile();
 				return { path, abs: abs(path), bytes, changed: Buffer.compare(current, bytes) !== 0 };
 			})
 		);
