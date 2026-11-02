@@ -232,6 +232,30 @@ export async function javaFor(inst: Instance): Promise<JavaMajor> {
 	return chosen ?? (await requiredJavaMajor(inst.mcVersion));
 }
 
+const USER_JVM_ARGS = 'user_jvm_args.txt';
+
+/**
+ * The arguments Java starts a server with. Forge and NeoForge keep JVM flags in `user_jvm_args.txt`
+ * and pass it from their run scripts, which the panel does not use, so it is passed here. It comes first,
+ * so the instance's RAM and JVM args after it win where both set a flag (Java keeps the last one).
+ * Java 8 cannot read an argument file, so the file is left out there.
+ */
+export function javaArgs(
+	server: string,
+	inst: Pick<Instance, 'ramMinMb' | 'ramMaxMb' | 'jvmArgs'>,
+	java: JavaMajor,
+	launch: string[]
+) {
+	const fromFile = java > 8 && existsSync(join(server, USER_JVM_ARGS)) ? [`@${USER_JVM_ARGS}`] : [];
+	return [
+		...fromFile,
+		`-Xms${inst.ramMinMb}M`,
+		`-Xmx${inst.ramMaxMb}M`,
+		...inst.jvmArgs.split(/\s+/).filter(Boolean),
+		...launch
+	];
+}
+
 export async function startInstance(id: number) {
 	const inst = getInstance(id);
 	if (!inst) throw new Error('Instance not found');
@@ -264,14 +288,10 @@ export async function startInstance(id: number) {
 		'rcon.password': rcon.password
 	});
 
+	const java = await javaFor(inst);
 	const spec: LaunchSpec = {
-		command: javaOverride ?? (await ensureJava(await javaFor(inst))),
-		args: [
-			`-Xms${inst.ramMinMb}M`,
-			`-Xmx${inst.ramMaxMb}M`,
-			...inst.jvmArgs.split(/\s+/).filter(Boolean),
-			...launch
-		],
+		command: javaOverride ?? (await ensureJava(java)),
+		args: javaArgs(server, inst, java, launch),
 		cwd: server
 	};
 	writeFileSync(join(dir, 'launch.json'), JSON.stringify(spec, null, 2));

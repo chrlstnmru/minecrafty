@@ -151,6 +151,43 @@ describe('start refusals', () => {
 	});
 });
 
+describe('the Java arguments', () => {
+	const settings = { ramMinMb: 1024, ramMaxMb: 4096, jvmArgs: '-XX:+UseG1GC  -Dfoo=bar' };
+	const launch = ['@libraries/net/neoforged/unix_args.txt', 'nogui'];
+
+	it('pass user_jvm_args.txt first, so the instance settings after it win', () => {
+		const row = makeInstance();
+		writeFileSync(`${I.serverDir(row.id)}/user_jvm_args.txt`, '-Xmx2G -XX:+UseZGC\n');
+		expect(I.javaArgs(I.serverDir(row.id), settings, 21, launch)).toEqual([
+			'@user_jvm_args.txt',
+			'-Xms1024M',
+			'-Xmx4096M',
+			'-XX:+UseG1GC',
+			'-Dfoo=bar',
+			...launch
+		]);
+	});
+
+	it('leave the file out when the server has none', () => {
+		const row = makeInstance();
+		expect(I.javaArgs(I.serverDir(row.id), settings, 21, launch)[0]).toBe('-Xms1024M');
+	});
+
+	it('leave the file out on Java 8, which cannot read an argument file', () => {
+		const row = makeInstance();
+		writeFileSync(`${I.serverDir(row.id)}/user_jvm_args.txt`, '-XX:+UseG1GC\n');
+		expect(I.javaArgs(I.serverDir(row.id), settings, 8, ['-jar', 'forge.jar', 'nogui'])).toEqual([
+			'-Xms1024M',
+			'-Xmx4096M',
+			'-XX:+UseG1GC',
+			'-Dfoo=bar',
+			'-jar',
+			'forge.jar',
+			'nogui'
+		]);
+	});
+});
+
 describe('the instance list', () => {
 	it('reports state, and install progress while one is running', async () => {
 		const row = makeInstance({ installState: 'installing' });
