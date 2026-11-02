@@ -1,5 +1,7 @@
 // Turns a flat list of paths into folders inside folders, for the file tree component.
 
+import { joinPath, nameOf, under } from './paths';
+
 export type FileNode<T> = { kind: 'file'; name: string; path: string; item: T };
 export type FolderNode<T> = { kind: 'folder'; name: string; path: string; children: TreeNode<T>[] };
 export type TreeNode<T> = FileNode<T> | FolderNode<T>;
@@ -52,8 +54,7 @@ export function buildFileTree<T extends { path: string }>(
 }
 
 /** Whether dropping `from` on `folder` would put a folder inside itself. */
-export const intoItself = (from: string, folder: string) =>
-	folder === from || folder.startsWith(`${from}/`);
+export const intoItself = (from: string, folder: string) => under(folder, from);
 
 /**
  * Whether a drop of these items on `folder` is allowed and does something: none of them may go into
@@ -89,11 +90,8 @@ export const TREE_DRAG_TYPE = 'application/x-minecrafty-tree-item';
  * does nothing: it is already there, or a folder would go into itself.
  */
 export function movedPath(from: string, folder: string): string | null {
-	const to = folder
-		? `${folder}/${from.slice(from.lastIndexOf('/') + 1)}`
-		: from.slice(from.lastIndexOf('/') + 1);
-	if (to === from) return null;
-	if (folder === from || folder.startsWith(`${from}/`)) return null;
+	const to = joinPath(folder, nameOf(from));
+	if (to === from || under(folder, from)) return null;
 	return to;
 }
 

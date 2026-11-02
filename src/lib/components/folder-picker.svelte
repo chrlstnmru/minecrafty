@@ -6,13 +6,8 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import {
-		folderName,
-		newFolderError,
-		openableFolder,
-		parentFolder,
-		sortFolders
-	} from '#lib/folder-picker.js';
+	import { newFolderError, openableFolder, sortFolders } from '#lib/folder-picker.js';
+	import { nameOf, parentOf } from '#lib/paths.js';
 	import { cn } from '#lib/utils.js';
 
 	/**
@@ -57,7 +52,7 @@
 		let live = true;
 		Promise.resolve(current).then(
 			(paths) => {
-				if (live) known = paths.map(folderName);
+				if (live) known = paths.map(nameOf);
 			},
 			() => {
 				if (live) known = [];
@@ -68,8 +63,8 @@
 		};
 	});
 
-	const madeHere = $derived(created.filter((made) => parentFolder(made) === folder));
-	const siblings = $derived([...known, ...madeHere.map(folderName)]);
+	const madeHere = $derived(created.filter((made) => parentOf(made) === folder));
+	const siblings = $derived([...known, ...madeHere.map(nameOf)]);
 
 	let naming = $state<string | null>(null);
 	const nameError = $derived(naming === null ? undefined : newFolderError(naming, siblings));
@@ -94,11 +89,11 @@
 				<button
 					type="button"
 					class="flex w-full items-center gap-2 px-3 py-2 text-start font-mono text-sm hover:bg-accent/50 focus-visible:bg-accent/50 focus-visible:outline-none"
-					onclick={() => (folder = parentFolder(folder))}
+					onclick={() => (folder = parentOf(folder))}
 				>
 					<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
 					<span aria-hidden="true">..</span>
-					<span class="sr-only">Up to {parentFolder(folder) || rootLabel}</span>
+					<span class="sr-only">Up to {parentOf(folder) || rootLabel}</span>
 				</button>
 			</li>
 		{/if}
@@ -110,7 +105,7 @@
 					onclick={() => (folder = child)}
 				>
 					<FolderIcon class="size-4 shrink-0 text-muted-foreground" />
-					<span class="min-w-0 flex-1 truncate">{folderName(child)}</span>
+					<span class="min-w-0 flex-1 truncate">{nameOf(child)}</span>
 					{#if isNew(child)}
 						<span class="shrink-0 text-xs text-muted-foreground">New</span>
 					{/if}

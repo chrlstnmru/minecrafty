@@ -18,6 +18,7 @@ import {
 import { basename, dirname, join, relative, resolve, sep } from 'node:path';
 
 import { isEditable, MAX_EDIT_BYTES } from '../editable';
+import { under } from '../paths';
 import { ChangeRefused, refusal, StaleFile } from './http';
 
 export type Changes = {
@@ -51,10 +52,6 @@ export type ChangeRules = {
 
 export const sha1 = (bytes: Uint8Array) => createHash('sha1').update(bytes).digest('hex');
 
-/** Slashes tidied: backslashes made forward, and none at either end. */
-export const cleanPath = (path: string) => path.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
-
-const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
 const inside = (base: string, path: string) => path === base || path.startsWith(base + sep);
 
 const exists = (absolute: string) => {

@@ -16,6 +16,7 @@
 - "May this instance's files change now?": `assertWritable` in `server/operations.ts`.
 - Moving, deleting and writing files, one or many, all or none: `applyChanges` in `server/change-set.ts`. It owns safe paths, clashes, swaps, the edit checks and stale hashes; the caller passes its rules. The instance file manager calls it through `applyFileChanges` in `server/files.ts` (protected files, host code, world, busy), with `chosenPaths`, `movesInto` and `entryPath` to turn a request into changes; a pack's config files through `applyOverrideChanges` in `server/local-packs.ts`. New folders and uploads keep their own checks in `files.ts` (`addFolder`, `uploadFiles`, `assertMayUpload`).
 - The drafts of the files opened in an editor (both file editors): `FileDrafts` in `file-drafts.svelte.ts`. It loads, saves, reverts, discards and asks before leaving; each editor gives it an adapter for reading and saving. A draft keeps its editor model key when its file moves, and frees it when the file goes. The shared Discard question is `components/discard-dialog.svelte`.
+- Path rules for files inside a folder (clean, inside, rebase, parent, name, join), on the page and the server: `src/lib/paths.ts`. Use them rather than writing one inline.
 - Where an instance came from: `src/lib/instance-origin.ts`.
 - Modrinth dependency resolution and file picking: `server/mod-resolver.ts`.
 - Showing Markdown (release notes): `components/markdown.svelte`. It draws tokens and never uses `{@html}`; keep it that way.

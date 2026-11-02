@@ -13,6 +13,7 @@ import { basename, dirname, join } from 'node:path';
 import { assertEditableSize, decodeText } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 
+import { cleanPath, under } from '../paths';
 import { applyChanges, sha1, type Changes } from './change-set';
 import { dataDir } from './config';
 import { db } from './db';
@@ -516,14 +517,10 @@ export function readOverrideText(packId: number, rel: string) {
 	return { content: decodeText(bytes), size: stat.size, hash: sha1(bytes) };
 }
 
-const within = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-
 /** Slashes tidied, repeats dropped, and an item inside another chosen folder left to that folder. */
 function topLevel(paths: string[]) {
-	const clean = [
-		...new Set(paths.map((p) => p.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')).filter(Boolean))
-	];
-	return clean.filter((p) => !clean.some((q) => q !== p && within(p, q)));
+	const clean = [...new Set(paths.map(cleanPath).filter(Boolean))];
+	return clean.filter((p) => !clean.some((q) => q !== p && under(p, q)));
 }
 
 export type OverrideChanges = Changes;
@@ -567,7 +564,7 @@ export function exportOverridesZip(packId: number, paths: string[]) {
 	const entries: ZipEntry[] = [];
 	for (const rel of chosen) {
 		safeJoin(overridesDir(packId), rel);
-		const found = all.filter((f) => within(f.path, rel));
+		const found = all.filter((f) => under(f.path, rel));
 		if (!found.length) throw new Error(`There is nothing to download in ${rel}`);
 		for (const file of found)
 			entries.push({
