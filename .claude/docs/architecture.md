@@ -3,7 +3,7 @@
 ## Layout
 
 - `src/lib/*.remote.ts`: SvelteKit remote functions, the only way pages reach the server. Every export starts with a guard (`requireUser`, `requirePermission`, `requirePanel`, `requireOwner`); `remote-guards.test.ts` enforces it.
-- `src/lib/server/`: the server modules the remotes call. They take an instance id and throw plain `Error`s with text meant for the user; remotes wrap calls in `userFacing`.
+- `src/lib/server/`: the server modules the remotes call. They take an instance id and throw plain `Error`s with text meant for the user; remotes wrap calls in `userFacing`. A batch of file changes refuses an item with `ChangeRefused` (`server/http.ts`), whose `path` and `reason` (`stale` when the file changed since it was opened) reach the page as fields of the error body; pages read those, never the message text.
 - `src/lib/schemas/`: valibot schemas (a `.remote.ts` cannot export them).
 - `runner/`: the detached per-instance runner and its socket protocol.
 - `src/routes/`: pages, plus `+server.ts` only where a remote function cannot work (real downloads, large uploads). Those use the same guards from `auth.ts`.

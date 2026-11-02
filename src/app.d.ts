@@ -5,7 +5,13 @@ declare global {
 	const __MINECRAFTY_VERSION__: string | undefined;
 
 	namespace App {
-		// interface Error {}
+		interface Error {
+			message: string;
+			/** the file a refused change is about */
+			path?: string;
+			/** `stale`: the file changed since it was opened */
+			reason?: 'stale' | 'refused';
+		}
 		interface Locals {
 			user: import('#lib/server/auth.js').SessionUser | null;
 		}

@@ -20,6 +20,7 @@ import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '../e
 import { topLevelPaths } from '../file-tree';
 import { SMALL_FILE_BYTES } from '../upload-limits';
 import { assertMayWriteCode } from './host-code';
+import { refusedAs, StaleFile } from './http';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
 import { assertWritable } from './operations';
@@ -241,15 +242,6 @@ const exists = (absolute: string) => {
 	}
 };
 
-/** Runs a check on one item of a batch, so a refusal names the item it is about. */
-async function onItem<T>(rel: string, check: () => T | Promise<T>): Promise<T> {
-	try {
-		return await check();
-	} catch (e) {
-		throw new Error(`${rel}: ${e instanceof Error ? e.message : 'not allowed'}`);
-	}
-}
-
 /**
  * Saves several edited files together, all or none: every file is checked as `saveFile` would
  * (and must still be the text it was opened as, by `baseHash`) before the first is written, and a
@@ -265,7 +257,7 @@ export async function saveFiles(
 	const seen = new Set<string>();
 	for (const { rel, content, baseHash } of list) {
 		prepared.push(
-			await onItem(rel, () => {
+			await refusedAs(rel, () => {
 				assertMayWriteCode(actor, rel);
 				const target = resolveSafe(instanceId, rel);
 				if (seen.has(target.rel)) throw new Error('is in the list twice');
@@ -274,13 +266,10 @@ export async function saveFiles(
 					throw new Error('This file type cannot be edited here');
 				const bytes = Buffer.from(content, 'utf8');
 				if (bytes.length > MAX_EDIT_BYTES) throw new Error('The file is too large (2 MB limit)');
-				const stale = new Error(
-					'This file changed since you opened it. Reload it to see the new version.'
-				);
-				if (!exists(target.absolute) || !statSync(target.absolute).isFile()) throw stale;
+				if (!exists(target.absolute) || !statSync(target.absolute).isFile()) throw new StaleFile();
 				assertEditableSize(statSync(target.absolute).size);
 				const current = readFileSync(target.absolute);
-				if (sha1(current) !== baseHash) throw stale;
+				if (sha1(current) !== baseHash) throw new StaleFile();
 				return {
 					rel: target.rel,
 					absolute: target.absolute,
@@ -308,7 +297,7 @@ export async function removeEntries(instanceId: number, paths: string[]) {
 	const absolutes: string[] = [];
 	for (const rel of chosen)
 		absolutes.push(
-			await onItem(rel, async () => {
+			await refusedAs(rel, async () => {
 				await assertWorldStopped(instanceId, rel, 'deleting from');
 				const { absolute, base, rel: normalized } = resolveSafe(instanceId, rel);
 				if (absolute === base) throw new Error('The instance folder itself cannot be deleted');
@@ -344,7 +333,7 @@ export async function moveEntries(
 	const moves: { source: string; dest: string }[] = [];
 	const names = new Set<string>();
 	for (const rel of chosen) {
-		const move = await onItem(rel, async () => {
+		const move = await refusedAs(rel, async () => {
 			const from = resolveSafe(instanceId, rel);
 			if (from.absolute === from.base)
 				throw new Error('The instance folder itself cannot be moved');

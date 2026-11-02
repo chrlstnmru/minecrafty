@@ -258,9 +258,10 @@
 			toast.success(sent.length === 1 ? 'Saved' : `Saved ${sent.length} files`);
 		} catch (e) {
 			const text = message(e, 'Save failed');
+			const refused = (e as { body?: App.Error }).body;
 			saveError = text;
-			failedPath = sent.find((f) => text.startsWith(`${f.path}: `))?.path;
-			if (failedPath && text.includes('changed since you opened it')) {
+			failedPath = sent.find((f) => f.path === refused?.path)?.path;
+			if (failedPath && refused?.reason === 'stale') {
 				const path = failedPath;
 				toast.error(text, {
 					action: { label: 'Reload', onClick: () => askDiscard([path], () => void refetch(path)) }
