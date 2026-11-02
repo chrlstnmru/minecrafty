@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
+import { addFile, moveEntry, owner, removeEntry, saveFile } from '#test/file-changes.js';
 import { makeInstance } from '#test/instance.js';
 
 import * as F from './files';
@@ -11,7 +12,7 @@ import { assertWorldIdle, isProtected, isRewrittenOnStop, isWorldPath } from './
 import * as uploads from './uploads';
 
 describe('isProtected', () => {
-	it('covers the launcher files and the libraries folder, at the root only', () => {
+	it('covers the launcher files and the libraries folder, at the root only', async () => {
 		for (const p of [
 			'server.jar',
 			'eula.txt',
@@ -31,7 +32,7 @@ describe('isProtected', () => {
 			expect(isProtected(p), p).toBe(false);
 	});
 
-	it('ignores case, trailing dots and spaces, and backslashes', () => {
+	it('ignores case, trailing dots and spaces, and backslashes', async () => {
 		for (const p of ['SERVER.JAR', 'server.jar.', 'server.jar ', 'Libraries\\a\\b.jar'])
 			expect(isProtected(p), p).toBe(true);
 	});
@@ -51,25 +52,27 @@ beforeEach(() => {
 });
 
 describe('the file manager refuses to touch them', () => {
-	it('delete', () => {
-		expect(() => F.deleteEntry(id, 'server.jar')).toThrow(/cannot be deleted/);
-		expect(() => F.deleteEntry(id, 'libraries')).toThrow(/cannot be deleted/);
-		expect(() => F.deleteEntry(id, 'libraries/a.jar')).toThrow(/cannot be deleted/);
+	it('delete', async () => {
+		await expect(removeEntry(id, 'server.jar')).rejects.toThrow(/cannot be deleted/);
+		await expect(removeEntry(id, 'libraries')).rejects.toThrow(/cannot be deleted/);
+		await expect(removeEntry(id, 'libraries/a.jar')).rejects.toThrow(/cannot be deleted/);
 		expect(existsSync(join(root, 'server.jar'))).toBe(true);
-		F.deleteEntry(id, 'mods/server.jar'); // same name elsewhere is fine
+		await removeEntry(id, 'mods/server.jar'); // same name elsewhere is fine
 		expect(existsSync(join(root, 'mods/server.jar'))).toBe(false);
 	});
 
-	it('rename, from and onto a protected name', () => {
-		expect(() => F.renameEntry(id, 'server.jar', 'old.jar')).toThrow(/cannot be renamed/);
-		expect(() => F.renameEntry(id, 'libraries', 'lib')).toThrow(/cannot be renamed/);
+	it('rename, from and onto a protected name', async () => {
+		await expect(moveEntry(owner, id, 'server.jar', 'old.jar')).rejects.toThrow(/cannot be moved/);
+		await expect(moveEntry(owner, id, 'libraries', 'lib')).rejects.toThrow(/cannot be moved/);
 		writeFileSync(join(root, 'other.jar'), 'x');
-		expect(() => F.renameEntry(id, 'other.jar', 'SERVER.JAR')).toThrow(/cannot be replaced/);
+		await expect(moveEntry(owner, id, 'other.jar', 'SERVER.JAR')).rejects.toThrow(
+			/cannot be replaced/
+		);
 		expect(readFileSync(join(root, 'server.jar'), 'utf8')).toBe('JAR');
 	});
 
-	it('creating a file or folder with a protected name', () => {
-		expect(() => F.createTextFile(id, '', 'eula.txt')).toThrow(/cannot be replaced/);
+	it('creating a file or folder with a protected name', async () => {
+		await expect(addFile(owner, id, '', 'eula.txt')).rejects.toThrow(/cannot be replaced/);
 		expect(() => F.makeDirectory(id, '', 'Libraries')).toThrow(/cannot be replaced/);
 	});
 
@@ -92,13 +95,13 @@ describe('the file manager refuses to touch them', () => {
 		await F.saveUpload(id, 'mods', new File(['ok'], 'server.jar')); // elsewhere: allowed
 	});
 
-	it('editing stays possible for text files such as eula.txt', () => {
+	it('editing stays possible for text files such as eula.txt', async () => {
 		writeFileSync(join(root, 'eula.txt'), 'eula=false');
-		F.writeTextFile(id, 'eula.txt', 'eula=true');
+		await saveFile(owner, id, 'eula.txt', 'eula=true');
 		expect(readFileSync(join(root, 'eula.txt'), 'utf8')).toBe('eula=true');
 	});
 
-	it('the listing marks them as locked', () => {
+	it('the listing marks them as locked', async () => {
 		const names = Object.fromEntries(
 			F.listDirectory(id, '').entries.map((e) => [e.name, e.locked])
 		);
@@ -108,7 +111,7 @@ describe('the file manager refuses to touch them', () => {
 });
 
 describe('while the server runs', () => {
-	it('recognises the world folders by level-name, case-insensitively', () => {
+	it('recognises the world folders by level-name, case-insensitively', async () => {
 		for (const p of ['world', 'World/region/r.0.0.mca', 'world_nether', 'world_the_end/DIM1'])
 			expect(isWorldPath(p, 'world'), p).toBe(true);
 		for (const p of ['worlds', 'mods/world', 'world.txt', 'world_backup', ''])
@@ -117,7 +120,7 @@ describe('while the server runs', () => {
 		expect(isWorldPath('world', 'survival')).toBe(false);
 	});
 
-	it('refuses to change a world only while running', () => {
+	it('refuses to change a world only while running', async () => {
 		expect(() => assertWorldIdle('world/level.dat', 'world', true, 'deleting from')).toThrow(
 			/Stop the server before deleting from the world/
 		);
@@ -125,14 +128,14 @@ describe('while the server runs', () => {
 		expect(() => assertWorldIdle('mods/a.jar', 'world', true, 'deleting from')).not.toThrow();
 	});
 
-	it('knows which files the server writes back', () => {
+	it('knows which files the server writes back', async () => {
 		for (const p of ['server.properties', 'OPS.json', 'whitelist.json', 'banned-ips.json'])
 			expect(isRewrittenOnStop(p), p).toBe(true);
 		expect(isRewrittenOnStop('config/server.properties')).toBe(false);
 		expect(isRewrittenOnStop('usercache.json')).toBe(false);
 	});
 
-	it('marks them in a listing, using the level-name from server.properties', () => {
+	it('marks them in a listing, using the level-name from server.properties', async () => {
 		writeFileSync(join(root, 'server.properties'), 'level-name=survival\n');
 		writeFileSync(join(root, 'ops.json'), '[]');
 		mkdirSync(join(root, 'survival'));

@@ -436,7 +436,7 @@ describe('config files', () => {
 			await refuse({ moves: [], deletes: ['nope.txt'], writes: [edit] }, 'nope.txt: not found');
 			await refuse(
 				{ moves: [{ from: 'b.txt', to: '../x.txt' }], deletes: [], writes: [edit] },
-				'unsafe'
+				'not allowed'
 			);
 			await refuse(
 				{

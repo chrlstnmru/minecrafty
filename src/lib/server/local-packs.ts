@@ -1,26 +1,23 @@
 import { and, count, desc, eq } from 'drizzle-orm';
-import { createHash } from 'node:crypto';
 import {
 	cpSync,
 	existsSync,
 	mkdirSync,
-	mkdtempSync,
 	readFileSync,
 	readdirSync,
-	renameSync,
 	rmSync,
 	statSync
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
-import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '#lib/editable.js';
+import { assertEditableSize, decodeText } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 
+import { applyChanges, sha1, type Changes } from './change-set';
 import { dataDir } from './config';
 import { db } from './db';
 import { localPackFiles, localPacks } from './db/schema';
 import { isHostCode } from './host-code';
-import { ChangeRefused, refusal, StaleFile } from './http';
 import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
 import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
@@ -502,8 +499,6 @@ export async function saveOverrides(packId: number, files: { rel: string; bytes:
 export const saveOverride = (packId: number, rel: string, bytes: Uint8Array) =>
 	saveOverrides(packId, [{ rel, bytes }]);
 
-const sha1 = (bytes: Uint8Array) => createHash('sha1').update(bytes).digest('hex');
-
 function overrideFile(packId: number, rel: string) {
 	requirePack(packId);
 	const dest = safeJoin(overridesDir(packId), rel);
@@ -531,27 +526,13 @@ function topLevel(paths: string[]) {
 	return clean.filter((p) => !clean.some((q) => q !== p && within(p, q)));
 }
 
-export type OverrideChanges = {
-	/** Files to move, one entry per file (a folder is its files). */
-	moves: { from: string; to: string }[];
-	/** Files to delete. */
-	deletes: string[];
-	/**
-	 * Texts to write, at the path the file ends up at. A file that is on the server already says
-	 * where it is now (`original`) and the hash of the text it was opened as (`baseHash`); a new file
-	 * says neither.
-	 */
-	writes: { path: string; content: string; original?: string; baseHash?: string }[];
-};
+export type OverrideChanges = Changes;
 
 /**
- * Applies a set of changes to the config files together, as one revision, all or none. Everything
- * is checked before anything is touched: every file must exist where it is said to be, nothing may
- * land on a name that is taken (a file being moved away or deleted frees its name, so files can
- * swap places), an edited file must still be the text it was opened as, and a refusal names the
- * path. `check` is asked about every path a move or a write puts a file at or takes one from. Moves
- * go first, then deletes, then writes; folders left empty are removed. Returns how many files
- * changed, and the hash of each written text as it is now.
+ * Applies a set of changes to the config files together, as one revision, all or none (see
+ * `applyChanges`; a pack's moves name each file). `check` is asked about every path a file is
+ * put at or moved from. Folders left empty are removed, since a pack cannot keep one. Returns how
+ * many files changed, and the hash of each written text as it is now.
  */
 export async function applyOverrideChanges(
 	packId: number,
@@ -560,113 +541,20 @@ export async function applyOverrideChanges(
 ) {
 	requirePack(packId);
 	const root = overridesDir(packId);
-	const clean = (rel: string) => rel.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
-	const abs = (rel: string) => safeJoin(root, rel);
-	const named = <T>(rel: string, run: () => T): T => {
-		try {
-			return run();
-		} catch (e) {
-			throw refusal(rel, e);
-		}
-	};
-
-	const existing = new Set(listOverrides(packId).map((f) => f.path));
-	const moves = changes.moves
-		.map(({ from, to }) => ({ from: clean(from), to: clean(to) }))
-		.filter((move) => move.from !== move.to);
-	const deletes = [...new Set(changes.deletes.map(clean))];
-
-	// where everything stands once the moves and deletes are done: final path -> where it is now
-	const gone = new Set<string>();
-	for (const { from } of moves) {
-		named(from, () => abs(from));
-		if (!existing.has(from)) throw new ChangeRefused(from, 'not found');
-		if (gone.has(from)) throw new ChangeRefused(from, 'is moved twice');
-		gone.add(from);
-	}
-	for (const path of deletes) {
-		named(path, () => abs(path));
-		if (!existing.has(path)) throw new ChangeRefused(path, 'not found');
-		if (gone.has(path)) throw new ChangeRefused(path, 'is moved and deleted');
-		gone.add(path);
-	}
-	const final = new Map<string, string>();
-	for (const path of existing) if (!gone.has(path)) final.set(path, path);
-	const place = (path: string, origin: string) => {
-		named(path, () => abs(path));
-		if (!path) throw new Error('A file needs a name');
-		for (const other of final.keys()) {
-			if (other === path) throw new ChangeRefused(path, 'already exists');
-			if (other.startsWith(`${path}/`)) throw new ChangeRefused(path, 'is a folder');
-			if (path.startsWith(`${other}/`)) throw new ChangeRefused(other, 'is a file');
-		}
-		final.set(path, origin);
-	};
-	for (const { from, to } of moves) {
-		place(to, from);
-		check?.(from);
-		check?.(to);
-	}
-
-	const writes: { path: string; abs: string; bytes: Buffer; changed: boolean }[] = [];
-	const written = new Set<string>();
-	for (const write of changes.writes) {
-		const path = clean(write.path);
-		writes.push(
-			named(path, () => {
-				if (written.has(path)) throw new Error('is in the list twice');
-				written.add(path);
-				if (!isEditable(basename(path))) throw new Error('This file type cannot be edited here');
-				const bytes = Buffer.from(write.content, 'utf8');
-				if (bytes.length > MAX_EDIT_BYTES) throw new Error('The file is too large (2 MB limit)');
-				check?.(path);
-				if (write.original === undefined) {
-					place(path, path);
-					return { path, abs: abs(path), bytes, changed: true };
-				}
-				const original = clean(write.original);
-				if (!existing.has(original) || deletes.includes(original)) throw new StaleFile();
-				const target = moves.find((m) => m.from === original)?.to ?? original;
-				if (target !== path) throw new Error('does not go where it was moved to');
-				const current = readFileSync(abs(original));
-				if (sha1(current) !== write.baseHash) throw new StaleFile();
-				return { path, abs: abs(path), bytes, changed: Buffer.compare(current, bytes) !== 0 };
-			})
-		);
-	}
-
-	// moves go through a folder of their own, so a file can move onto the place another one leaves
-	const changed = moves.length + deletes.length + writes.filter((w) => w.changed).length;
-	if (changed) {
-		const parking = mkdtempSync(join(root, '.moving-'));
-		try {
-			for (const [index, { from }] of moves.entries())
-				renameSync(abs(from), join(parking, String(index)));
-			for (const path of deletes) rmSync(abs(path), { force: true });
-			for (const [index, { to }] of moves.entries()) {
-				mkdirSync(dirname(abs(to)), { recursive: true });
-				renameSync(join(parking, String(index)), abs(to));
-			}
-			for (const write of writes.filter((w) => w.changed)) {
-				mkdirSync(dirname(write.abs), { recursive: true });
-				await Bun.write(write.abs, write.bytes);
-			}
-		} finally {
-			rmSync(parking, { recursive: true, force: true });
-		}
-		// a folder that lost its last file goes too, up to the server folder
-		for (const path of [...moves.map((m) => m.from), ...deletes]) {
-			for (let dir = dirname(abs(path)); dir !== root && dir.startsWith(root); dir = dirname(dir)) {
-				if (!existsSync(dir) || readdirSync(dir).length) break;
-				rmSync(dir, { recursive: true, force: true });
-			}
-		}
-		bump(packId);
-	}
-	return {
-		changed,
-		hashes: Object.fromEntries(writes.map((write) => [write.path, sha1(write.bytes)]))
-	};
+	mkdirSync(root, { recursive: true });
+	const result = await applyChanges(
+		{
+			root,
+			// deleting takes nothing in, so only a move away is asked about
+			mayTake: (path, how) => (how === 'moved' ? check?.(path) : undefined),
+			mayPlace: (_, files) => files.forEach((file) => check?.(file)),
+			mayEdit: (path) => check?.(path),
+			pruneEmpty: true
+		},
+		changes
+	);
+	if (result.changed) bump(packId);
+	return result;
 }
 
 /** The entries of a zip of the chosen files and folders, folders kept as they are in the pack. */

@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import {
 	existsSync,
 	lstatSync,
@@ -6,12 +5,10 @@ import {
 	readFileSync,
 	readdirSync,
 	realpathSync,
-	renameSync,
 	rmSync,
-	statSync,
-	writeFileSync
+	statSync
 } from 'node:fs';
-import { basename, dirname, join, relative, resolve, sep } from 'node:path';
+import { basename, dirname, join, relative } from 'node:path';
 
 import type { Actor } from './access';
 import type { ZipEntry } from './zip-writer';
@@ -19,8 +16,15 @@ import type { ZipEntry } from './zip-writer';
 import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '../editable';
 import { topLevelPaths } from '../file-tree';
 import { SMALL_FILE_BYTES } from '../upload-limits';
+import {
+	applyChanges,
+	cleanPath,
+	safePath,
+	sha1,
+	type Changes,
+	type ChangeRules
+} from './change-set';
 import { assertMayWriteCode } from './host-code';
-import { refusedAs, StaleFile } from './http';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
 import { assertWritable } from './operations';
@@ -52,9 +56,6 @@ export type FileEntry = {
 
 export { isEditable, MAX_EDIT_BYTES };
 
-/** What a save builds on: the hash of the text as it was read, to tell a file changed since. */
-const sha1 = (bytes: Uint8Array) => createHash('sha1').update(bytes).digest('hex');
-
 function root(instanceId: number) {
 	if (!getInstance(instanceId)) throw new Error('Instance not found');
 	const dir = serverDir(instanceId);
@@ -62,27 +63,13 @@ function root(instanceId: number) {
 	return realpathSync(dir);
 }
 
-const inside = (base: string, path: string) => path === base || path.startsWith(base + sep);
-
 /**
  * The absolute path for a path relative to the instance's server folder. Throws for anything
  * that would land outside it, including through a symlink (checked on the deepest part that
  * already exists, so creating new files works too).
  */
 export function resolveSafe(instanceId: number, rel: string) {
-	const base = root(instanceId);
-	if (rel.includes('\0')) throw new Error('Invalid path');
-	const clean = rel.replaceAll('\\', '/');
-	if (clean.startsWith('/') || /^[a-zA-Z]:/.test(clean) || clean.split('/').includes('..'))
-		throw new Error('That path is not allowed');
-
-	const absolute = resolve(base, clean);
-	if (!inside(base, absolute)) throw new Error('That path is not allowed');
-
-	let probe = absolute;
-	while (!existsSync(probe)) probe = dirname(probe);
-	if (!inside(base, realpathSync(probe))) throw new Error('That path leaves the instance folder');
-	return { base, absolute, rel: relative(base, absolute).split(sep).join('/') };
+	return safePath(root(instanceId), rel);
 }
 
 /** The world folder's name from server.properties (`world` when unset). */
@@ -137,21 +124,18 @@ export function readTextFile(instanceId: number, rel: string) {
 	return { content: decodeText(bytes), size: stat.size, modified: stat.mtimeMs, hash: sha1(bytes) };
 }
 
-export function writeTextFile(instanceId: number, rel: string, content: string) {
-	const { absolute } = resolveSafe(instanceId, rel);
-	if (!isEditable(basename(absolute))) throw new Error('This file type cannot be edited here');
-	if (Buffer.byteLength(content) > MAX_EDIT_BYTES)
-		throw new Error('The file is too large (2 MB limit)');
-	if (existsSync(absolute) && !statSync(absolute).isFile()) throw new Error('Not a file');
-	mkdirSync(dirname(absolute), { recursive: true });
-	writeFileSync(absolute, content);
-}
-
 /** A new name may not carry a path: it is one entry in one folder. */
 function checkName(name: string) {
 	if (!name || name === '.' || name === '..' || /[\\/\0]/.test(name) || name.length > 255)
 		throw new Error('Use a plain file name, without slashes');
 	return name;
+}
+
+/** The path of a new entry named `name` in `folder`; the name must be one plain name. */
+export function entryPath(folder: string, name: string) {
+	checkName(name);
+	const parent = cleanPath(folder);
+	return parent && parent !== '.' ? `${parent}/${name}` : name;
 }
 
 export function makeDirectory(instanceId: number, parentRel: string, name: string) {
@@ -161,76 +145,64 @@ export function makeDirectory(instanceId: number, parentRel: string, name: strin
 	mkdirSync(absolute, { recursive: true });
 }
 
-export function createTextFile(instanceId: number, parentRel: string, name: string) {
-	const { absolute, rel } = resolveSafe(instanceId, join(parentRel, checkName(name)));
-	assertMutable(rel, 'replaced');
-	if (!isEditable(name)) throw new Error('This file type cannot be edited here');
-	if (existsSync(absolute)) throw new Error(`${name} already exists`);
-	writeFileSync(absolute, '');
-}
-
-export function renameEntry(instanceId: number, rel: string, newName: string) {
-	const from = resolveSafe(instanceId, rel);
-	if (from.absolute === from.base) throw new Error('The instance folder itself cannot be renamed');
-	const to = resolveSafe(instanceId, join(dirname(from.rel), checkName(newName)));
-	assertMutable(from.rel, 'renamed');
-	assertMutable(to.rel, 'replaced');
-	if (existsSync(to.absolute)) throw new Error(`${newName} already exists`);
-	renameSync(from.absolute, to.absolute);
-}
-
-export function deleteEntry(instanceId: number, rel: string) {
-	const { absolute, base, rel: normalized } = resolveSafe(instanceId, rel);
-	if (absolute === base) throw new Error('The instance folder itself cannot be deleted');
-	assertMutable(normalized, 'deleted');
-	rmSync(absolute, { recursive: true, force: true });
-}
-
-// What a person may do to the server folder. One function per file manager action, each applying
-// every rule that action is subject to, so a route cannot forget one: protected install files
-// (inside the primitives above), code files for the owner alone, a world left alone while the
-// server runs, and no changes while a restore or an install or update is working on the folder.
-
-/** Saves the text of a file (an existing protected file such as eula.txt may be edited). */
-export function saveFile(actor: Actor, instanceId: number, rel: string, content: string) {
-	assertWritable(instanceId);
-	assertMayWriteCode(actor, rel);
-	writeTextFile(instanceId, rel, content);
-}
+// What a person may do to the server folder. Every change goes through `applyFileChanges`, which
+// applies each rule that change is subject to, so a route cannot forget one: protected install
+// files, code files for the owner alone, a world left alone while the server runs, and no changes
+// while a restore or an install or update is working on the folder.
 
 export function addFolder(instanceId: number, parentRel: string, name: string) {
 	assertWritable(instanceId);
 	makeDirectory(instanceId, parentRel, name);
 }
 
-export function addFile(actor: Actor, instanceId: number, parentRel: string, name: string) {
-	assertWritable(instanceId);
-	assertMayWriteCode(actor, name);
-	createTextFile(instanceId, parentRel, name);
+/** The rules for `actor` changing an instance's server folder. */
+function instanceRules(actor: Actor, instanceId: number): ChangeRules {
+	return {
+		root: root(instanceId),
+		mayTake: async (path, how) => {
+			assertMutable(path, how);
+			await assertWorldStopped(instanceId, path, how === 'moved' ? 'moving from' : 'deleting from');
+		},
+		mayPlace: async (path, files) => {
+			assertMutable(path, 'replaced');
+			await assertWorldStopped(instanceId, path, 'moving into');
+			for (const file of files) assertMayWriteCode(actor, file);
+		},
+		mayEdit: (path) => assertMayWriteCode(actor, path)
+	};
 }
 
-export async function moveEntry(actor: Actor, instanceId: number, rel: string, newName: string) {
+/**
+ * Applies moves, deletes and text writes to the server folder together, all or none (see
+ * `applyChanges`). An existing protected file such as eula.txt may be edited, never moved,
+ * deleted or replaced.
+ */
+export async function applyFileChanges(
+	actor: Actor,
+	instanceId: number,
+	changes: Partial<Changes>
+) {
 	assertWritable(instanceId);
-	assertMayWriteCode(actor, newName);
-	await assertWorldStopped(instanceId, rel, 'renaming');
-	renameEntry(instanceId, rel, newName);
+	return applyChanges(instanceRules(actor, instanceId), {
+		moves: changes.moves ?? [],
+		deletes: changes.deletes ?? [],
+		writes: changes.writes ?? []
+	});
 }
 
-export async function removeEntry(instanceId: number, rel: string) {
-	assertWritable(instanceId);
-	await assertWorldStopped(instanceId, rel, 'deleting from');
-	deleteEntry(instanceId, rel);
+/** The files and folders chosen, tidied, without one inside another that is chosen too. */
+export function chosenPaths(paths: string[]) {
+	const chosen = topLevelPaths(paths.map(cleanPath));
+	if (!chosen.length) throw new Error('Choose a file or folder');
+	return chosen;
 }
 
-/** Every file under a path, as paths relative to the server folder; a file is just itself. */
-function filesUnder(instanceId: number, rel: string): string[] {
-	const { absolute, base } = resolveSafe(instanceId, rel);
-	const stat = lstatSync(absolute);
-	if (stat.isSymbolicLink()) return [];
-	if (!stat.isDirectory()) return [relative(base, absolute).split(sep).join('/')];
-	return readdirSync(absolute, { recursive: true, withFileTypes: true })
-		.filter((entry) => entry.isFile())
-		.map((entry) => relative(base, join(entry.parentPath, entry.name)).split(sep).join('/'));
+/** Moving these into `folder` ('' is the server folder), each keeping its name; those already there stay. */
+export function movesInto(paths: string[], folder: string) {
+	const into = cleanPath(folder);
+	return chosenPaths(paths)
+		.map((from) => ({ from, to: into ? `${into}/${basename(from)}` : basename(from) }))
+		.filter((move) => move.from !== move.to);
 }
 
 const exists = (absolute: string) => {
@@ -242,130 +214,9 @@ const exists = (absolute: string) => {
 	}
 };
 
-/**
- * Saves several edited files together, all or none: every file is checked as `saveFile` would
- * (and must still be the text it was opened as, by `baseHash`) before the first is written, and a
- * refusal names the file. Returns how many files changed, and each file's hash as it is now.
- */
-export async function saveFiles(
-	actor: Actor,
-	instanceId: number,
-	list: { rel: string; content: string; baseHash: string }[]
-) {
-	assertWritable(instanceId);
-	const prepared: { rel: string; absolute: string; bytes: Buffer; changed: boolean }[] = [];
-	const seen = new Set<string>();
-	for (const { rel, content, baseHash } of list) {
-		prepared.push(
-			await refusedAs(rel, () => {
-				assertMayWriteCode(actor, rel);
-				const target = resolveSafe(instanceId, rel);
-				if (seen.has(target.rel)) throw new Error('is in the list twice');
-				seen.add(target.rel);
-				if (!isEditable(basename(target.absolute)))
-					throw new Error('This file type cannot be edited here');
-				const bytes = Buffer.from(content, 'utf8');
-				if (bytes.length > MAX_EDIT_BYTES) throw new Error('The file is too large (2 MB limit)');
-				if (!exists(target.absolute) || !statSync(target.absolute).isFile()) throw new StaleFile();
-				assertEditableSize(statSync(target.absolute).size);
-				const current = readFileSync(target.absolute);
-				if (sha1(current) !== baseHash) throw new StaleFile();
-				return {
-					rel: target.rel,
-					absolute: target.absolute,
-					bytes,
-					changed: Buffer.compare(current, bytes) !== 0
-				};
-			})
-		);
-	}
-	for (const file of prepared) if (file.changed) writeFileSync(file.absolute, file.bytes);
-	return {
-		changed: prepared.filter((file) => file.changed).length,
-		hashes: Object.fromEntries(prepared.map((file) => [file.rel, sha1(file.bytes)]))
-	};
-}
-
-/**
- * Deletes files and folders (a folder with all in it) together, all or none: each is checked as
- * `removeEntry` would be before the first goes. Returns how many were chosen.
- */
-export async function removeEntries(instanceId: number, paths: string[]) {
-	assertWritable(instanceId);
-	const chosen = topLevelPaths(paths.map((p) => p.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')));
-	if (!chosen.length) throw new Error('Choose a file or folder');
-	const absolutes: string[] = [];
-	for (const rel of chosen)
-		absolutes.push(
-			await refusedAs(rel, async () => {
-				await assertWorldStopped(instanceId, rel, 'deleting from');
-				const { absolute, base, rel: normalized } = resolveSafe(instanceId, rel);
-				if (absolute === base) throw new Error('The instance folder itself cannot be deleted');
-				assertMutable(normalized, 'deleted');
-				if (!exists(absolute)) throw new Error('not found');
-				return absolute;
-			})
-		);
-	for (const absolute of absolutes) rmSync(absolute, { recursive: true, force: true });
-	return chosen.length;
-}
-
-/**
- * Moves files and folders into `folder` ('' is the server folder), each keeping its name, all or
- * none. Each move is checked as `moveEntry` is, and since a folder arrives with everything in it,
- * every file inside is checked for the owner-only code rule at its new place. Items already in
- * `folder` are left alone. Returns how many moved.
- */
-export async function moveEntries(
-	actor: Actor,
-	instanceId: number,
-	paths: string[],
-	folder: string
-) {
-	assertWritable(instanceId);
-	const clean = (p: string) => p.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '');
-	const chosen = topLevelPaths(paths.map(clean));
-	if (!chosen.length) throw new Error('Choose a file or folder');
-	const target = resolveSafe(instanceId, clean(folder));
-	if (exists(target.absolute) && !statSync(target.absolute).isDirectory())
-		throw new Error(`${folder} is a file`);
-
-	const moves: { source: string; dest: string }[] = [];
-	const names = new Set<string>();
-	for (const rel of chosen) {
-		const move = await refusedAs(rel, async () => {
-			const from = resolveSafe(instanceId, rel);
-			if (from.absolute === from.base)
-				throw new Error('The instance folder itself cannot be moved');
-			if (!exists(from.absolute)) throw new Error('not found');
-			const name = basename(from.rel);
-			const to = resolveSafe(instanceId, join(target.rel, name));
-			if (to.absolute === from.absolute) return null;
-			if (inside(from.absolute, target.absolute)) throw new Error('cannot be moved into itself');
-			if (names.has(name)) throw new Error(`Two of the items are called ${name}`);
-			names.add(name);
-			assertMutable(from.rel, 'moved');
-			assertMutable(to.rel, 'replaced');
-			await assertWorldStopped(instanceId, from.rel, 'moving from');
-			await assertWorldStopped(instanceId, to.rel, 'moving into');
-			if (exists(to.absolute)) throw new Error(`${to.rel} already exists`);
-			for (const file of filesUnder(instanceId, from.rel))
-				assertMayWriteCode(actor, join(to.rel, relative(from.rel, file)));
-			return { source: from.absolute, dest: to.absolute };
-		});
-		if (move) moves.push(move);
-	}
-	if (!moves.length) return 0;
-	mkdirSync(target.absolute, { recursive: true });
-	resolveSafe(instanceId, target.rel);
-	for (const { source, dest } of moves) renameSync(source, dest);
-	return moves.length;
-}
-
 /** The entries of a zip of the chosen files and folders, named by their path in the server folder. */
 export function describeSelection(instanceId: number, paths: string[]) {
-	const chosen = topLevelPaths(paths.map((p) => p.replaceAll('\\', '/').replace(/^\/+|\/+$/g, '')));
-	if (!chosen.length) throw new Error('Choose a file or folder');
+	const chosen = chosenPaths(paths);
 	const entries: ZipEntry[] = [];
 	for (const rel of chosen) {
 		const { absolute, rel: normalized } = resolveSafe(instanceId, rel);

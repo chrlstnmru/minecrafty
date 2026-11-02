@@ -143,8 +143,8 @@ describe('starting with a bad path or size', () => {
 
 	it('refuses to go through, or into, a symlink pointing outside', () => {
 		symlinkSync(outside, join(root, 'escape'));
-		expect(() => begin('escape/x.bin', 10)).toThrow(/leaves the instance/);
-		expect(() => begin('x.bin', 10, 'escape')).toThrow(/leaves the instance/);
+		expect(() => begin('escape/x.bin', 10)).toThrow(/leaves the folder/);
+		expect(() => begin('x.bin', 10, 'escape')).toThrow(/leaves the folder/);
 	});
 
 	it('refuses negative, fractional and over-limit sizes', () => {
@@ -174,7 +174,7 @@ describe('a link appearing after the upload began', () => {
 			piece: new Blob(['12345'])
 		});
 		symlinkSync(outside, join(root, 'later'));
-		expect(() => U.finishUpload(s.uploadId, id, USER)).toThrow(/leaves the instance/);
+		expect(() => U.finishUpload(s.uploadId, id, USER)).toThrow(/leaves the folder/);
 		expect(readdirSync(outside)).toEqual(['secret.txt']);
 	});
 });
