@@ -17,11 +17,11 @@
 
 	import { getLocalPack, readPackConfig, savePackChanges } from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
+	import DiscardDialog from '#lib/components/discard-dialog.svelte';
 	import FileTree from '#lib/components/file-tree.svelte';
 	import FolderPicker from '#lib/components/folder-picker.svelte';
 	import SaveBar from '#lib/components/save-bar.svelte';
 	import SelectionBar from '#lib/components/selection-bar.svelte';
-	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
@@ -30,8 +30,9 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
-	import { formatConfig, formatKind } from '#lib/config-format.js';
+	import { formatKind } from '#lib/config-format.js';
 	import { isEditable } from '#lib/editable.js';
+	import { FileDrafts, type SaveResult } from '#lib/file-drafts.svelte.js';
 	import {
 		buildFileTree,
 		canMoveInto,
@@ -85,20 +86,42 @@
 	const rebase = (path: string, from: string, to: string) =>
 		under(path, from) ? `${to}${path.slice(from.length)}` : path;
 
-	// Every file opened here keeps its own text, so switching file never loses an edit. `loaded` is
-	// what the server had when it was read (or last saved), `hash` is what a save builds on, and a
-	// file made here is `isNew` until its first save.
-	type Draft = { content: string; loaded: string; hash?: string; isNew: boolean };
-	let open = $state<string | null>(null);
-	let drafts = $state<Record<string, Draft>>({});
-	const entry = $derived(open ? drafts[open] : undefined);
-	const isDirty = (d: Draft) => d.isNew || d.content !== d.loaded;
-	const unsavedPaths = $derived(
-		Object.entries(drafts)
-			.filter(([, d]) => isDirty(d))
-			.map(([path]) => path)
-	);
-	let editorShown = false;
+	// the panel is made again for another pack, so its first id is the one it keeps
+	const drafts = new FileDrafts(`pack-${untrack(() => id)}`, {
+		// the open file is read from where it is on the server, even when a move is waiting for it
+		read: (path) => {
+			const original = originalOf(view, path);
+			return original === undefined ? null : readPackConfig({ id, path: original });
+		},
+		// `only` limits a save to the edits of those files and the moves that belong to them
+		save: async (sent, only) => {
+			const originals = new Set(
+				(only ?? []).flatMap((path) => {
+					const original = originalOf(view, path);
+					return original === undefined ? [] : [original];
+				})
+			);
+			const sentStaged: Staged = only
+				? Object.fromEntries(Object.entries(staged).filter(([original]) => originals.has(original)))
+				: staged;
+			const changes = changesOf(view, sentStaged, sent);
+			if (!changes.moves.length && !changes.deletes.length && !changes.writes.length) return null;
+			const count = countChanges(view, sentStaged, sent);
+			const { hashes } = await savePackChanges({ id, ...changes });
+			staged = Object.fromEntries(
+				Object.entries(staged).filter(([original]) => !(original in sentStaged))
+			);
+			return { hashes, count };
+		},
+		count: (unsaved) => countChanges(view, staged, unsaved),
+		// the server names the path as it knows it: where the file is now, or where it goes
+		shownAt: (named) => view.find((f) => f.original === named || f.path === named)?.path ?? named,
+		onDiscardAll: () => {
+			for (const item of view) if (item.moved) drafts.rekey(item.path, item.original);
+			staged = {};
+		},
+		report: (text) => toast.error(text)
+	});
 
 	// Moves and deletes wait here, by where each file is on the server now, until Save all. The tree
 	// shows the result as if it were done.
@@ -116,20 +139,11 @@
 	// the new files show in the tree before the server has them
 	const listed: Item[] = $derived([
 		...view.map((f) => ({ ...f })),
-		...Object.entries(drafts)
+		...Object.entries(drafts.byPath)
 			.filter(([path, d]) => d.isNew && !view.some((f) => f.path === path))
 			.map(([path]) => ({ path, size: 0, pending: true }))
 	]);
-	// what is waiting to be saved: edited and new files, moves and deletes
-	const draftList = $derived(
-		unsavedPaths.map((path) => ({
-			path,
-			content: drafts[path].content,
-			hash: drafts[path].hash,
-			isNew: drafts[path].isNew
-		}))
-	);
-	const changeCount = $derived(countChanges(view, staged, draftList));
+	const changeCount = $derived(drafts.changeCount);
 
 	// folders that are new here or lost their last file: the pack cannot keep an empty folder, so the
 	// server has no trace of them, but they stay in the tree until the page is reloaded or they are deleted
@@ -149,244 +163,54 @@
 	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
 	const where = $derived(target || 'overrides');
 
-	// the open file is read from where it is on the server, even when a move is waiting for it
-	const openOriginal = $derived(open ? originalOf(view, open) : undefined);
-	const file = $derived(
-		open && entry && !entry.isNew && openOriginal
-			? readPackConfig({ id, path: openOriginal })
-			: null
-	);
+	const open = $derived(drafts.open);
+	const entry = $derived(drafts.current);
+	const file = $derived(drafts.file);
 	const dirty = $derived(entry ? entry.content !== entry.loaded : false);
-	const unsaved = $derived(entry ? isDirty(entry) : false);
+	const unsaved = $derived(open ? drafts.dirty(open) : false);
 
-	// load the file into the editor when it is opened, and again after a save
-	$effect(() => {
-		const current = file?.current;
-		const path = open;
-		if (!current || !path) return;
-		untrack(() => {
-			const draft = drafts[path];
-			if (!draft) return;
-			if (draft.content === draft.loaded) draft.content = current.content;
-			draft.loaded = current.content;
-			draft.hash = current.hash;
-		});
-	});
-
-	function show(path: string | null, created = false) {
-		open = path;
-		if (!path) return;
-		editorShown = true;
-		drafts[path] ??= { content: '', loaded: '', isNew: created };
-	}
-
-	// the editor keeps each file's text and undo history; free them when the panel goes
-	onDestroy(() => {
-		if (editorShown)
-			void import('./config-editor/monaco.js').then((editor) => editor.disposeModels(`${id}/`));
-	});
-
-	// the editor keeps undo history by path, so a file made later at this path would inherit it
-	function forgetHistory(path: string) {
-		if (editorShown)
-			void import('./config-editor/monaco.js').then((editor) =>
-				editor.disposeModelsAt(`${id}/`, path)
-			);
-	}
-
-	/** Puts a file back to its saved text; a file made here is dropped. */
-	function revert(path: string) {
-		const draft = drafts[path];
-		if (!draft) return;
-		if (draft.isNew) {
-			delete drafts[path];
-			if (open === path) open = null;
-			forgetHistory(path);
-		} else {
-			draft.content = draft.loaded;
-			// a save refused this file as out of date, so what it was read as is stale too
-			if (path === failedPath) void refetch(path);
-		}
-	}
-
-	/** Takes everything waiting away: edits, new files, moves and deletes. */
-	function undoAll() {
-		for (const item of view) if (item.moved) rekeyDrafts(item.path, item.original);
-		staged = {};
-		for (const path of Object.keys(drafts)) revert(path);
-		failedPath = undefined;
-		saveError = undefined;
-	}
-
-	let discarding = $state<{ paths: string[]; all?: boolean; then?: () => void } | null>(null);
-	let discardOpen = $state(false);
-
-	function askDiscard(paths: string[], then?: () => void) {
-		discarding = { paths, then };
-		discardOpen = true;
-	}
-
-	function askDiscardAll(then?: () => void) {
-		discarding = { paths: unsavedPaths, all: true, then };
-		discardOpen = true;
-	}
-
-	/** The dialog's Discard: close it first, so nothing the action does can leave it open. */
-	function discard() {
-		discardOpen = false;
-		const asked = discarding;
-		discarding = null;
-		if (!asked) return;
-		if (asked.all) undoAll();
-		else for (const path of asked.paths) revert(path);
-		asked.then?.();
-	}
+	onDestroy(() => drafts.destroy());
+	beforeNavigate((navigation) => drafts.leave(navigation, (url) => void goto(url)));
 
 	/** The Discard button: an edit goes back to the saved text (undo brings it back), a new file is asked about. */
 	function discardEdits() {
 		if (!open || !entry) return;
-		if (entry.isNew) askDiscard([open]);
-		else revert(open);
+		if (entry.isNew) drafts.askDiscard([open]);
+		else drafts.revert(open);
 	}
 
-	// SvelteKit also runs this when the tab is closed or reloaded, where cancel() asks the browser
-	beforeNavigate((navigation) => {
-		// changing the tab only changes the query; this panel stays mounted, so nothing is lost
-		if (navigation.to?.url.pathname === page.url.pathname) return;
-		if (!changeCount) return;
-		navigation.cancel();
-		if (navigation.type === 'leave' || !navigation.to) return;
-		const { url } = navigation.to;
-		askDiscardAll(() => void goto(url));
-	});
-
-	let saving = $state(false);
-	let saveError = $state<string>();
-	// the file a failed save names, marked in the tree
-	let failedPath = $state<string>();
-
-	$effect(() => {
-		if (changeCount) return;
-		saveError = undefined;
-		failedPath = undefined;
-	});
-
-	/**
-	 * Saves what is waiting together, as one revision; one part refused stops it all. `only` limits
-	 * it to the edits of those files (shown at those paths) and the moves that belong to them.
-	 */
+	/** Saves what is waiting together, as one revision; one part refused stops it all. */
 	async function saveAll(only?: string[]) {
-		if (!canWrite || saving) return;
-		const sentDrafts = draftList.filter((d) => !only || only.includes(d.path));
-		const originals = new Set(
-			(only ?? []).flatMap((path) => {
-				const original = originalOf(view, path);
-				return original === undefined ? [] : [original];
-			})
-		);
-		const sentStaged: Staged = only
-			? Object.fromEntries(Object.entries(staged).filter(([original]) => originals.has(original)))
-			: staged;
-		const changes = changesOf(view, sentStaged, sentDrafts);
-		if (!changes.moves.length && !changes.deletes.length && !changes.writes.length) return;
-		const count = countChanges(view, sentStaged, sentDrafts);
-		saving = true;
-		saveError = undefined;
-		failedPath = undefined;
-		try {
-			const { hashes } = await savePackChanges({ id, ...changes });
-			for (const sent of sentDrafts) {
-				const draft = drafts[sent.path];
-				if (!draft) continue;
-				// edits made while the save was going out stay unsaved
-				draft.loaded = sent.content;
-				draft.hash = hashes[sent.path];
-				draft.isNew = false;
-			}
-			staged = Object.fromEntries(
-				Object.entries(staged).filter(([original]) => !(original in sentStaged))
-			);
-			toast.success(count === 1 ? 'Saved' : `Saved ${count} changes`);
-		} catch (e) {
-			const text = message(e, 'Could not save the changes');
-			const refused = (e as { body?: App.Error }).body;
-			saveError = text;
-			// the server names the path as it knows it: where the file is now, or where it goes
-			const named = refused?.path;
-			failedPath = named
-				? (view.find((f) => f.original === named || f.path === named)?.path ?? named)
-				: undefined;
-			const stale = failedPath && refused?.reason === 'stale';
-			if (stale) {
-				const path = failedPath!;
-				toast.error(text, {
-					action: { label: 'Reload', onClick: () => askDiscard([path], () => void refetch(path)) }
-				});
-			} else toast.error(text);
-		} finally {
-			saving = false;
+		if (!canWrite) return;
+		const result: SaveResult = await drafts.saveAll(only);
+		if (!result) return;
+		if ('saved' in result) {
+			toast.success(result.saved === 1 ? 'Saved' : `Saved ${result.saved} changes`);
+			return;
 		}
+		const { message: text, path, stale } = result.failed;
+		if (path && stale)
+			toast.error(text, {
+				action: {
+					label: 'Reload',
+					onClick: () => drafts.askDiscard([path], () => void drafts.refetch(path))
+				}
+			});
+		else toast.error(text);
 	}
 
 	const save = () => (open ? saveAll([open]) : undefined);
-
-	/** Reads a file again, as the server has it now, replacing what was in the editor. */
-	async function refetch(path: string) {
-		const original = originalOf(view, path) ?? path;
-		try {
-			await readPackConfig({ id, path: original }).refresh();
-			const fresh = await readPackConfig({ id, path: original });
-			const draft = drafts[path];
-			if (draft) {
-				draft.content = draft.loaded = fresh.content;
-				draft.hash = fresh.hash;
-			}
-			if (failedPath === path) {
-				failedPath = undefined;
-				saveError = undefined;
-			}
-		} catch (e) {
-			toast.error(message(e, 'Could not read the file again'));
-		}
-	}
-
-	async function format() {
-		if (!open || !entry) return;
-		try {
-			entry.content = await formatConfig(open, entry.content);
-		} catch (e) {
-			toast.error(e instanceof Error ? e.message : 'Could not format this file');
-		}
-	}
 
 	/** A folder that lost its last file stays in the tree, empty, rather than vanishing under the cursor. */
 	function keepFolder(dir: string) {
 		if (dir && !emptyFolders.includes(dir)) emptyFolders = [...emptyFolders, dir];
 	}
 
-	/** Drops the texts held for a file, or for everything in a folder; closes the editor if it was on one. */
-	function dropDrafts(path: string) {
-		for (const key of Object.keys(drafts)) if (under(key, path)) delete drafts[key];
-		if (open && under(open, path)) open = null;
-		forgetHistory(path);
-	}
-
-	/** Moves the texts held for a file, or for everything in a folder, to where it went. */
-	function rekeyDrafts(from: string, to: string) {
-		for (const key of Object.keys(drafts)) {
-			if (!under(key, from)) continue;
-			drafts[rebase(key, from, to)] = drafts[key];
-			delete drafts[key];
-		}
-		if (open && under(open, from)) open = rebase(open, from, to);
-		forgetHistory(from);
-	}
-
 	/** Forgets what the page held for a folder that goes: its empty-folder marks, the target and the texts. */
 	function forgetFolder(path: string) {
 		emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
 		if (under(targetDir, path)) targetDir = dirOf(path);
-		dropDrafts(path);
+		drafts.drop(path);
 	}
 
 	/** Stages deleting files and folders (by where they show): they stay in the tree, struck through, until saved. */
@@ -413,13 +237,13 @@
 			const current = viewOf(files, next);
 			const here = current.some((f) => !f.deleted && under(f.path, from));
 			const heldHere =
-				Object.keys(drafts).some((path) => under(path, from)) ||
+				Object.keys(drafts.byPath).some((path) => under(path, from)) ||
 				emptyFolders.some((folder) => under(folder, from));
 			if (!here && !heldHere) {
 				toast.error(`${from} not found`);
 				return false;
 			}
-			const taken = Object.entries(drafts).find(
+			const taken = Object.entries(drafts.byPath).find(
 				([path, d]) =>
 					d.isNew &&
 					under(path, from) &&
@@ -443,7 +267,7 @@
 			if (onServer.includes(from)) keepFolder(dirOf(from));
 			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
 			targetDir = rebase(targetDir, from, to);
-			rekeyDrafts(from, to);
+			drafts.rekey(from, to);
 		}
 		return true;
 	}
@@ -457,7 +281,7 @@
 				toast.error(`${original} is taken now`);
 				return;
 			}
-			rekeyDrafts(item.path, original);
+			drafts.rekey(item.path, original);
 		}
 		staged = undoStaged(staged, original);
 	}
@@ -548,7 +372,7 @@
 			return;
 		}
 		targetDir = dirOf(to);
-		show(to, true);
+		drafts.show(to, { created: true });
 	}
 
 	// Rows chosen with the checkboxes. A deleted file, and a folder that holds nothing, get no checkbox.
@@ -817,11 +641,11 @@
 						status={(file) =>
 							file.pending
 								? { tone: 'info', label: 'New file, not saved yet' }
-								: file.path === failedPath
+								: file.path === drafts.failedPath
 									? { tone: 'danger', label: 'Stopped the save' }
 									: file.deleted
 										? { tone: 'danger', label: 'Deleted when you save' }
-										: drafts[file.path] && isDirty(drafts[file.path])
+										: drafts.dirty(file.path)
 											? { tone: 'warning', label: 'Unsaved changes' }
 											: file.moved
 												? { tone: 'info', label: `Moved from ${file.original} when you save` }
@@ -832,7 +656,7 @@
 								: undefined}
 						onselect={(file) => {
 							targetDir = dirOf(file.path);
-							show(file.path);
+							drafts.show(file.path);
 						}}
 						{selection}
 						onselection={(next) => (selection = next)}
@@ -883,7 +707,7 @@
 										size="icon"
 										class="ms-auto"
 										aria-label="Discard the new file {file.path}"
-										onclick={() => askDiscard([file.path])}
+										onclick={() => drafts.askDiscard([file.path])}
 									>
 										<TrashIcon />
 									</Button>
@@ -958,13 +782,13 @@
 					{/if}
 					{#if canWrite}
 						{#if formatKind(open)}
-							<Button variant="outline" onclick={format} disabled={file?.loading}>
+							<Button variant="outline" onclick={() => drafts.format()} disabled={file?.loading}>
 								<WandIcon />Format
 							</Button>
 							<Separator orientation="vertical" />
 						{/if}
 						<Button variant="ghost" onclick={discardEdits} disabled={!unsaved}>Discard</Button>
-						<Button onclick={save} loading={saving} disabled={!unsaved}>Save</Button>
+						<Button onclick={save} loading={drafts.saving} disabled={!unsaved}>Save</Button>
 					{/if}
 				</div>
 				{#if file?.error}
@@ -972,14 +796,14 @@
 						{message(file.error, 'Could not open this file.')}
 					</p>
 				{:else if entry && (entry.isNew || file?.current)}
-					{#key open}
+					{#key entry.key}
 						<CodeEditor
 							bind:value={entry.content}
 							filename={open}
-							modelKey="{id}/{open}"
+							modelKey={drafts.modelKey(open)}
 							readonly={!canWrite}
 							onsave={save}
-							onformat={canWrite ? format : undefined}
+							onformat={canWrite ? () => drafts.format() : undefined}
 							class="max-md:h-96"
 						/>
 					{/key}
@@ -1046,35 +870,7 @@
 	</Dialog.Content>
 </Dialog.Root>
 
-<AlertDialog.Root
-	bind:open={discardOpen}
-	onOpenChange={(isOpen) => {
-		if (!isOpen) discarding = null;
-	}}
->
-	<AlertDialog.Content>
-		<AlertDialog.Header>
-			<AlertDialog.Title>Discard your changes?</AlertDialog.Title>
-			<AlertDialog.Description>
-				{#if discarding?.all}
-					{changeCount}
-					{changeCount === 1 ? 'file has' : 'files have'} changes that have not been saved: edits, new
-					files, moves or deletes. All of them are dropped.
-				{:else if discarding && discarding.paths.length > 1}
-					{discarding.paths.length} files have changes that have not been saved.
-				{:else if discarding && drafts[discarding.paths[0]]?.isNew}
-					This new file has not been saved yet.
-				{:else}
-					The edits to this file have not been saved.
-				{/if}
-			</AlertDialog.Description>
-		</AlertDialog.Header>
-		<AlertDialog.Footer>
-			<AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={discard}>Discard</AlertDialog.Action>
-		</AlertDialog.Footer>
-	</AlertDialog.Content>
-</AlertDialog.Root>
+<DiscardDialog {drafts} allDetail="edits, new files, moves or deletes. All of them are dropped." />
 
 <Dialog.Root bind:open={bulkMoveOpen}>
 	<Dialog.Content>
@@ -1104,13 +900,13 @@
 	<SaveBar
 		{changeCount}
 		noun={['file', 'files']}
-		error={saveError}
-		{saving}
-		canSave={!saving}
+		error={drafts.saveError}
+		saving={drafts.saving}
+		canSave={!drafts.saving}
 		saveLabel="Save all"
 		discardLabel="Discard all"
 		onsave={() => saveAll()}
-		ondiscard={() => askDiscardAll()}
+		ondiscard={() => drafts.askDiscardAll()}
 	/>
 {/if}
 
