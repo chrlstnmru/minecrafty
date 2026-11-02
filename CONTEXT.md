@@ -100,6 +100,10 @@ A file the server cannot start without (`server.jar`, `eula.txt`, the launcher s
 **Host code**:
 A file the server or the machine would run as code (`.jar`, scripts, `user_jvm_args.txt`). Only the owner may add or change one.
 
+**Draft**:
+The text of a file opened in an editor, kept until it is saved or discarded. A draft follows its file when the file is moved or renamed, and goes when the file is deleted.
+_Avoid_: buffer, unsaved copy
+
 ## People and access
 
 **Owner**:
