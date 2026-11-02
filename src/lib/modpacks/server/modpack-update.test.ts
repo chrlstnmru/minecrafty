@@ -13,13 +13,14 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { db } from '#lib/server/db/index.js';
+import { installedMods, instances } from '#lib/server/db/schema.js';
+import { zipStream, type ZipEntry } from '#lib/server/zip-writer.js';
 import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
 
-import { db } from './db';
-import { installedMods, instances } from './db/schema';
-import { Zip } from './zip';
-import { zipStream, type ZipEntry } from './zip-writer';
+import type { LoadedPack } from './modpacks';
+import type { IndexFile } from './mrpack';
 
 // Modrinth, the downloads, the runner and the installer are replaced: what matters is what an
 // update does to the server folder, the Mods tab and the instance, given two versions of a pack.
@@ -43,16 +44,19 @@ vi.mock('./local-packs', async (original) => ({
 	loadLocalPack: async (packId: number) => fake.builder.get(packId)!.loaded
 }));
 
-vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
+vi.mock(
+	'#lib/server/runner-client.js',
+	async () => (await import('#test/fake-runner.js')).fakeRunnerClient
+);
 
-vi.mock('./java', () => ({
+vi.mock('#lib/server/java.js', () => ({
 	ensureJava: async () => '/fake/java',
 	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17),
 	JAVA_MAJORS: [8, 17, 21, 25]
 }));
 
-vi.mock('./loaders', async (original) => ({
-	...(await original<typeof import('./loaders')>()),
+vi.mock('#lib/server/loaders.js', async (original) => ({
+	...(await original<typeof import('#lib/server/loaders.js')>()),
 	launchArgs: () => ['-jar', 'server.jar', 'nogui'],
 	installServer: async (o: { serverDir: string; mc: string; build?: string }) => {
 		fake.installs.push({ dir: o.serverDir, mc: o.mc, build: o.build });
@@ -60,7 +64,7 @@ vi.mock('./loaders', async (original) => ({
 	}
 }));
 
-vi.mock('./download', () => ({
+vi.mock('#lib/server/download.js', () => ({
 	downloadFile: async (dest: string, { url }: { url: string }) => {
 		if (url === fake.failUrl) throw new Error('Download failed (500)');
 		const content = fake.content.get(url);
@@ -69,8 +73,8 @@ vi.mock('./download', () => ({
 	}
 }));
 
-vi.mock('./modrinth', async (original) => ({
-	...(await original<typeof import('./modrinth')>()),
+vi.mock('#lib/server/modrinth.js', async (original) => ({
+	...(await original<typeof import('#lib/server/modrinth.js')>()),
 	versionsByHashes: async (hashes: string[]) =>
 		Object.fromEntries(hashes.filter((h) => fake.known.has(h)).map((h) => [h, fake.known.get(h)])),
 	getProjects: async () => [],
@@ -104,11 +108,12 @@ vi.mock('./modpacks', async (original) => ({
 }));
 
 const U = await import('./modpack-update');
+const { summarize } = await import('./modpacks');
+const { readMrpack, writeIndex } = await import('./mrpack');
 const { writeManifest, readManifest } = await import('./modpack-manifest');
-const { lastOutcome } = await import('./update-outcome');
-const { listBackups } = await import('./backups');
-const { getInstance, serverDir } = await import('./instances');
-type LoadedPack = Awaited<ReturnType<typeof import('./modpacks').loadModpack>>;
+const { lastOutcome } = await import('#lib/server/update-outcome.js');
+const { listBackups } = await import('#lib/server/backups.js');
+const { getInstance, serverDir } = await import('#lib/server/instances.js');
 
 const sha1 = (text: string) => createHash('sha1').update(text).digest('hex');
 const sha512 = (text: string) => createHash('sha512').update(text).digest('hex');
@@ -125,21 +130,7 @@ type PackSpec = {
 };
 
 async function makePack(spec: PackSpec): Promise<LoadedPack> {
-	const work = mkdtempSync(join(tmpdir(), 'pack-'));
-	const entries: ZipEntry[] = [];
-	const overrides = { 'readme.txt': 'hello', ...spec.overrides };
-	for (const [path, content] of Object.entries(overrides)) {
-		writeFileSync(join(work, path.replaceAll('/', '_')), content);
-		entries.push({
-			kind: 'file',
-			name: `overrides/${path}`,
-			path: join(work, path.replaceAll('/', '_')),
-			modified: new Date()
-		});
-	}
-	const bytes = new Uint8Array(await new Response(zipStream(entries)).arrayBuffer());
-
-	const files = Object.entries(spec.files).map(([path, content]) => {
+	const files: IndexFile[] = Object.entries(spec.files).map(([path, content]) => {
 		const url = `https://cdn.modrinth.com/data/${spec.versionId}/${path}`;
 		fake.content.set(url, content);
 		fake.known.set(sha512(content), {
@@ -155,32 +146,49 @@ async function makePack(spec: PackSpec): Promise<LoadedPack> {
 			env: { server: 'required' }
 		};
 	});
-	const pack = {
-		zip: new Zip(bytes),
-		index: {
-			formatVersion: 1,
-			game: 'minecraft',
+	const index = writeIndex(
+		{
 			name: 'Test Pack',
-			versionId: spec.versionNumber,
-			files,
-			dependencies: {}
-		},
-		summary: {
-			projectId: spec.projectId ?? 'PACK',
-			versionId: spec.versionId,
-			name: 'Test Pack',
-			iconUrl: null,
 			summary: '',
 			versionNumber: spec.versionNumber,
 			mcVersion: spec.mc ?? '1.21.4',
 			loader: spec.loader ?? 'fabric',
-			loaderVersion: spec.loaderVersion ?? '0.16.0',
-			files: files.length,
-			clientOnly: 0,
-			downloadBytes: 0,
-			overrides: Object.keys(overrides).length
+			loaderVersion: spec.loaderVersion ?? '0.16.0'
+		},
+		files
+	);
+
+	const work = mkdtempSync(join(tmpdir(), 'pack-'));
+	writeFileSync(join(work, 'index.json'), JSON.stringify(index));
+	const entries: ZipEntry[] = [
+		{
+			kind: 'file',
+			name: 'modrinth.index.json',
+			path: join(work, 'index.json'),
+			modified: new Date()
 		}
-	} as unknown as LoadedPack;
+	];
+	const overrides = { 'readme.txt': 'hello', ...spec.overrides };
+	for (const [path, content] of Object.entries(overrides)) {
+		writeFileSync(join(work, path.replaceAll('/', '_')), content);
+		entries.push({
+			kind: 'file',
+			name: `overrides/${path}`,
+			path: join(work, path.replaceAll('/', '_')),
+			modified: new Date()
+		});
+	}
+	const mrpack = readMrpack(new Uint8Array(await new Response(zipStream(entries)).arrayBuffer()));
+	const pack: LoadedPack = {
+		mrpack,
+		summary: summarize(mrpack, {
+			projectId: spec.projectId ?? 'PACK',
+			versionId: spec.versionId,
+			versionNumber: spec.versionNumber,
+			name: 'Test Pack',
+			iconUrl: null
+		})
+	};
 	fake.packs.set(spec.versionId, pack);
 	return pack;
 }

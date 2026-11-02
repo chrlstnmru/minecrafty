@@ -1,6 +1,6 @@
-import { originOf } from '#lib/instance-origin.js';
+import type { instances } from '#lib/server/db/schema.js';
 
-import type { instances } from './db/schema';
+import { originOf } from '#lib/instance-origin.js';
 
 import { getPack, loadLocalPack, localPackSource, localRevisionId } from './local-packs';
 import { listModpackVersions, loadModpack, type LoadedPack, type ModpackVersion } from './modpacks';

@@ -16,7 +16,6 @@
 	import { onDestroy, untrack } from 'svelte';
 	import { toast } from 'svelte-sonner';
 
-	import { getLocalPack, readPackConfig, savePackChanges } from '#lib/builder.remote.js';
 	import CodeEditor from '#lib/components/config-editor/code-editor.svelte';
 	import DiscardDialog from '#lib/components/discard-dialog.svelte';
 	import FileTree from '#lib/components/file-tree.svelte';
@@ -51,6 +50,7 @@
 	} from '#lib/file-tree.js';
 	import { childFolders, insideAny } from '#lib/folder-picker.js';
 	import { formatBytes } from '#lib/format.js';
+	import { getLocalPack, readPackConfig, savePackChanges } from '#lib/modpacks/builder.remote.js';
 	import {
 		changesOf,
 		countChanges,
@@ -60,7 +60,7 @@
 		undoStaged,
 		viewOf,
 		type Staged
-	} from '#lib/pack-changes.js';
+	} from '#lib/modpacks/pack-changes.js';
 	import { joinPath, nameOf, parentOf, rebase, under } from '#lib/paths.js';
 	import {
 		batches,

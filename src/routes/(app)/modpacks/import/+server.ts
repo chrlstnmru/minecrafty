@@ -1,8 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 
+import { importMrpack } from '#lib/modpacks/server/local-packs.js';
 import { record } from '#lib/server/audit.js';
 import { requirePanel } from '#lib/server/auth.js';
-import { importMrpack } from '#lib/server/local-packs.js';
 
 import type { RequestHandler } from './$types';
 

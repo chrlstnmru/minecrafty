@@ -2,7 +2,7 @@
 // moves and deletes. They are kept per file (a folder is its files) under the path each file has on
 // the server, and the tree shows the result as if they were done. Pure, so it can be tested.
 
-import { rebase, under } from './paths';
+import { rebase, under } from '#lib/paths.js';
 
 export type ServerFile = { path: string; size: number };
 

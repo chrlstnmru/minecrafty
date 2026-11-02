@@ -7,7 +7,6 @@
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
 	import { toast } from 'svelte-sonner';
 
-	import { deleteLocalPack, duplicateLocalPack, listLocalPacks } from '#lib/builder.remote.js';
 	import * as DataTable from '#lib/components/data-table/index.js';
 	import {
 		createColumns,
@@ -23,6 +22,11 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
+	import {
+		deleteLocalPack,
+		duplicateLocalPack,
+		listLocalPacks
+	} from '#lib/modpacks/builder.remote.js';
 
 	import type { PageProps } from './$types';
 

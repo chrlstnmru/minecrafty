@@ -1,8 +1,8 @@
 import { error, json } from '@sveltejs/kit';
 
+import { getPack, iconFile, saveIcon } from '#lib/modpacks/server/local-packs.js';
 import { record } from '#lib/server/audit.js';
 import { requirePanel, requireUser } from '#lib/server/auth.js';
-import { getPack, iconFile, saveIcon } from '#lib/server/local-packs.js';
 
 import type { RequestHandler } from './$types';
 

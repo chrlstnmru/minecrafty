@@ -10,31 +10,22 @@ import {
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import { CONFIG_SIDES, inSide, isSide } from '#lib/config-sides.js';
 import { assertEditableSize, decodeText } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
+import { cleanPath, under } from '#lib/paths.js';
+import { applyChanges, sha1, type Changes } from '#lib/server/change-set.js';
+import { dataDir } from '#lib/server/config.js';
+import { db } from '#lib/server/db/index.js';
+import { localPackFiles, localPacks } from '#lib/server/db/schema.js';
+import { isHostCode } from '#lib/server/host-code.js';
+import { isKnownVersion, latestBuild, loaderBuilds } from '#lib/server/loaders.js';
+import { pickFile, pickVersion, resolveMods } from '#lib/server/mod-resolver.js';
+import * as modrinth from '#lib/server/modrinth.js';
+import { zipChunks, type ZipEntry } from '#lib/server/zip-writer.js';
 
-import { CONFIG_SIDES, inSide, isSide } from '../config-sides';
-import { cleanPath, under } from '../paths';
-import { applyChanges, sha1, type Changes } from './change-set';
-import { dataDir } from './config';
-import { db } from './db';
-import { localPackFiles, localPacks } from './db/schema';
-import { isHostCode } from './host-code';
-import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
-import { pickFile, pickVersion, resolveMods } from './mod-resolver';
-import {
-	LOADER_KEYS,
-	configEntries,
-	overrideEntries,
-	parseIndex,
-	safeJoin,
-	startImportLoaded,
-	type IndexFile,
-	type LoadedPack
-} from './modpacks';
-import * as modrinth from './modrinth';
-import { Zip } from './zip';
-import { zipChunks, type ZipEntry } from './zip-writer';
+import { startImportLoaded, summarize, type LoadedPack } from './modpacks';
+import { readMrpack, safeJoin, writeIndex, type IndexFile } from './mrpack';
 
 // Modpacks made in the builder. A pack is rows in the database (its settings and the files it
 // downloads, each pinned to one version and its hashes) plus a folder of config files on disk.
@@ -607,10 +598,7 @@ const MAX_ENV = { required: 'required', optional: 'optional', unsupported: 'unsu
 /** The pack as a Modrinth modpack index. */
 export function buildIndex(packId: number) {
 	const pack = requirePack(packId);
-	const key = LOADER_KEYS.find(([, loader]) => loader === pack.loader)![0];
-	const dependencies: Record<string, string> = { minecraft: pack.mcVersion };
-	if (pack.loaderVersion) dependencies[key] = pack.loaderVersion;
-	const files = listFiles(packId).map((f) => ({
+	const files = listFiles(packId).map((f): IndexFile => ({
 		path: f.path,
 		hashes: { ...(f.sha1 ? { sha1: f.sha1 } : {}), ...(f.sha512 ? { sha512: f.sha512 } : {}) },
 		env: {
@@ -620,15 +608,17 @@ export function buildIndex(packId: number) {
 		downloads: JSON.parse(f.downloads) as string[],
 		...(f.size ? { fileSize: f.size } : {})
 	}));
-	return {
-		formatVersion: 1,
-		game: 'minecraft',
-		versionId: String(pack.revision),
-		name: pack.name,
-		summary: pack.description,
-		files,
-		dependencies
-	};
+	return writeIndex(
+		{
+			name: pack.name,
+			summary: pack.description,
+			versionNumber: String(pack.revision),
+			mcVersion: pack.mcVersion,
+			loader: pack.loader,
+			loaderVersion: pack.loaderVersion
+		},
+		files
+	);
 }
 
 /** The entries of the pack's .mrpack: the index, then every config file in its folder. */
@@ -674,42 +664,43 @@ export async function importMrpack(
 	nameOverride?: string,
 	{ vettedOnly = false } = {}
 ) {
-	const zip = new Zip(bytes);
-	const index = parseIndex(zip);
-	const found = LOADER_KEYS.find(([key]) => index.dependencies[key]);
-	if (!found || found[1] === 'vanilla')
+	const mrpack = readMrpack(bytes);
+	if (mrpack.loader === 'vanilla')
 		throw new Error(
 			'This pack has no mod loader; the builder makes fabric, quilt, forge or neoforge packs'
 		);
-	const loader = found[1] as PackLoader;
+	const loader = mrpack.loader as PackLoader;
+	const configs = mrpack.configs(CONFIG_SIDES);
 
-	const sha512s = index.files.flatMap((f) => (f.hashes.sha512 ? [f.hashes.sha512] : []));
+	const sha512s = mrpack.files.flatMap((f) => (f.hashes.sha512 ? [f.hashes.sha512] : []));
 	const known = await modrinth.versionsByHashes(sha512s);
 	if (vettedOnly) {
-		const unknown = index.files.find((f) => !f.hashes.sha512 || !known[f.hashes.sha512]);
+		const unknown = mrpack.files.find((f) => !f.hashes.sha512 || !known[f.hashes.sha512]);
 		if (unknown)
 			throw new Error(
 				`Only the owner may import a pack with files Modrinth does not know, such as ${unknown.path}`
 			);
-		const code = [...configEntries(zip, CONFIG_SIDES).keys()].find(isHostCode);
+		const code = [...configs.keys()].find(isHostCode);
 		if (code)
 			throw new Error(
 				`Only the owner may import a pack with code in its config files, such as ${code}`
 			);
 	}
-	const projectIds = [...new Set(Object.values(known).map((v) => v.project_id))];
-	const projects = new Map<string, modrinth.ModrinthProject>();
-	for (let i = 0; i < projectIds.length; i += 100)
-		for (const p of await modrinth.getProjects(projectIds.slice(i, i + 100))) projects.set(p.id, p);
+	const projects = new Map(
+		(await modrinth.getProjects(Object.values(known).map((v) => v.project_id))).map((p) => [
+			p.id,
+			p
+		])
+	);
 
 	const pack = db
 		.insert(localPacks)
 		.values({
-			name: cleanName((nameOverride ?? index.name).slice(0, MAX_NAME)),
-			description: (index.summary ?? '').slice(0, 500),
+			name: cleanName((nameOverride ?? mrpack.name).slice(0, MAX_NAME)),
+			description: mrpack.summary.slice(0, 500),
 			loader,
-			loaderVersion: index.dependencies[found[0]] ?? null,
-			mcVersion: index.dependencies.minecraft
+			loaderVersion: mrpack.loaderVersion,
+			mcVersion: mrpack.mcVersion
 		})
 		.returning()
 		.get();
@@ -717,7 +708,7 @@ export async function importMrpack(
 	try {
 		db.transaction((tx) => {
 			const seen = new Set<string>();
-			for (const f of index.files as IndexFile[]) {
+			for (const f of mrpack.files) {
 				if (seen.has(f.path)) continue;
 				seen.add(f.path);
 				const version = f.hashes.sha512 ? known[f.hashes.sha512] : undefined;
@@ -742,8 +733,8 @@ export async function importMrpack(
 					.run();
 			}
 		});
-		for (const [rel, entry] of configEntries(zip, CONFIG_SIDES)) {
-			const data = zip.read(entry);
+		for (const [rel, entry] of configs) {
+			const data = mrpack.read(entry);
 			const dest = configPath(pack.id, rel);
 			mkdirSync(dirname(dest), { recursive: true });
 			await Bun.write(dest, data);
@@ -762,28 +753,16 @@ export const localRevisionId = (revision: number) => `rev:${revision}`;
 /** The pack at its current revision, read the way a downloaded .mrpack is. */
 export async function loadLocalPack(packId: number): Promise<LoadedPack> {
 	const pack = requirePack(packId);
-	const { bytes } = await exportBytes(packId);
-	const zip = new Zip(bytes);
-	const index = parseIndex(zip);
-	const files = index.files.filter((f) => f.env?.server !== 'unsupported');
+	const mrpack = readMrpack((await exportBytes(packId)).bytes);
 	return {
-		zip,
-		index,
-		summary: {
+		mrpack,
+		summary: summarize(mrpack, {
 			projectId: localPackSource(pack.id),
 			versionId: localRevisionId(pack.revision),
-			name: pack.name,
-			iconUrl: iconUrlOf(pack.id),
-			summary: pack.description,
 			versionNumber: `revision ${pack.revision}`,
-			mcVersion: pack.mcVersion,
-			loader: pack.loader,
-			loaderVersion: pack.loaderVersion,
-			files: files.length,
-			clientOnly: index.files.length - files.length,
-			downloadBytes: files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
-			overrides: overrideEntries(zip).size
-		}
+			name: pack.name,
+			iconUrl: iconUrlOf(pack.id)
+		})
 	};
 }
 

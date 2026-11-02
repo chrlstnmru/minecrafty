@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import type { instances } from './db/schema';
+import type { instances } from '#lib/server/db/schema.js';
 
 import { packSourceOf } from './pack-source';
 

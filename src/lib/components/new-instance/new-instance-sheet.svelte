@@ -2,7 +2,7 @@
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { nextPort, createInstance } from '#lib/instances.remote.js';
-	import { importModpack } from '#lib/modpacks.remote.js';
+	import { importModpack } from '#lib/modpacks/modpacks.remote.js';
 
 	import LocalPackForm from './local-pack-form.svelte';
 	import ModpackForm from './modpack-form.svelte';

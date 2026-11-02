@@ -20,7 +20,7 @@
 		modpackStatus,
 		modpackUpdatePreview,
 		updateModpack
-	} from '#lib/modpack-update.remote.js';
+	} from '#lib/modpacks/modpack-update.remote.js';
 	import { installedMods } from '#lib/mods.remote.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number

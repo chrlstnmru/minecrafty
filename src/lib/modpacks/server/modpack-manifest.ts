@@ -1,7 +1,7 @@
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { instanceDir } from './instances';
+import { instanceDir } from '#lib/server/instances.js';
 
 /**
  * What a modpack put on the server, so a later version can be compared with it: the SHA-1 of
