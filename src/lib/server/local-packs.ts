@@ -13,6 +13,7 @@ import { basename, dirname, join } from 'node:path';
 import { assertEditableSize, decodeText } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 
+import { CONFIG_SIDES, inSide, isSide } from '../config-sides';
 import { cleanPath, under } from '../paths';
 import { applyChanges, sha1, type Changes } from './change-set';
 import { dataDir } from './config';
@@ -23,6 +24,7 @@ import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
 import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
 	LOADER_KEYS,
+	configEntries,
 	overrideEntries,
 	parseIndex,
 	safeJoin,
@@ -45,6 +47,12 @@ export type LocalPackFile = typeof localPackFiles.$inferSelect;
 
 export const packDir = (id: number) => join(dataDir, 'packs', String(id));
 export const overridesDir = (id: number) => join(packDir(id), 'overrides');
+
+/** The absolute path of a config file or folder, by its path with its folder (`overrides/config/a.toml`). */
+function configPath(packId: number, rel: string) {
+	if (!inSide(rel)) throw new Error(`${rel || 'That'} is not inside ${CONFIG_SIDES.join(', ')}`);
+	return safeJoin(packDir(packId), rel);
+}
 
 const MAX_NAME = 60;
 const MAX_ICON_BYTES = 2 * 1024 * 1024;
@@ -155,9 +163,8 @@ export function listFiles(packId: number) {
 
 export type OverrideFile = { path: string; size: number };
 
-/** The pack's config files, by path inside the server folder. */
+/** The pack's config files, by path with their folder (`server-overrides/config/a.toml`). */
 export function listOverrides(packId: number): OverrideFile[] {
-	const root = overridesDir(packId);
 	const found: OverrideFile[] = [];
 	const walk = (dir: string, prefix: string) => {
 		if (!existsSync(dir)) return;
@@ -167,7 +174,7 @@ export function listOverrides(packId: number): OverrideFile[] {
 			else found.push({ path: rel, size: statSync(join(dir, entry.name)).size });
 		}
 	};
-	walk(root, '');
+	for (const side of CONFIG_SIDES) walk(join(packDir(packId), side), side);
 	return found.sort((a, b) => a.path.localeCompare(b.path));
 }
 
@@ -241,8 +248,9 @@ export function duplicatePack(id: number) {
 			tx.insert(localPackFiles)
 				.values({ ...file, packId: copy.id })
 				.run();
-		if (existsSync(overridesDir(id)))
-			cpSync(overridesDir(id), overridesDir(copy.id), { recursive: true });
+		for (const side of CONFIG_SIDES)
+			if (existsSync(join(packDir(id), side)))
+				cpSync(join(packDir(id), side), join(packDir(copy.id), side), { recursive: true });
 		const icon = iconFile(id);
 		if (icon) {
 			mkdirSync(packDir(copy.id), { recursive: true });
@@ -484,12 +492,12 @@ export async function setLoaderVersion(packId: number, loaderVersion: string) {
 }
 
 /**
- * Stores config files at paths inside the server folder, as one new revision. Every path is checked
- * before the first is written, so a path that leaves the folder refuses the lot.
+ * Stores config files, by path with their folder, as one new revision. Every path is checked before
+ * the first is written, so a path outside the three folders refuses the lot.
  */
 export async function saveOverrides(packId: number, files: { rel: string; bytes: Uint8Array }[]) {
 	requirePack(packId);
-	const dests = files.map(({ rel }) => safeJoin(overridesDir(packId), rel));
+	const dests = files.map(({ rel }) => configPath(packId, rel));
 	for (const [index, { bytes }] of files.entries()) {
 		mkdirSync(dirname(dests[index]), { recursive: true });
 		await Bun.write(dests[index], bytes);
@@ -502,7 +510,7 @@ export const saveOverride = (packId: number, rel: string, bytes: Uint8Array) =>
 
 function overrideFile(packId: number, rel: string) {
 	requirePack(packId);
-	const dest = safeJoin(overridesDir(packId), rel);
+	const dest = configPath(packId, rel);
 	const stat = existsSync(dest) ? statSync(dest) : undefined;
 	if (stat && !stat.isFile()) throw new Error('Not a file');
 	return { dest, stat };
@@ -525,11 +533,18 @@ function topLevel(paths: string[]) {
 
 export type OverrideChanges = Changes;
 
+/** Refuses a change outside the three config folders, or to one of them itself. */
+function assertConfigPath(path: string, how: string) {
+	if (isSide(path)) throw new Error(`${path} is always there and cannot be ${how}`);
+	if (!inSide(path)) throw new Error(`Config files go in ${CONFIG_SIDES.join(', ')}`);
+}
+
 /**
  * Applies a set of changes to the config files together, as one revision, all or none (see
- * `applyChanges`; a pack's moves name each file). `check` is asked about every path a file is
- * put at or moved from. Folders left empty are removed, since a pack cannot keep one. Returns how
- * many files changed, and the hash of each written text as it is now.
+ * `applyChanges`; a pack's moves name each file). Paths carry their folder, and nothing may land
+ * outside the three folders or move or delete one of them. `check` is asked about every path a
+ * file is put at or moved from. Folders left empty are removed, since a pack cannot keep one.
+ * Returns how many files changed, and the hash of each written text as it is now.
  */
 export async function applyOverrideChanges(
 	packId: number,
@@ -537,15 +552,24 @@ export async function applyOverrideChanges(
 	check?: (path: string) => void
 ) {
 	requirePack(packId);
-	const root = overridesDir(packId);
+	const root = packDir(packId);
 	mkdirSync(root, { recursive: true });
 	const result = await applyChanges(
 		{
 			root,
-			// deleting takes nothing in, so only a move away is asked about
-			mayTake: (path, how) => (how === 'moved' ? check?.(path) : undefined),
-			mayPlace: (_, files) => files.forEach((file) => check?.(file)),
-			mayEdit: (path) => check?.(path),
+			mayTake: (path, how) => {
+				assertConfigPath(path, how);
+				// deleting takes nothing in, so only a move away is asked about
+				if (how === 'moved') check?.(path);
+			},
+			mayPlace: (path, files) => {
+				assertConfigPath(path, 'replaced');
+				files.forEach((file) => check?.(file));
+			},
+			mayEdit: (path) => {
+				assertConfigPath(path, 'edited');
+				check?.(path);
+			},
 			pruneEmpty: true
 		},
 		changes
@@ -563,14 +587,14 @@ export function exportOverridesZip(packId: number, paths: string[]) {
 	const modified = new Date();
 	const entries: ZipEntry[] = [];
 	for (const rel of chosen) {
-		safeJoin(overridesDir(packId), rel);
+		if (!isSide(rel)) configPath(packId, rel);
 		const found = all.filter((f) => under(f.path, rel));
 		if (!found.length) throw new Error(`There is nothing to download in ${rel}`);
 		for (const file of found)
 			entries.push({
 				kind: 'file',
 				name: file.path,
-				path: join(overridesDir(packId), file.path),
+				path: join(packDir(packId), file.path),
 				modified
 			});
 	}
@@ -607,7 +631,7 @@ export function buildIndex(packId: number) {
 	};
 }
 
-/** The entries of the pack's .mrpack: the index, then every config file under overrides/. */
+/** The entries of the pack's .mrpack: the index, then every config file in its folder. */
 export async function exportEntries(
 	packId: number
 ): Promise<{ filename: string; entries: ZipEntry[] }> {
@@ -622,8 +646,8 @@ export async function exportEntries(
 	for (const file of listOverrides(packId))
 		entries.push({
 			kind: 'file',
-			name: `overrides/${file.path}`,
-			path: join(overridesDir(packId), file.path),
+			name: file.path,
+			path: join(packDir(packId), file.path),
 			modified
 		});
 	const safe = pack.name.replace(/[^\w.-]+/g, '-').replace(/^-+|-+$/g, '') || 'modpack';
@@ -640,8 +664,8 @@ export async function exportBytes(packId: number) {
 
 /**
  * Makes a pack from a Modrinth .mrpack. Files Modrinth knows by hash get their project and
- * version back (so they can be re-pinned); any other file is kept as it is. Config files under
- * overrides/ and server-overrides/ are stored as the pack's config files. With `vettedOnly` (an
+ * version back (so they can be re-pinned); any other file is kept as it is. Config files are kept
+ * in the folder they came in: overrides/, server-overrides/ or client-overrides/. With `vettedOnly` (an
  * import by anyone but the owner), a pack with a file Modrinth does not know, or with code in its
  * config files, is refused: either could run anything on the host once installed.
  */
@@ -667,7 +691,7 @@ export async function importMrpack(
 			throw new Error(
 				`Only the owner may import a pack with files Modrinth does not know, such as ${unknown.path}`
 			);
-		const code = [...overrideEntries(zip).keys()].find(isHostCode);
+		const code = [...configEntries(zip, CONFIG_SIDES).keys()].find(isHostCode);
 		if (code)
 			throw new Error(
 				`Only the owner may import a pack with code in its config files, such as ${code}`
@@ -718,9 +742,9 @@ export async function importMrpack(
 					.run();
 			}
 		});
-		for (const [rel, entry] of overrideEntries(zip)) {
+		for (const [rel, entry] of configEntries(zip, CONFIG_SIDES)) {
 			const data = zip.read(entry);
-			const dest = safeJoin(overridesDir(pack.id), rel);
+			const dest = configPath(pack.id, rel);
 			mkdirSync(dirname(dest), { recursive: true });
 			await Bun.write(dest, data);
 		}
