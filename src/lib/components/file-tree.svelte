@@ -9,6 +9,7 @@
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import { DragMove } from '#lib/drag-move.svelte.js';
 	import { nodeState, toggleNode, type FolderNode, type TreeNode } from '#lib/file-tree.js';
+	import { parentOf } from '#lib/paths.js';
 
 	type Status = { tone: 'info' | 'warning' | 'danger'; label: string };
 
@@ -113,7 +114,6 @@
 		if (event.type === 'click') swallowClick = false;
 	}
 	const hasFiles = (event: DragEvent) => event.dataTransfer?.types.includes('Files') ?? false;
-	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
 
 	const drag = new DragMove({
 		onmove: () => onmove,
@@ -246,9 +246,9 @@
 				onpointercancel={pressEnd}
 				oncontextmenu={swallow}
 				onclickcapture={swallow}
-				ondragover={(event) => drag.over(event, dirOf(node.path), dirOf(node.path) || null)}
+				ondragover={(event) => drag.over(event, parentOf(node.path), parentOf(node.path) || null)}
 				ondragleave={(event) => drag.leave(event)}
-				ondrop={(event) => drag.drop(event, dirOf(node.path))}
+				ondrop={(event) => drag.drop(event, parentOf(node.path))}
 				class="group/row flex items-center gap-1 rounded-md ps-2 {onselection
 					? 'select-none'
 					: ''} {selected === node.path ? 'bg-accent' : ''}"

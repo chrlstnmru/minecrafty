@@ -6,6 +6,7 @@ import type { beforeNavigate } from '$app/navigation';
 import { untrack } from 'svelte';
 
 import { formatConfig } from '#lib/config-format.js';
+import { rebase, under } from '#lib/paths.js';
 
 /** What `beforeNavigate` hands its callback. */
 export type Leaving = Parameters<Parameters<typeof beforeNavigate>[0]>[0];
@@ -64,10 +65,6 @@ export type SaveResult =
 	| { saved: number }
 	| { failed: { message: string; path?: string; stale: boolean } }
 	| null;
-
-const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-const rebase = (path: string, from: string, to: string) =>
-	under(path, from) ? `${to}${path.slice(from.length)}` : path;
 
 const errorBody = (e: unknown) => (e as { body?: App.Error } | null)?.body;
 const messageOf = (e: unknown, fallback: string) => errorBody(e)?.message ?? fallback;

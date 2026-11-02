@@ -52,6 +52,7 @@
 		viewOf,
 		type Staged
 	} from '#lib/pack-changes.js';
+	import { joinPath, nameOf, parentOf, rebase, under } from '#lib/paths.js';
 	import {
 		batches,
 		collectEntries,
@@ -76,15 +77,6 @@
 
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
-
-	const nameOf = (path: string) => path.slice(path.lastIndexOf('/') + 1);
-	const dirOf = (path: string) => path.slice(0, Math.max(path.lastIndexOf('/'), 0));
-	const joinPath = (dir: string, rel: string) => (dir ? `${dir}/${rel}` : rel);
-	const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-
-	/** `path` as it reads once the folder `from` has been renamed to `to`. */
-	const rebase = (path: string, from: string, to: string) =>
-		under(path, from) ? `${to}${path.slice(from.length)}` : path;
 
 	// the panel is made again for another pack, so its first id is the one it keeps
 	const drafts = new FileDrafts(`pack-${untrack(() => id)}`, {
@@ -154,7 +146,7 @@
 	let targetDir = $state('');
 	const folderPaths = $derived(
 		new Set(
-			[...listed.map((f) => dirOf(f.path)), ...emptyFolders].flatMap((path) => {
+			[...listed.map((f) => parentOf(f.path)), ...emptyFolders].flatMap((path) => {
 				const parts = path ? path.split('/') : [];
 				return parts.map((_, index) => parts.slice(0, index + 1).join('/'));
 			})
@@ -209,7 +201,7 @@
 	/** Forgets what the page held for a folder that goes: its empty-folder marks, the target and the texts. */
 	function forgetFolder(path: string) {
 		emptyFolders = emptyFolders.filter((folder) => !under(folder, path));
-		if (under(targetDir, path)) targetDir = dirOf(path);
+		if (under(targetDir, path)) targetDir = parentOf(path);
 		drafts.drop(path);
 	}
 
@@ -218,7 +210,7 @@
 		let next = staged;
 		for (const path of paths) {
 			const current = viewOf(files, next);
-			if (current.some((f) => !f.deleted && under(f.path, path))) keepFolder(dirOf(path));
+			if (current.some((f) => !f.deleted && under(f.path, path))) keepFolder(parentOf(path));
 			next = stageDelete(current, next, path);
 			forgetFolder(path);
 		}
@@ -264,7 +256,7 @@
 		}
 		staged = next;
 		for (const { from, to } of moves) {
-			if (onServer.includes(from)) keepFolder(dirOf(from));
+			if (onServer.includes(from)) keepFolder(parentOf(from));
 			emptyFolders = emptyFolders.map((folder) => rebase(folder, from, to));
 			targetDir = rebase(targetDir, from, to);
 			drafts.rekey(from, to);
@@ -371,7 +363,7 @@
 			targetDir = to;
 			return;
 		}
-		targetDir = dirOf(to);
+		targetDir = parentOf(to);
 		drafts.show(to, { created: true });
 	}
 
@@ -655,7 +647,7 @@
 								? { tone: 'info', label: 'Empty folder, not kept in the pack' }
 								: undefined}
 						onselect={(file) => {
-							targetDir = dirOf(file.path);
+							targetDir = parentOf(file.path);
 							drafts.show(file.path);
 						}}
 						{selection}

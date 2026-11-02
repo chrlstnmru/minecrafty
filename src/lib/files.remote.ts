@@ -2,6 +2,7 @@ import { command, query } from '$app/server';
 import * as v from 'valibot';
 
 import { isEditable } from '#lib/editable.js';
+import { joinPath, nameOf, parentOf } from '#lib/paths.js';
 import { idSchema } from '#lib/schemas/common.js';
 import {
 	fileNameSchema,
@@ -62,10 +63,6 @@ export const saveFiles = command(saveFilesSchema, async ({ id: instanceId, files
 	return { hashes };
 });
 
-// the folder that holds the entry, so the listing on screen can be refreshed after a change
-const joinPath = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
-const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
-
 /**
  * Reads the editable files now at these paths again: a read is cached by path, so an editor would
  * otherwise open what a deleted file there held. One that cannot be read (a folder) is skipped.
@@ -73,7 +70,7 @@ const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
 const refreshReads = (instanceId: number, paths: string[]) =>
 	Promise.all(
 		paths
-			.filter((path) => isEditable(path.slice(path.lastIndexOf('/') + 1)))
+			.filter((path) => isEditable(nameOf(path)))
 			.map((path) =>
 				readFile({ id: instanceId, path })
 					.refresh()
@@ -267,6 +264,6 @@ export const moveFiles = command(moveFilesSchema, async ({ id: instanceId, paths
 	await refreshListings(instanceId, [...paths, joinPath(folder, 'x')]);
 	await refreshReads(
 		instanceId,
-		paths.map((from) => joinPath(folder, from.slice(from.lastIndexOf('/') + 1)))
+		paths.map((from) => joinPath(folder, nameOf(from)))
 	);
 });

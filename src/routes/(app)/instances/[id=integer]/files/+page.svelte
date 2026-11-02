@@ -71,6 +71,7 @@
 	} from '#lib/files.remote.js';
 	import { insideAny } from '#lib/folder-picker.js';
 	import { formatBytes } from '#lib/format.js';
+	import { joinPath, nameOf, parentOf, under } from '#lib/paths.js';
 	import { readDropped, type UploadItem } from '#lib/upload-entries.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
@@ -112,7 +113,7 @@
 			else if (prompt.kind === 'file') await newFile({ id, path, name });
 			else {
 				await renameFile({ id, path: prompt.target!, name });
-				drafts.rekey(prompt.target!, joinIn(parentOf(prompt.target!), name));
+				drafts.rekey(prompt.target!, joinPath(parentOf(prompt.target!), name));
 			}
 			promptOpen = false;
 		} catch (err) {
@@ -121,12 +122,6 @@
 			promptBusy = false;
 		}
 	}
-
-	const under = (candidate: string, folder: string) =>
-		candidate === folder || candidate.startsWith(`${folder}/`);
-	const parentOf = (full: string) => full.split('/').slice(0, -1).join('/');
-	const nameOf = (full: string) => full.slice(full.lastIndexOf('/') + 1);
-	const joinIn = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 
 	const drafts = new FileDrafts(`instance-${page.params.id}`, {
 		read: (path) => readFile({ id, path }),
@@ -294,7 +289,7 @@
 		try {
 			await moveFiles({ id, paths, folder });
 			for (const from of paths) {
-				const to = joinIn(folder, nameOf(from));
+				const to = joinPath(folder, nameOf(from));
 				if (to !== from) drafts.rekey(from, to);
 			}
 			const what = paths.length === 1 ? nameOf(paths[0]) : `${paths.length} items`;
@@ -316,7 +311,7 @@
 		const { entries, running: busy } = await listFiles({ id, path: folder });
 		return entries
 			.filter((e) => e.kind === 'dir' && !e.locked && !(busy && e.inWorld))
-			.map((e) => joinIn(folder, e.name));
+			.map((e) => joinPath(folder, e.name));
 	}
 
 	// Dragging rows onto a folder row, a crumb or the back button moves them like the Move dialog does.

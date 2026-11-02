@@ -2,6 +2,8 @@
 // moves and deletes. They are kept per file (a folder is its files) under the path each file has on
 // the server, and the tree shows the result as if they were done. Pure, so it can be tested.
 
+import { rebase, under } from './paths';
+
 export type ServerFile = { path: string; size: number };
 
 /** By the path a file has on the server: where it goes, or null when it is to be deleted. */
@@ -16,10 +18,6 @@ export type ViewFile = {
 	deleted: boolean;
 	moved: boolean;
 };
-
-const under = (path: string, folder: string) => path === folder || path.startsWith(`${folder}/`);
-const rebase = (path: string, from: string, to: string) =>
-	under(path, from) ? `${to}${path.slice(from.length)}` : path;
 
 /** The files as the tree shows them with the staged changes applied. */
 export function viewOf(files: ServerFile[], staged: Staged): ViewFile[] {

@@ -15,15 +15,9 @@ import type { ZipEntry } from './zip-writer';
 
 import { assertEditableSize, decodeText, isEditable, MAX_EDIT_BYTES } from '../editable';
 import { topLevelPaths } from '../file-tree';
+import { cleanPath, joinPath } from '../paths';
 import { SMALL_FILE_BYTES } from '../upload-limits';
-import {
-	applyChanges,
-	cleanPath,
-	safePath,
-	sha1,
-	type Changes,
-	type ChangeRules
-} from './change-set';
+import { applyChanges, safePath, sha1, type Changes, type ChangeRules } from './change-set';
 import { assertMayWriteCode } from './host-code';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
@@ -135,7 +129,7 @@ function checkName(name: string) {
 export function entryPath(folder: string, name: string) {
 	checkName(name);
 	const parent = cleanPath(folder);
-	return parent && parent !== '.' ? `${parent}/${name}` : name;
+	return joinPath(parent === '.' ? '' : parent, name);
 }
 
 export function makeDirectory(instanceId: number, parentRel: string, name: string) {
@@ -201,7 +195,7 @@ export function chosenPaths(paths: string[]) {
 export function movesInto(paths: string[], folder: string) {
 	const into = cleanPath(folder);
 	return chosenPaths(paths)
-		.map((from) => ({ from, to: into ? `${into}/${basename(from)}` : basename(from) }))
+		.map((from) => ({ from, to: joinPath(into, basename(from)) }))
 		.filter((move) => move.from !== move.to);
 }
 

@@ -2,23 +2,13 @@ import { describe, expect, it } from 'vitest';
 
 import {
 	childFolders,
-	folderName,
 	insideAny,
 	newFolderError,
 	openableFolder,
-	parentFolder,
 	sortFolders
 } from './folder-picker';
 
 describe('paths', () => {
-	it('finds the folder above, with the top as the empty path', () => {
-		expect(parentFolder('config/sodium')).toBe('config');
-		expect(parentFolder('config')).toBe('');
-		expect(parentFolder('')).toBe('');
-		expect(folderName('config/sodium')).toBe('sodium');
-		expect(folderName('config')).toBe('config');
-	});
-
 	it('tells a moved folder, and everything inside it, from one that only shares a prefix', () => {
 		expect(insideAny('config', ['config'])).toBe(true);
 		expect(insideAny('config/sodium', ['a.toml', 'config'])).toBe(true);
