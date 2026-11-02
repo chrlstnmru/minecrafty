@@ -1,6 +1,7 @@
 import { command, query } from '$app/server';
 import * as v from 'valibot';
 
+import { isEditable } from '#lib/editable.js';
 import { idSchema } from '#lib/schemas/common.js';
 import {
 	fileNameSchema,
@@ -62,6 +63,21 @@ export const saveFiles = command(saveFilesSchema, async ({ id: instanceId, files
 const joinPath = (dir: string, name: string) => (dir ? `${dir}/${name}` : name);
 const parentOf = (path: string) => path.split('/').slice(0, -1).join('/');
 
+/**
+ * Reads the editable files now at these paths again: a read is cached by path, so an editor would
+ * otherwise open what a deleted file there held. One that cannot be read (a folder) is skipped.
+ */
+const refreshReads = (instanceId: number, paths: string[]) =>
+	Promise.all(
+		paths
+			.filter((path) => isEditable(path.slice(path.lastIndexOf('/') + 1)))
+			.map((path) =>
+				readFile({ id: instanceId, path })
+					.refresh()
+					.catch(() => undefined)
+			)
+	);
+
 export const newFolder = command(
 	v.object({ id, path: filePathSchema, name: fileNameSchema }),
 	async ({ id: instanceId, path, name }) => {
@@ -87,6 +103,7 @@ export const newFile = command(
 			instanceId
 		});
 		await listFiles({ id: instanceId, path }).refresh();
+		await refreshReads(instanceId, [joinPath(path, name)]);
 	}
 );
 
@@ -101,6 +118,7 @@ export const renameFile = command(
 			instanceId
 		});
 		await listFiles({ id: instanceId, path: parentOf(path) }).refresh();
+		await refreshReads(instanceId, [joinPath(parentOf(path), name)]);
 	}
 );
 
@@ -122,6 +140,10 @@ export const uploadFiles = command(uploadBatchSchema, async ({ id: instanceId, p
 		)
 	);
 	await listFiles({ id: instanceId, path }).refresh();
+	await refreshReads(
+		instanceId,
+		items.map((item) => joinPath(path, item.path))
+	);
 });
 
 const uploadId = v.pipe(v.string(), v.uuid());
@@ -224,4 +246,8 @@ export const moveFiles = command(moveFilesSchema, async ({ id: instanceId, paths
 			instanceId
 		});
 	await refreshListings(instanceId, [...paths, joinPath(folder, 'x')]);
+	await refreshReads(
+		instanceId,
+		paths.map((from) => joinPath(folder, from.slice(from.lastIndexOf('/') + 1)))
+	);
 });
