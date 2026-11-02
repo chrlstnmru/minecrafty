@@ -99,7 +99,7 @@ export async function planModpackUpdate(
 
 	const hashOf = async (rel: string | null) => (rel === null ? null : hashFile(join(server, rel)));
 
-	const newFiles = new Map(pack.mrpack.serverFiles.map((f) => [f.path, f]));
+	const newFiles = new Map(pack.mrpack.files.map((f) => [f.path, f]));
 	for (const [path, file] of newFiles) {
 		safeJoin(server, path);
 		const wanted = file.hashes.sha1;
@@ -267,7 +267,7 @@ export async function startModpackUpdate(
 			}
 
 			const manifest: PackManifest = {
-				files: await packFileHashes(server, pack.mrpack.serverFiles),
+				files: await packFileHashes(server, pack.mrpack.files),
 				overrides: Object.fromEntries(
 					[...configs].map(([path, entry]) => [path, sha1(pack.mrpack.read(entry))])
 				)

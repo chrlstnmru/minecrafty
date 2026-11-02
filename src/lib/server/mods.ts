@@ -275,14 +275,3 @@ export async function backfillSides(instanceId: number) {
 	}
 	return filled;
 }
-
-/** Disables every enabled mod its project says does not run on a server; returns their titles. */
-export function disableClientOnly(instanceId: number) {
-	const titles: string[] = [];
-	for (const mod of listInstalled(instanceId)) {
-		if (!mod.enabled || mod.serverSide !== 'unsupported') continue;
-		setEnabled(instanceId, mod.id, false);
-		titles.push(mod.title);
-	}
-	return titles;
-}

@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { getProjects } from './modrinth';
+import { getProjects, searchProjects } from './modrinth';
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -23,5 +23,21 @@ describe('getProjects', () => {
 		vi.stubGlobal('fetch', fetch);
 		expect(await getProjects([])).toEqual([]);
 		expect(fetch).not.toHaveBeenCalled();
+	});
+});
+
+describe('searchProjects', () => {
+	it('does not filter by where a project runs, so client-only mods are found too', async () => {
+		let facets = '';
+		vi.stubGlobal('fetch', async (url: URL) => {
+			facets = url.searchParams.get('facets')!;
+			return Response.json({ hits: [], total_hits: 0 });
+		});
+		await searchProjects({ query: 'sodium', loaders: ['fabric'], mc: '1.21.4' });
+		expect(JSON.parse(facets)).toEqual([
+			['project_type:mod'],
+			['categories:fabric'],
+			['versions:1.21.4']
+		]);
 	});
 });

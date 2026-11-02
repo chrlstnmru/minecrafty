@@ -1,4 +1,3 @@
-import { eq } from 'drizzle-orm';
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -38,7 +37,7 @@ vi.mock('./modrinth', async (original) => ({
 }));
 
 const { projectSides } = await import('./mod-sides');
-const { backfillSides, disableClientOnly, listInstalled } = await import('./mods');
+const { backfillSides, listInstalled } = await import('./mods');
 const { serverDir } = await import('./instances');
 
 beforeEach(() => {
@@ -105,27 +104,5 @@ describe('installed mods', () => {
 	it('does nothing when every row already knows', async () => {
 		add('LITHIUM', 'Lithium', 'lithium.jar', ['optional', 'required']);
 		expect(await backfillSides(id)).toBe(0);
-	});
-
-	it('disables only the enabled mods that do not run on a server, and says which', () => {
-		add('SODIUM', 'Sodium', 'sodium.jar', ['required', 'unsupported']);
-		add('MODMENU', 'Mod Menu', 'modmenu.jar', ['required', 'unsupported']);
-		add('LITHIUM', 'Lithium', 'lithium.jar', ['optional', 'required']);
-		db.update(installedMods)
-			.set({ file: 'mods/modmenu.jar.disabled' })
-			.where(eq(installedMods.projectId, 'MODMENU'))
-			.run();
-		writeFileSync(join(serverDir(id), 'mods', 'modmenu.jar.disabled'), 'jar');
-
-		expect(disableClientOnly(id)).toEqual(['Sodium']);
-
-		const by = Object.fromEntries(listInstalled(id).map((m) => [m.title, m.enabled]));
-		expect(by).toEqual({ Sodium: false, 'Mod Menu': false, Lithium: true });
-	});
-
-	it('leaves mods with unknown sides alone', () => {
-		add('X', 'Mystery', 'x.jar', [null, null]);
-		expect(disableClientOnly(id)).toEqual([]);
-		expect(listInstalled(id)[0].enabled).toBe(true);
 	});
 });

@@ -68,14 +68,14 @@ describe('readMrpack', () => {
 		});
 	});
 
-	it('leaves client-only files out of what the server installs', async () => {
+	it('keeps client-only files with the rest', async () => {
 		const files = [
 			file('mods/a.jar'),
 			file('mods/b.jar', 'unsupported'),
 			file('mods/c.jar', 'optional')
 		];
 		const read = readMrpack(await pack({}, writeIndex(fields, files)));
-		expect(read.serverFiles.map((f) => f.path)).toEqual(['mods/a.jar', 'mods/c.jar']);
+		expect(read.files.map((f) => f.path)).toEqual(['mods/a.jar', 'mods/b.jar', 'mods/c.jar']);
 	});
 
 	it('gives the server one copy of each config file, server-overrides/ winning', async () => {

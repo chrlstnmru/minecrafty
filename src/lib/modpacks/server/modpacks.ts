@@ -43,6 +43,7 @@ export type ModpackSummary = {
 	loaderVersion: string | null;
 	/** files that will be downloaded for the server */
 	files: number;
+	/** of those, the ones the pack marks as not running on a server */
 	clientOnly: number;
 	downloadBytes: number;
 	/** files copied straight from the pack (configs, scripts, ...) */
@@ -62,9 +63,9 @@ export function summarize(
 		mcVersion: mrpack.mcVersion,
 		loader: mrpack.loader,
 		loaderVersion: mrpack.loaderVersion,
-		files: mrpack.serverFiles.length,
-		clientOnly: mrpack.files.length - mrpack.serverFiles.length,
-		downloadBytes: mrpack.serverFiles.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
+		files: mrpack.files.length,
+		clientOnly: mrpack.files.filter((f) => f.env?.server === 'unsupported').length,
+		downloadBytes: mrpack.files.reduce((sum, f) => sum + (f.fileSize ?? 0), 0),
 		overrides: mrpack.overrides.size
 	};
 }
@@ -191,15 +192,15 @@ function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack) {
 		setProgress(row.id, { label: 'Installing the server', done: 0, total: 1 });
 		await installBase(row);
 
-		await downloadFiles(row.id, server, pack.mrpack.serverFiles);
+		await downloadFiles(row.id, server, pack.mrpack.files);
 
 		setProgress(row.id, { label: 'Copying configuration', done: 0, total: 1 });
 		const overrides = await extractOverrides(pack.mrpack, server);
 
 		setProgress(row.id, { label: 'Recording mods', done: 0, total: 1 });
-		await trackMods(row.id, pack.mrpack.serverFiles);
+		await trackMods(row.id, pack.mrpack.files);
 		writeManifest(row.id, {
-			files: await packFileHashes(server, pack.mrpack.serverFiles),
+			files: await packFileHashes(server, pack.mrpack.files),
 			overrides
 		});
 	});
@@ -317,9 +318,6 @@ export async function searchModpacks(query: string, limit: number) {
 		query,
 		loaders: [],
 		type: 'modpack',
-		// Modrinth's server-side flag is not reliable for packs: client-only mods are handled when
-		// a pack is read, so every pack is listed
-		serverSide: false,
 		limit
 	});
 	return { hits: res.hits, total: res.total_hits };

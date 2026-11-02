@@ -122,6 +122,8 @@ type PackSpec = {
 	versionId: string;
 	versionNumber: string;
 	files: Record<string, string>;
+	/** files the pack marks as not running on a server */
+	clientOnly?: string[];
 	overrides?: Record<string, string>;
 	mc?: string;
 	loaderVersion?: string;
@@ -143,7 +145,7 @@ async function makePack(spec: PackSpec): Promise<LoadedPack> {
 			hashes: { sha1: sha1(content), sha512: sha512(content) },
 			downloads: [url],
 			fileSize: content.length,
-			env: { server: 'required' }
+			env: { server: spec.clientOnly?.includes(path) ? 'unsupported' : 'required' }
 		};
 	});
 	const index = writeIndex(
@@ -280,6 +282,19 @@ describe('updating the files', () => {
 		expect(read('world/level.dat')).toBe('level');
 		expect(existsSync(`${root}.updating`)).toBe(false);
 		expect(lastOutcome(id)).toMatchObject({ ok: true });
+	});
+
+	it('installs files the pack marks as client only, like any other', async () => {
+		await installV1({ 'mods/a.jar': 'a1' });
+		await makePack({
+			versionId: 'V2',
+			versionNumber: '2.0',
+			files: { 'mods/a.jar': 'a1', 'mods/sodium.jar': 'sodium' },
+			clientOnly: ['mods/sodium.jar']
+		});
+		await run('V2');
+		expect(read('mods/sodium.jar')).toBe('sodium');
+		expect(readManifest(id)?.files).toHaveProperty('mods/sodium.jar', sha1('sodium'));
 	});
 
 	it('records the new version on the instance and in the manifest', async () => {
