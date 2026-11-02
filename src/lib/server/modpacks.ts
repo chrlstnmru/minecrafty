@@ -300,11 +300,16 @@ export async function downloadWithFallback(dest: string, file: IndexFile) {
 	);
 }
 
-/** The pack's config files by their path in the server, `server-overrides/` winning over `overrides/`. */
-export function overrideEntries(zip: Zip) {
+/** The config files in these folders of the pack, each by its path inside its folder, a later folder winning. */
+function entriesIn(
+	zip: Zip,
+	folders: readonly string[],
+	keep: (folder: string, rel: string) => string
+) {
 	const found = new Map<string, ZipEntry>();
 	let total = 0;
-	for (const prefix of ['overrides/', 'server-overrides/']) {
+	for (const folder of folders) {
+		const prefix = `${folder}/`;
 		for (const entry of zip.entries) {
 			if (entry.isDir || !entry.name.startsWith(prefix)) continue;
 			if (entry.size > MAX_FILE_BYTES) throw new Error(`${entry.name} is too large`);
@@ -313,11 +318,19 @@ export function overrideEntries(zip: Zip) {
 			const rel = entry.name.slice(prefix.length);
 			const safe = safeEntryName(rel.replaceAll('\\', '/'));
 			if (isAbsolute(rel) || !safe) throw new Error(`Refusing unsafe path "${rel}"`);
-			found.set(safe, entry);
+			found.set(keep(folder, safe), entry);
 		}
 	}
 	return found;
 }
+
+/** The pack's config files by their path in the server, `server-overrides/` winning over `overrides/`. */
+export const overrideEntries = (zip: Zip) =>
+	entriesIn(zip, ['overrides', 'server-overrides'], (_, rel) => rel);
+
+/** All of the pack's config files, each by its path with its folder (`client-overrides/options.txt`). */
+export const configEntries = (zip: Zip, folders: readonly string[]) =>
+	entriesIn(zip, folders, (folder, rel) => `${folder}/${rel}`);
 
 export const sha1Of = (bytes: Uint8Array) =>
 	new Bun.CryptoHasher('sha1').update(bytes).digest('hex');

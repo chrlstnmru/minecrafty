@@ -8,6 +8,7 @@
 	import FileSearchIcon from '@tabler/icons-svelte/icons/file-search';
 	import FolderPlusIcon from '@tabler/icons-svelte/icons/folder-plus';
 	import FolderUpIcon from '@tabler/icons-svelte/icons/folder-up';
+	import InfoCircleIcon from '@tabler/icons-svelte/icons/info-circle';
 	import PencilIcon from '@tabler/icons-svelte/icons/pencil';
 	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
@@ -31,6 +32,14 @@
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatKind } from '#lib/config-format.js';
+	import {
+		CONFIG_SIDES,
+		DEFAULT_SIDE,
+		inSide,
+		isSide,
+		serverCopyOf,
+		SIDE_HINTS
+	} from '#lib/config-sides.js';
 	import { isEditable } from '#lib/editable.js';
 	import { FileDrafts, type SaveResult } from '#lib/file-drafts.svelte.js';
 	import {
@@ -140,20 +149,21 @@
 	// folders that are new here or lost their last file: the pack cannot keep an empty folder, so the
 	// server has no trace of them, but they stay in the tree until the page is reloaded or they are deleted
 	let emptyFolders = $state<string[]>([]);
-	const tree = $derived(buildFileTree(listed, emptyFolders));
+	// the three folders are always there, even empty
+	const tree = $derived(buildFileTree(listed, [...CONFIG_SIDES, ...emptyFolders]));
 
-	// where New file, New folder and Upload put things: the last folder or file picked, else the root
+	// where New file, New folder and Upload put things: the last folder or file picked, else overrides
 	let targetDir = $state('');
 	const folderPaths = $derived(
 		new Set(
-			[...listed.map((f) => parentOf(f.path)), ...emptyFolders].flatMap((path) => {
+			[...listed.map((f) => parentOf(f.path)), ...CONFIG_SIDES, ...emptyFolders].flatMap((path) => {
 				const parts = path ? path.split('/') : [];
 				return parts.map((_, index) => parts.slice(0, index + 1).join('/'));
 			})
 		)
 	);
-	const target = $derived(folderPaths.has(targetDir) ? targetDir : '');
-	const where = $derived(target || 'overrides');
+	const target = $derived(targetDir && folderPaths.has(targetDir) ? targetDir : DEFAULT_SIDE);
+	const where = $derived(target);
 
 	const open = $derived(drafts.open);
 	const entry = $derived(drafts.current);
@@ -309,7 +319,7 @@
 		const name = naming.value.trim();
 		if (!name)
 			return naming.from
-				? `Enter a path, such as ${naming.kind === 'folder' ? 'config/sodium' : 'config/mod.toml'}`
+				? `Enter a path, such as ${naming.kind === 'folder' ? 'overrides/config/sodium' : 'overrides/config/mod.toml'}`
 				: naming.kind === 'folder'
 					? 'Enter a folder name, such as sodium'
 					: 'Enter a file name, such as mod.toml';
@@ -317,7 +327,9 @@
 			return 'Use a name without slashes. Pick the folder first to choose where it goes.';
 		const path = namedPath;
 		if (path.startsWith('/') || path.split('/').includes('..'))
-			return 'Use a path inside the server folder, without a leading slash or ..';
+			return 'Use a path in the pack, without a leading slash or ..';
+		if (!inSide(path))
+			return `Start the path with ${CONFIG_SIDES.join(', ')}, such as overrides/config/mod.toml`;
 		if (path === naming.from) return undefined;
 		if (naming.kind === 'folder' && naming.from && path.startsWith(`${naming.from}/`))
 			return 'A folder cannot be moved into itself';
@@ -338,7 +350,7 @@
 
 	const nameHint = $derived(
 		naming?.from
-			? `The path inside the server folder, such as ${naming.kind === 'folder' ? 'config/sodium' : 'config/mod.toml'}.`
+			? `The path in the pack, starting with its folder, such as ${naming.kind === 'folder' ? 'overrides/config/sodium' : 'overrides/config/mod.toml'}.`
 			: naming?.kind === 'folder'
 				? 'A folder name such as sodium. It cannot contain slashes.'
 				: 'A text file such as mod.toml, options.json or config.yml.'
@@ -516,7 +528,8 @@
 	<Card.Header>
 		<Card.Title>Config files</Card.Title>
 		<Card.Description>
-			Copied into every server made from this pack, and into the .mrpack under overrides/.
+			Kept in the .mrpack in their folder. A server made from this pack gets overrides, with
+			server-overrides on top.
 		</Card.Description>
 	</Card.Header>
 	<Card.Content
@@ -540,20 +553,11 @@
 				dragging = false;
 				if (!canWrite || !event.dataTransfer || !hasFiles(event)) return;
 				event.preventDefault();
-				void drop(event.dataTransfer, '');
+				void drop(event.dataTransfer, DEFAULT_SIDE);
 			}}
 		>
 			<div class="flex items-center gap-1 border-b bg-muted/50 py-1.5 ps-3 pe-2">
-				<button
-					type="button"
-					class="min-w-0 flex-1 truncate rounded-sm text-start font-mono text-xs {target === ''
-						? 'text-foreground'
-						: 'text-muted-foreground hover:text-foreground'}"
-					aria-pressed={target === ''}
-					onclick={() => (targetDir = '')}
-				>
-					overrides
-				</button>
+				<span class="min-w-0 flex-1 truncate text-xs text-muted-foreground">Pack</span>
 				{#if canWrite}
 					<div class="flex shrink-0 items-center gap-0.5">
 						{@render tool(`New file in ${where}`, FilePlusIcon, () => startNaming('file'))}
@@ -596,7 +600,7 @@
 					}}
 				/>
 			{/if}
-			<!-- clicking anywhere in the tree but on a row goes back to the server folder; the overrides button is the keyboard way -->
+			<!-- clicking anywhere in the tree but on a row goes back to overrides -->
 			<div
 				role="presentation"
 				class="min-h-0 flex-1 overflow-y-auto p-2 {rootDrop ? 'bg-accent/30' : ''}"
@@ -617,14 +621,14 @@
 					const from = decodeDrag(event.dataTransfer?.getData(TREE_DRAG_TYPE));
 					if (!canWrite || !from.length) return;
 					event.preventDefault();
-					moveInto(from, '');
+					moveInto(from, DEFAULT_SIDE);
 				}}
 			>
 				{#if tree.length}
 					<FileTree
 						nodes={tree}
 						selected={open}
-						selectedFolder={target || null}
+						selectedFolder={target}
 						selectable={(file) => !file.deleted && isEditable(file.path)}
 						unselectableTitle={(file) =>
 							file.deleted ? 'Deleted when you save' : 'Not a text file'}
@@ -652,13 +656,15 @@
 						}}
 						{selection}
 						onselection={(next) => (selection = next)}
-						checkable={choosable}
+						checkable={(path) => !isSide(path) && choosable(path)}
+						folderDraggable={(path) => !isSide(path)}
+						folderTitle={(folder) => (isSide(folder.path) ? SIDE_HINTS[folder.path] : undefined)}
 						onselectfolder={(path) => (targetDir = path)}
 						ondropfiles={canWrite ? (folder, transfer) => void drop(transfer, folder) : undefined}
 						onmove={canWrite ? moveInto : undefined}
 					>
 						{#snippet folderTrailing(folder)}
-							{#if canWrite}
+							{#if canWrite && !isSide(folder.path)}
 								<Button
 									variant="ghost"
 									size="icon"
@@ -704,6 +710,18 @@
 										<TrashIcon />
 									</Button>
 								{:else}
+									{@const copy = serverCopyOf(file.path)}
+									{#if copy && listed.some((f) => !f.deleted && f.path === copy)}
+										<Tooltip.Root>
+											<Tooltip.Trigger
+												class="shrink-0 text-muted-foreground"
+												aria-label="Servers use the copy in server-overrides"
+											>
+												<InfoCircleIcon class="size-3.5" />
+											</Tooltip.Trigger>
+											<Tooltip.Content>Servers use the copy in server-overrides.</Tooltip.Content>
+										</Tooltip.Root>
+									{/if}
 									<span class="shrink-0 text-xs text-muted-foreground"
 										>{formatBytes(file.size)}</span
 									>
@@ -739,14 +757,13 @@
 							{/if}
 						{/snippet}
 					</FileTree>
-				{:else}
-					<p class="p-2 text-sm text-muted-foreground">
-						No config files{canWrite
-							? ' yet. Drop files or a folder here, or use the buttons above.'
-							: '.'}
-					</p>
 				{/if}
 			</div>
+			{#if canWrite}
+				<p class="border-t px-3 py-1.5 text-xs text-muted-foreground">
+					Files are saved in overrides unless you pick a folder.
+				</p>
+			{/if}
 		</div>
 
 		<div
@@ -817,9 +834,9 @@
 			</Dialog.Title>
 			<Dialog.Description>
 				{#if naming?.from}
-					The path inside the server folder. A new folder in the path is made for you.
+					The path in the pack, starting with its folder. A new folder in the path is made for you.
 				{:else}
-					Made in <span class="font-mono">{naming?.dir || 'overrides'}</span>{naming?.kind ===
+					Made in <span class="font-mono">{naming?.dir || DEFAULT_SIDE}</span>{naming?.kind ===
 					'folder'
 						? ', and kept once it holds a file.'
 						: '.'}
@@ -877,12 +894,12 @@
 			bind:folder={moveTo}
 			list={(folder) => childFolders(folderPaths, folder)}
 			exclude={(folder) => insideAny(folder, chosen)}
-			rootLabel="overrides"
+			rootLabel="pack"
 		/>
 		<Dialog.Footer>
 			<Button type="button" variant="ghost" onclick={() => (bulkMoveOpen = false)}>Cancel</Button>
-			<Button class="min-w-0" disabled={!canMoveInto(chosen, moveTo)} onclick={bulkMove}>
-				<span class="truncate">Move to {moveTo || 'the server folder'}</span>
+			<Button class="min-w-0" disabled={!moveTo || !canMoveInto(chosen, moveTo)} onclick={bulkMove}>
+				<span class="truncate">{moveTo ? `Move to ${moveTo}` : 'Open a folder to move into'}</span>
 			</Button>
 		</Dialog.Footer>
 	</Dialog.Content>

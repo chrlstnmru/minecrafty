@@ -92,8 +92,51 @@ vi.mock('./modrinth', () => ({
 const { db } = await import('./db');
 const { localPackFiles, localPacks } = await import('./db/schema');
 const P = await import('./local-packs');
+
+// The config file API as seen from inside overrides/, where the cases below are written: paths go
+// in without their folder and come back without it. The three folders have their own tests.
+const inO = (path: string) => `overrides/${path}`;
+const outO = (path: string) => path.replace(/^overrides\//, '');
+type Changes = Parameters<typeof P.applyOverrideChanges>[1];
+const C = {
+	saveOverride: (id: number, rel: string, bytes: Uint8Array) => P.saveOverride(id, inO(rel), bytes),
+	saveOverrides: (id: number, files: { rel: string; bytes: Uint8Array }[]) =>
+		P.saveOverrides(
+			id,
+			files.map((f) => ({ ...f, rel: inO(f.rel) }))
+		),
+	listOverrides: (id: number) => P.listOverrides(id).map((f) => ({ ...f, path: outO(f.path) })),
+	readOverrideText: (id: number, rel: string) => P.readOverrideText(id, inO(rel)),
+	exportOverridesZip(id: number, paths: string[]) {
+		const zip = P.exportOverridesZip(id, paths.map(inO));
+		return { ...zip, entries: zip.entries.map((e) => ({ ...e, name: outO(e.name) })) };
+	},
+	async applyOverrideChanges(id: number, changes: Changes, check?: (path: string) => void) {
+		try {
+			const result = await P.applyOverrideChanges(
+				id,
+				{
+					moves: changes.moves.map((m) => ({ from: inO(m.from), to: inO(m.to) })),
+					deletes: changes.deletes.map(inO),
+					writes: changes.writes.map((w) => ({
+						...w,
+						path: inO(w.path),
+						...(w.original === undefined ? {} : { original: inO(w.original) })
+					}))
+				},
+				check && ((path) => check(outO(path)))
+			);
+			const hashes = Object.entries(result.hashes).map(([k, v]) => [outO(k), v]);
+			return { ...result, hashes: Object.fromEntries(hashes) as Record<string, string> };
+		} catch (e) {
+			if (e instanceof Error && 'path' in e) Object.assign(e, { path: outO(String(e.path)) });
+			throw e;
+		}
+	}
+};
 const { Zip } = await import('./zip');
-const { parseIndex } = await import('./modpacks');
+const { overrideEntries, parseIndex } = await import('./modpacks');
+const { assertMayWriteCode } = await import('./host-code');
 
 beforeEach(() => {
 	db.delete(localPacks).run();
@@ -238,27 +281,27 @@ describe('changing the Minecraft version', () => {
 describe('config files', () => {
 	const enc = (text: string) => new TextEncoder().encode(text);
 	const put = (packId: number, files: Record<string, string>) =>
-		P.saveOverrides(
+		C.saveOverrides(
 			packId,
 			Object.entries(files).map(([rel, text]) => ({ rel, bytes: enc(text) }))
 		);
-	const paths = (packId: number) => P.listOverrides(packId).map((f) => f.path);
-	const hashOf = (packId: number, rel: string) => P.readOverrideText(packId, rel).hash;
+	const paths = (packId: number) => C.listOverrides(packId).map((f) => f.path);
+	const hashOf = (packId: number, rel: string) => C.readOverrideText(packId, rel).hash;
 	const revision = (packId: number) => P.getPack(packId).revision;
 	const none = { moves: [], deletes: [], writes: [] };
 
 	it('stores files by path, lists them, and refuses a path that leaves the folder', async () => {
 		const pack = await make();
-		await P.saveOverride(pack.id, 'config/sodium.json', enc('{}'));
-		expect(P.listOverrides(pack.id)).toEqual([{ path: 'config/sodium.json', size: 2 }]);
-		await expect(P.saveOverride(pack.id, '../escape.txt', new Uint8Array())).rejects.toThrow(
+		await C.saveOverride(pack.id, 'config/sodium.json', enc('{}'));
+		expect(C.listOverrides(pack.id)).toEqual([{ path: 'config/sodium.json', size: 2 }]);
+		await expect(C.saveOverride(pack.id, '../escape.txt', new Uint8Array())).rejects.toThrow(
 			'unsafe'
 		);
 	});
 
 	it('stores several files as one revision, and writes none when one path leaves the folder', async () => {
 		const pack = await make();
-		await P.saveOverrides(pack.id, [
+		await C.saveOverrides(pack.id, [
 			{ rel: 'config/a.toml', bytes: enc('x') },
 			{ rel: 'config/sub/b.toml', bytes: enc('x') }
 		]);
@@ -266,7 +309,7 @@ describe('config files', () => {
 		expect(paths(pack.id)).toEqual(['config/a.toml', 'config/sub/b.toml']);
 
 		await expect(
-			P.saveOverrides(pack.id, [
+			C.saveOverrides(pack.id, [
 				{ rel: 'config/c.toml', bytes: enc('x') },
 				{ rel: '../d.toml', bytes: enc('x') }
 			])
@@ -278,13 +321,13 @@ describe('config files', () => {
 	it('reads a file as text with a hash, and refuses a missing or binary one, or one too large', async () => {
 		const pack = await make();
 		await put(pack.id, { 'a.txt': 'one', 'bom.txt': '\uFEFFhi' });
-		expect(P.readOverrideText(pack.id, 'a.txt')).toMatchObject({ content: 'one', size: 3 });
-		expect(P.readOverrideText(pack.id, 'bom.txt').content).toBe('\uFEFFhi');
-		await P.saveOverride(pack.id, 'blob.json', new Uint8Array([123, 0, 125]));
-		expect(() => P.readOverrideText(pack.id, 'blob.json')).toThrow('binary');
-		expect(() => P.readOverrideText(pack.id, 'missing.json')).toThrow('not found');
-		await P.saveOverride(pack.id, 'big.txt', new Uint8Array(2 * 1024 * 1024 + 1));
-		expect(() => P.readOverrideText(pack.id, 'big.txt')).toThrow('too large');
+		expect(C.readOverrideText(pack.id, 'a.txt')).toMatchObject({ content: 'one', size: 3 });
+		expect(C.readOverrideText(pack.id, 'bom.txt').content).toBe('\uFEFFhi');
+		await C.saveOverride(pack.id, 'blob.json', new Uint8Array([123, 0, 125]));
+		expect(() => C.readOverrideText(pack.id, 'blob.json')).toThrow('binary');
+		expect(() => C.readOverrideText(pack.id, 'missing.json')).toThrow('not found');
+		await C.saveOverride(pack.id, 'big.txt', new Uint8Array(2 * 1024 * 1024 + 1));
+		expect(() => C.readOverrideText(pack.id, 'big.txt')).toThrow('too large');
 	});
 
 	describe('applying changes together', () => {
@@ -297,7 +340,7 @@ describe('config files', () => {
 				'keep.txt': 'keep'
 			});
 			const before = revision(pack.id);
-			const result = await P.applyOverrideChanges(pack.id, {
+			const result = await C.applyOverrideChanges(pack.id, {
 				moves: [{ from: 'config/a.toml', to: 'moved/a.toml' }],
 				deletes: ['old/c.json'],
 				writes: [
@@ -318,14 +361,14 @@ describe('config files', () => {
 				'keep.txt',
 				'moved/a.toml'
 			]);
-			expect(P.readOverrideText(pack.id, 'keep.txt').content).toBe('kept!');
+			expect(C.readOverrideText(pack.id, 'keep.txt').content).toBe('kept!');
 			expect(revision(pack.id)).toBe(before + 1);
 		});
 
 		it('writes an edited file at the place it is moved to, built on the text it was opened as', async () => {
 			const pack = await make();
 			await put(pack.id, { 'a.toml': 'a = 1' });
-			await P.applyOverrideChanges(pack.id, {
+			await C.applyOverrideChanges(pack.id, {
 				moves: [{ from: 'a.toml', to: 'config/a.toml' }],
 				deletes: [],
 				writes: [
@@ -338,13 +381,13 @@ describe('config files', () => {
 				]
 			});
 			expect(paths(pack.id)).toEqual(['config/a.toml']);
-			expect(P.readOverrideText(pack.id, 'config/a.toml').content).toBe('a = 2');
+			expect(C.readOverrideText(pack.id, 'config/a.toml').content).toBe('a = 2');
 		});
 
 		it('lets two files swap places, and a move land on the name a delete frees', async () => {
 			const pack = await make();
 			await put(pack.id, { 'a.txt': 'A', 'b.txt': 'B', 'c.txt': 'C' });
-			await P.applyOverrideChanges(pack.id, {
+			await C.applyOverrideChanges(pack.id, {
 				moves: [
 					{ from: 'a.txt', to: 'b.txt' },
 					{ from: 'b.txt', to: 'a.txt' },
@@ -353,22 +396,22 @@ describe('config files', () => {
 				deletes: [],
 				writes: []
 			});
-			expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('B');
-			expect(P.readOverrideText(pack.id, 'b.txt').content).toBe('A');
-			expect(P.readOverrideText(pack.id, 'd.txt').content).toBe('C');
+			expect(C.readOverrideText(pack.id, 'a.txt').content).toBe('B');
+			expect(C.readOverrideText(pack.id, 'b.txt').content).toBe('A');
+			expect(C.readOverrideText(pack.id, 'd.txt').content).toBe('C');
 
-			await P.applyOverrideChanges(pack.id, {
+			await C.applyOverrideChanges(pack.id, {
 				moves: [{ from: 'd.txt', to: 'a.txt' }],
 				deletes: ['a.txt'],
 				writes: []
 			});
-			expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('C');
+			expect(C.readOverrideText(pack.id, 'a.txt').content).toBe('C');
 		});
 
 		it('removes a folder that lost its last file, but not the ones that still hold something', async () => {
 			const pack = await make();
 			await put(pack.id, { 'a/b/c.txt': '1', 'a/d.txt': '2', 'x/y/z.txt': '3' });
-			await P.applyOverrideChanges(pack.id, {
+			await C.applyOverrideChanges(pack.id, {
 				moves: [{ from: 'a/b/c.txt', to: 'c.txt' }],
 				deletes: ['x/y/z.txt'],
 				writes: []
@@ -384,17 +427,17 @@ describe('config files', () => {
 			await put(pack.id, { 'a.txt': 'A', 'b.txt': 'B' });
 			const stale = { path: 'a.txt', original: 'a.txt', baseHash: 'f'.repeat(40), content: 'A!' };
 			await expect(
-				P.applyOverrideChanges(pack.id, { moves: [], deletes: [], writes: [stale] })
+				C.applyOverrideChanges(pack.id, { moves: [], deletes: [], writes: [stale] })
 			).rejects.toMatchObject({ path: 'a.txt', kind: 'stale' });
 			await expect(
-				P.applyOverrideChanges(pack.id, {
+				C.applyOverrideChanges(pack.id, {
 					moves: [{ from: 'b.txt', to: 'a.txt' }],
 					deletes: [],
 					writes: []
 				})
 			).rejects.toMatchObject({ path: 'a.txt', kind: 'refused' });
 			await expect(
-				P.applyOverrideChanges(pack.id, { moves: [], deletes: ['nope.txt'], writes: [] })
+				C.applyOverrideChanges(pack.id, { moves: [], deletes: ['nope.txt'], writes: [] })
 			).rejects.toMatchObject({ path: 'nope.txt', kind: 'refused' });
 		});
 
@@ -406,9 +449,9 @@ describe('config files', () => {
 				changes: Parameters<typeof P.applyOverrideChanges>[1],
 				message: string
 			) => {
-				await expect(P.applyOverrideChanges(pack.id, changes, undefined)).rejects.toThrow(message);
+				await expect(C.applyOverrideChanges(pack.id, changes, undefined)).rejects.toThrow(message);
 				expect(paths(pack.id)).toEqual(['a.txt', 'b.txt', 'dir/c.txt']);
-				expect(P.readOverrideText(pack.id, 'a.txt').content).toBe('A');
+				expect(C.readOverrideText(pack.id, 'a.txt').content).toBe('A');
 				expect(revision(pack.id)).toBe(before);
 			};
 			const edit = {
@@ -492,7 +535,7 @@ describe('config files', () => {
 			const pack = await make();
 			await put(pack.id, { 'a.txt': 'A', 'b.txt': 'B' });
 			const asked: string[] = [];
-			await P.applyOverrideChanges(
+			await C.applyOverrideChanges(
 				pack.id,
 				{
 					moves: [{ from: 'a.txt', to: 'x/a.txt' }],
@@ -506,7 +549,7 @@ describe('config files', () => {
 
 			const before = paths(pack.id);
 			await expect(
-				P.applyOverrideChanges(
+				C.applyOverrideChanges(
 					pack.id,
 					{ moves: [{ from: 'x/a.txt', to: 'run.sh' }], deletes: [], writes: [] },
 					(path) => {
@@ -522,13 +565,13 @@ describe('config files', () => {
 			await put(pack.id, { 'a.txt': 'A' });
 			const before = revision(pack.id);
 			const hash = hashOf(pack.id, 'a.txt');
-			const same = await P.applyOverrideChanges(pack.id, {
+			const same = await C.applyOverrideChanges(pack.id, {
 				moves: [{ from: 'a.txt', to: 'a.txt' }],
 				deletes: [],
 				writes: [{ path: 'a.txt', original: 'a.txt', baseHash: hash, content: 'A' }]
 			});
 			expect(same).toEqual({ changed: 0, hashes: { 'a.txt': hash } });
-			expect((await P.applyOverrideChanges(pack.id, none)).changed).toBe(0);
+			expect((await C.applyOverrideChanges(pack.id, none)).changed).toBe(0);
 			expect(revision(pack.id)).toBe(before);
 		});
 	});
@@ -536,7 +579,7 @@ describe('config files', () => {
 	it('lists the chosen files for a zip, folders kept, and refuses a missing or empty choice', async () => {
 		const pack = await make();
 		await put(pack.id, { 'config/sodium/a.json': 'x', 'config/b.toml': 'x', 'options.txt': 'x' });
-		const { filename, entries } = P.exportOverridesZip(pack.id, [
+		const { filename, entries } = C.exportOverridesZip(pack.id, [
 			'config',
 			'config/b.toml',
 			'options.txt'
@@ -547,8 +590,108 @@ describe('config files', () => {
 			'config/sodium/a.json',
 			'options.txt'
 		]);
-		expect(() => P.exportOverridesZip(pack.id, ['nope'])).toThrow('nothing to download in nope');
-		expect(() => P.exportOverridesZip(pack.id, [])).toThrow('Choose');
+		expect(() => C.exportOverridesZip(pack.id, ['nope'])).toThrow(
+			'nothing to download in overrides/nope'
+		);
+		expect(() => C.exportOverridesZip(pack.id, [])).toThrow('Choose');
+	});
+});
+
+describe('the three config folders', () => {
+	const enc = (text: string) => new TextEncoder().encode(text);
+	const files = (packId: number) => P.listOverrides(packId).map((f) => f.path);
+	/** What a server made from the pack gets, by path in the server folder. */
+	async function serverGets(packId: number) {
+		const zip = new Zip((await P.exportBytes(packId)).bytes);
+		return Object.fromEntries(
+			[...overrideEntries(zip)].map(([path, entry]) => [
+				path,
+				new TextDecoder().decode(zip.read(entry))
+			])
+		);
+	}
+
+	it('keeps a file in each folder, exports all three, and an import keeps them apart', async () => {
+		const pack = await make();
+		await P.saveOverrides(pack.id, [
+			{ rel: 'overrides/config/a.toml', bytes: enc('both') },
+			{ rel: 'server-overrides/config/a.toml', bytes: enc('server') },
+			{ rel: 'client-overrides/options.txt', bytes: enc('client') }
+		]);
+		expect(files(pack.id)).toEqual([
+			'client-overrides/options.txt',
+			'overrides/config/a.toml',
+			'server-overrides/config/a.toml'
+		]);
+		const zip = new Zip((await P.exportBytes(pack.id)).bytes);
+		expect(zip.entries.map((e) => e.name)).toEqual(
+			expect.arrayContaining([
+				'overrides/config/a.toml',
+				'server-overrides/config/a.toml',
+				'client-overrides/options.txt'
+			])
+		);
+		const copy = await P.importMrpack((await P.exportBytes(pack.id)).bytes);
+		expect(files(copy.id)).toEqual(files(pack.id));
+	});
+
+	it('gives a server overrides with server-overrides on top, and never client-overrides', async () => {
+		const pack = await make();
+		await P.saveOverrides(pack.id, [
+			{ rel: 'overrides/config/a.toml', bytes: enc('both') },
+			{ rel: 'overrides/config/b.toml', bytes: enc('b') },
+			{ rel: 'server-overrides/config/a.toml', bytes: enc('server') },
+			{ rel: 'client-overrides/options.txt', bytes: enc('client') }
+		]);
+		expect(await serverGets(pack.id)).toEqual({ 'config/a.toml': 'server', 'config/b.toml': 'b' });
+
+		// a change only players see leaves what a server gets as it was
+		const before = await serverGets(pack.id);
+		await P.saveOverride(pack.id, 'client-overrides/options.txt', enc('changed'));
+		expect(await serverGets(pack.id)).toEqual(before);
+	});
+
+	it('moves files between the folders', async () => {
+		const pack = await make();
+		await P.saveOverride(pack.id, 'overrides/config/a.toml', enc('a'));
+		await P.applyOverrideChanges(pack.id, {
+			moves: [{ from: 'overrides/config/a.toml', to: 'server-overrides/config/a.toml' }],
+			deletes: [],
+			writes: []
+		});
+		expect(files(pack.id)).toEqual(['server-overrides/config/a.toml']);
+	});
+
+	it('never moves or deletes a folder itself, and keeps files inside the three', async () => {
+		const pack = await make();
+		await P.saveOverride(pack.id, 'overrides/a.txt', enc('a'));
+		const refused = (changes: Partial<Parameters<typeof P.applyOverrideChanges>[1]>) =>
+			expect(P.applyOverrideChanges(pack.id, { moves: [], deletes: [], writes: [], ...changes }))
+				.rejects;
+		await refused({ deletes: ['overrides'] }).toThrow('overrides is always there');
+		await refused({ moves: [{ from: 'overrides', to: 'server-overrides/x' }] }).toThrow(
+			'always there'
+		);
+		await refused({ moves: [{ from: 'overrides/a.txt', to: 'a.txt' }] }).toThrow(
+			'Config files go in'
+		);
+		await refused({ writes: [{ path: 'notes.txt', content: 'x' }] }).toThrow('Config files go in');
+		await expect(P.saveOverride(pack.id, 'notes.txt', enc('x'))).rejects.toThrow('is not inside');
+		expect(() => P.readOverrideText(pack.id, 'modrinth.index.json')).toThrow('is not inside');
+		expect(files(pack.id)).toEqual(['overrides/a.txt']);
+	});
+
+	it('keeps code to the owner in every folder', async () => {
+		const pack = await make();
+		const member = { id: 2, role: 'user' } as const;
+		for (const side of ['overrides', 'server-overrides', 'client-overrides'])
+			await expect(
+				P.applyOverrideChanges(
+					pack.id,
+					{ moves: [], deletes: [], writes: [{ path: `${side}/user_jvm_args.txt`, content: '' }] },
+					(path) => assertMayWriteCode(member, path)
+				)
+			).rejects.toThrow('Only the owner');
 	});
 });
 
@@ -575,7 +718,7 @@ describe('the .mrpack', () => {
 	it('round-trips: an export reads as a valid pack, and importing it gives the same pack back', async () => {
 		const pack = await make();
 		await P.addMod(pack.id, 'sodium');
-		await P.saveOverride(pack.id, 'config/a.toml', new TextEncoder().encode('x=1'));
+		await P.saveOverride(pack.id, 'overrides/config/a.toml', new TextEncoder().encode('x=1'));
 		const { bytes, filename } = await P.exportBytes(pack.id);
 		expect(filename).toMatch(/^My-pack-\d+\.mrpack$/);
 
@@ -595,7 +738,7 @@ describe('the .mrpack', () => {
 			['mods/fabric-api-9.0.jar', 'fabric-api', '9.0'],
 			['mods/sodium-2.0.jar', 'sodium', '2.0']
 		]);
-		expect(imported.overrides).toEqual([{ path: 'config/a.toml', size: 3 }]);
+		expect(imported.overrides).toEqual([{ path: 'overrides/config/a.toml', size: 3 }]);
 	});
 
 	it('keeps a file Modrinth does not know, and refuses a pack with no mod loader or a broken one', async () => {
@@ -623,15 +766,19 @@ describe('the .mrpack', () => {
 	it('takes from anyone but the owner only files Modrinth knows, and no code in the config files', async () => {
 		const pack = await make();
 		await P.addMod(pack.id, 'sodium');
-		await P.saveOverride(pack.id, 'config/a.toml', new TextEncoder().encode('x=1'));
+		await P.saveOverride(pack.id, 'overrides/config/a.toml', new TextEncoder().encode('x=1'));
 		const vetted = (await P.exportBytes(pack.id)).bytes;
 		const before = db.select().from(localPacks).all().length;
 
-		await P.saveOverride(pack.id, 'mods/evil.jar', new TextEncoder().encode('jar'));
+		await P.saveOverride(pack.id, 'overrides/mods/evil.jar', new TextEncoder().encode('jar'));
 		await expect(
 			P.importMrpack((await P.exportBytes(pack.id)).bytes, undefined, { vettedOnly: true })
-		).rejects.toThrow(/code in its config files, such as mods\/evil\.jar/);
-		await P.applyOverrideChanges(pack.id, { moves: [], deletes: ['mods/evil.jar'], writes: [] });
+		).rejects.toThrow(/code in its config files, such as overrides\/mods\/evil\.jar/);
+		await P.applyOverrideChanges(pack.id, {
+			moves: [],
+			deletes: ['overrides/mods/evil.jar'],
+			writes: []
+		});
 
 		db.insert(localPackFiles)
 			.values({
@@ -685,7 +832,7 @@ describe('duplicating and deleting', () => {
 	it('copies the files and config, and delete removes the pack, its rows and its folder', async () => {
 		const pack = await make();
 		await P.addMod(pack.id, 'lithium');
-		await P.saveOverride(pack.id, 'config/a.toml', new TextEncoder().encode('x'));
+		await P.saveOverride(pack.id, 'overrides/config/a.toml', new TextEncoder().encode('x'));
 		const copy = P.duplicatePack(pack.id);
 		expect(copy).toMatchObject({ name: 'My pack copy', revision: 1 });
 		expect(P.listFiles(copy.id)).toHaveLength(1);

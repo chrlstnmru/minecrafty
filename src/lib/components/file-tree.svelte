@@ -21,6 +21,8 @@
 		unselectableTitle,
 		nameClass,
 		dragDisabled,
+		folderDraggable = () => true,
+		folderTitle,
 		status,
 		folderStatus,
 		onselect,
@@ -48,6 +50,10 @@
 		nameClass?: (item: T) => string | undefined;
 		/** Rows that cannot be dragged (with `onmove` on, every other row can). */
 		dragDisabled?: (item: T) => boolean;
+		/** Whether the folder at this path can be dragged (with `onmove` on). */
+		folderDraggable?: (path: string) => boolean;
+		/** A tooltip for a folder's name; its name when not given. */
+		folderTitle?: (folder: FolderNode<T>) => string | undefined;
 		/** A coloured dot after a name, with what it means (also read out to screen readers). */
 		status?: (item: T) => Status | undefined;
 		folderStatus?: (folder: FolderNode<T>) => Status | undefined;
@@ -179,7 +185,7 @@
 				<div
 					role="presentation"
 					data-tree-row
-					draggable={onmove ? 'true' : undefined}
+					draggable={onmove && folderDraggable(node.path) ? 'true' : undefined}
 					ondragstart={(event) => drag.start(event, node.path, selection)}
 					ondragend={() => drag.end()}
 					onpointerdown={(event) => pressStart(event, node)}
@@ -222,7 +228,9 @@
 						class="min-w-0 flex-1 py-1.5 text-start text-sm"
 						onclick={() => onselectfolder?.(node.path)}
 					>
-						<span class="block truncate font-mono" title={node.name}>{node.name}</span>
+						<span class="block truncate font-mono" title={folderTitle?.(node) ?? node.name}
+							>{node.name}</span
+						>
 					</Collapsible.Trigger>
 					{@render dot(folderStatus?.(node))}
 					{@render folderTrailing?.(node)}
