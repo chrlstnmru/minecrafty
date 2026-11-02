@@ -21,7 +21,7 @@
 		modpackPreview,
 		modpackVersions,
 		searchModpacks
-	} from '#lib/modpacks.remote.js';
+	} from '#lib/modpacks/modpacks.remote.js';
 	import { importModpackSchema } from '#lib/schemas/modpack.js';
 
 	import EulaCheckbox from './eula-checkbox.svelte';

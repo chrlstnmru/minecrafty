@@ -10,18 +10,21 @@ import {
 } from 'node:fs';
 import { basename, dirname, join } from 'node:path';
 
+import { CONFIG_SIDES, inSide, isSide } from '#lib/config-sides.js';
 import { assertEditableSize, decodeText } from '#lib/editable.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
+import { cleanPath, under } from '#lib/paths.js';
+import { applyChanges, sha1, type Changes } from '#lib/server/change-set.js';
+import { dataDir } from '#lib/server/config.js';
+import { db } from '#lib/server/db/index.js';
+import { localPackFiles, localPacks } from '#lib/server/db/schema.js';
+import { isHostCode } from '#lib/server/host-code.js';
+import { isKnownVersion, latestBuild, loaderBuilds } from '#lib/server/loaders.js';
+import { pickFile, pickVersion, resolveMods } from '#lib/server/mod-resolver.js';
+import * as modrinth from '#lib/server/modrinth.js';
+import { zipChunks, type ZipEntry } from '#lib/server/zip-writer.js';
+import { Zip } from '#lib/server/zip.js';
 
-import { CONFIG_SIDES, inSide, isSide } from '../config-sides';
-import { cleanPath, under } from '../paths';
-import { applyChanges, sha1, type Changes } from './change-set';
-import { dataDir } from './config';
-import { db } from './db';
-import { localPackFiles, localPacks } from './db/schema';
-import { isHostCode } from './host-code';
-import { isKnownVersion, latestBuild, loaderBuilds } from './loaders';
-import { pickFile, pickVersion, resolveMods } from './mod-resolver';
 import {
 	LOADER_KEYS,
 	configEntries,
@@ -32,9 +35,6 @@ import {
 	type IndexFile,
 	type LoadedPack
 } from './modpacks';
-import * as modrinth from './modrinth';
-import { Zip } from './zip';
-import { zipChunks, type ZipEntry } from './zip-writer';
 
 // Modpacks made in the builder. A pack is rows in the database (its settings and the files it
 // downloads, each pinned to one version and its hashes) plus a folder of config files on disk.

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 
-	import { listLocalPacks } from '#lib/builder.remote.js';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerForm from '#lib/components/make-server-form.svelte';
@@ -9,6 +8,7 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
+	import { listLocalPacks } from '#lib/modpacks/builder.remote.js';
 
 	let { onDone }: { onDone: () => void } = $props();
 

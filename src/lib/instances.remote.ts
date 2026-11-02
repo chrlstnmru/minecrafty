@@ -3,6 +3,7 @@ import { error, invalid } from '@sveltejs/kit';
 import * as v from 'valibot';
 
 import { framesFrom } from '#lib/console-frames.js';
+import { backfillPackIcons } from '#lib/modpacks/server/modpacks.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
 import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
@@ -12,7 +13,6 @@ import { userFacing } from '#lib/server/http.js';
 import * as instances from '#lib/server/instances.js';
 import * as live from '#lib/server/live-server.js';
 import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib/server/loaders.js';
-import { backfillPackIcons } from '#lib/server/modpacks.js';
 
 const id = idSchema;
 

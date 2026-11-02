@@ -2,13 +2,13 @@
 	import { goto } from '$app/navigation';
 	import { toast } from 'svelte-sonner';
 
-	import { createLocalPack, packMinecraftVersions } from '#lib/builder.remote.js';
 	import Combobox from '#lib/components/combobox.svelte';
 	import SelectMenu from '#lib/components/select-menu.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Dialog from '#lib/components/ui/dialog/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
+	import { createLocalPack, packMinecraftVersions } from '#lib/modpacks/builder.remote.js';
 	import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 
 	let { open = $bindable(false) }: { open: boolean } = $props();

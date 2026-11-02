@@ -1,6 +1,7 @@
 import { command, query } from '$app/server';
 import * as v from 'valibot';
 
+import * as packs from '#lib/modpacks/server/local-packs.js';
 import { PACK_LOADERS } from '#lib/pack-loaders.js';
 import {
 	addPackModSchema,
@@ -23,7 +24,6 @@ import { assertMayWriteCode } from '#lib/server/host-code.js';
 import { userFacing } from '#lib/server/http.js';
 import { portConflict } from '#lib/server/instances.js';
 import { getMinecraftVersions } from '#lib/server/loaders.js';
-import * as packs from '#lib/server/local-packs.js';
 
 const packName = (id: number) => packs.getPack(id).name;
 

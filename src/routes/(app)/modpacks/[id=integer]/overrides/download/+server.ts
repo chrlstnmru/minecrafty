@@ -1,7 +1,7 @@
 import { error } from '@sveltejs/kit';
 
+import { exportOverridesZip } from '#lib/modpacks/server/local-packs.js';
 import { requirePanel } from '#lib/server/auth.js';
-import { exportOverridesZip } from '#lib/server/local-packs.js';
 import { zipStream } from '#lib/server/zip-writer.js';
 
 import type { RequestHandler } from './$types';

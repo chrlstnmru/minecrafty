@@ -5,8 +5,8 @@ const projects = vi.hoisted(() => ({
 	fail: false
 }));
 
-vi.mock('./modrinth', async (original) => ({
-	...(await original<typeof import('./modrinth')>()),
+vi.mock('#lib/server/modrinth.js', async (original) => ({
+	...(await original<typeof import('#lib/server/modrinth.js')>()),
 	getProjects: async () => {
 		if (projects.fail) throw new Error('Modrinth is down');
 		return projects.list;

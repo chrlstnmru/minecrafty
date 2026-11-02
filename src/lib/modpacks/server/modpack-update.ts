@@ -2,14 +2,18 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
-import { javaOverride } from './config';
-import { db } from './db';
-import { installedMods } from './db/schema';
-import { runUpdate } from './instance-job';
-import { getInstance, serverDir } from './instances';
-import { ensureJava, requiredJavaMajor } from './java';
-import { isRunning } from './live-server';
-import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
+import { javaOverride } from '#lib/server/config.js';
+import { db } from '#lib/server/db/index.js';
+import { installedMods } from '#lib/server/db/schema.js';
+import { runUpdate } from '#lib/server/instance-job.js';
+import { getInstance, serverDir } from '#lib/server/instances.js';
+import { ensureJava, requiredJavaMajor } from '#lib/server/java.js';
+import { isRunning } from '#lib/server/live-server.js';
+import { installServer, launchArgs, needsJavaToInstall, type Loader } from '#lib/server/loaders.js';
+import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from '#lib/server/mods.js';
+import { mergeStaged, removeStale } from '#lib/server/staged-install.js';
+import { lastOutcome } from '#lib/server/update-outcome.js';
+
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import {
 	downloadFiles,
@@ -22,11 +26,8 @@ import {
 	type IndexFile,
 	type LoadedPack
 } from './modpacks';
-import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from './mods';
 import { decide } from './pack-diff';
 import { packSourceOf, type ModpackInfo } from './pack-source';
-import { mergeStaged, removeStale } from './staged-install';
-import { lastOutcome } from './update-outcome';
 
 export { lastOutcome };
 

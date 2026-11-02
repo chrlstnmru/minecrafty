@@ -13,13 +13,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import { db } from '#lib/server/db/index.js';
+import { installedMods, instances } from '#lib/server/db/schema.js';
+import { zipStream, type ZipEntry } from '#lib/server/zip-writer.js';
+import { Zip } from '#lib/server/zip.js';
 import { runner } from '#test/fake-runner.js';
 import { makeInstance } from '#test/instance.js';
-
-import { db } from './db';
-import { installedMods, instances } from './db/schema';
-import { Zip } from './zip';
-import { zipStream, type ZipEntry } from './zip-writer';
 
 // Modrinth, the downloads, the runner and the installer are replaced: what matters is what an
 // update does to the server folder, the Mods tab and the instance, given two versions of a pack.
@@ -43,16 +42,19 @@ vi.mock('./local-packs', async (original) => ({
 	loadLocalPack: async (packId: number) => fake.builder.get(packId)!.loaded
 }));
 
-vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
+vi.mock(
+	'#lib/server/runner-client.js',
+	async () => (await import('#test/fake-runner.js')).fakeRunnerClient
+);
 
-vi.mock('./java', () => ({
+vi.mock('#lib/server/java.js', () => ({
 	ensureJava: async () => '/fake/java',
 	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17),
 	JAVA_MAJORS: [8, 17, 21, 25]
 }));
 
-vi.mock('./loaders', async (original) => ({
-	...(await original<typeof import('./loaders')>()),
+vi.mock('#lib/server/loaders.js', async (original) => ({
+	...(await original<typeof import('#lib/server/loaders.js')>()),
 	launchArgs: () => ['-jar', 'server.jar', 'nogui'],
 	installServer: async (o: { serverDir: string; mc: string; build?: string }) => {
 		fake.installs.push({ dir: o.serverDir, mc: o.mc, build: o.build });
@@ -60,7 +62,7 @@ vi.mock('./loaders', async (original) => ({
 	}
 }));
 
-vi.mock('./download', () => ({
+vi.mock('#lib/server/download.js', () => ({
 	downloadFile: async (dest: string, { url }: { url: string }) => {
 		if (url === fake.failUrl) throw new Error('Download failed (500)');
 		const content = fake.content.get(url);
@@ -69,8 +71,8 @@ vi.mock('./download', () => ({
 	}
 }));
 
-vi.mock('./modrinth', async (original) => ({
-	...(await original<typeof import('./modrinth')>()),
+vi.mock('#lib/server/modrinth.js', async (original) => ({
+	...(await original<typeof import('#lib/server/modrinth.js')>()),
 	versionsByHashes: async (hashes: string[]) =>
 		Object.fromEntries(hashes.filter((h) => fake.known.has(h)).map((h) => [h, fake.known.get(h)])),
 	getProjects: async () => [],
@@ -105,9 +107,9 @@ vi.mock('./modpacks', async (original) => ({
 
 const U = await import('./modpack-update');
 const { writeManifest, readManifest } = await import('./modpack-manifest');
-const { lastOutcome } = await import('./update-outcome');
-const { listBackups } = await import('./backups');
-const { getInstance, serverDir } = await import('./instances');
+const { lastOutcome } = await import('#lib/server/update-outcome.js');
+const { listBackups } = await import('#lib/server/backups.js');
+const { getInstance, serverDir } = await import('#lib/server/instances.js');
 type LoadedPack = Awaited<ReturnType<typeof import('./modpacks').loadModpack>>;
 
 const sha1 = (text: string) => createHash('sha1').update(text).digest('hex');

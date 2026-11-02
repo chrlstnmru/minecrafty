@@ -51,8 +51,8 @@ const version = (
 	dependencies: deps
 });
 
-vi.mock('./loaders', async (original) => ({
-	...(await original<typeof import('./loaders')>()),
+vi.mock('#lib/server/loaders.js', async (original) => ({
+	...(await original<typeof import('#lib/server/loaders.js')>()),
 	isKnownVersion: async (_loader: string, mc: string) => fake.mcs.includes(mc),
 	latestBuild: async (_loader: string, mc: string) => `build-${mc}`,
 	loaderBuilds: async (_loader: string, mc: string) => [`build-${mc}`, `older-${mc}`]
@@ -61,7 +61,7 @@ vi.mock('./loaders', async (original) => ({
 const searches = vi.hoisted(() => [] as Record<string, unknown>[]);
 const lookups = vi.hoisted(() => ({ versionLists: 0 }));
 
-vi.mock('./modrinth', () => ({
+vi.mock('#lib/server/modrinth.js', () => ({
 	searchProjects: async (opts: Record<string, unknown>) => {
 		searches.push(opts);
 		return { hits: [], total_hits: 0 };
@@ -89,8 +89,8 @@ vi.mock('./modrinth', () => ({
 		)
 }));
 
-const { db } = await import('./db');
-const { localPackFiles, localPacks } = await import('./db/schema');
+const { db } = await import('#lib/server/db/index.js');
+const { localPackFiles, localPacks } = await import('#lib/server/db/schema.js');
 const P = await import('./local-packs');
 
 // The config file API as seen from inside overrides/, where the cases below are written: paths go
@@ -134,9 +134,9 @@ const C = {
 		}
 	}
 };
-const { Zip } = await import('./zip');
+const { Zip } = await import('#lib/server/zip.js');
 const { overrideEntries, parseIndex } = await import('./modpacks');
-const { assertMayWriteCode } = await import('./host-code');
+const { assertMayWriteCode } = await import('#lib/server/host-code.js');
 
 beforeEach(() => {
 	db.delete(localPacks).run();

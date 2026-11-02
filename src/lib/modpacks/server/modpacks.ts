@@ -2,19 +2,19 @@ import { and, eq, isNotNull, isNull } from 'drizzle-orm';
 import { mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
 import { dirname, isAbsolute, join, resolve, sep } from 'node:path';
 
+import type { Loader } from '#lib/server/loaders.js';
+
 import { safeEntryName } from '#lib/safe-entry-name.js';
+import { dataDir } from '#lib/server/config.js';
+import { db } from '#lib/server/db/index.js';
+import { installedMods, instances } from '#lib/server/db/schema.js';
+import { downloadFile } from '#lib/server/download.js';
+import { runInstall, setProgress } from '#lib/server/install-progress.js';
+import { installBase, insertInstance, serverDir, type NewInstance } from '#lib/server/instances.js';
+import * as modrinth from '#lib/server/modrinth.js';
+import { Zip, type ZipEntry } from '#lib/server/zip.js';
 
-import type { Loader } from './loaders';
-
-import { dataDir } from './config';
-import { db } from './db';
-import { installedMods, instances } from './db/schema';
-import { downloadFile } from './download';
-import { runInstall, setProgress } from './install-progress';
-import { installBase, insertInstance, serverDir, type NewInstance } from './instances';
 import { writeManifest } from './modpack-manifest';
-import * as modrinth from './modrinth';
-import { Zip, type ZipEntry } from './zip';
 
 // Modrinth modpacks (.mrpack): a zip with modrinth.index.json (what to download), plus
 // overrides/ and server-overrides/ folders that are copied into the server as they are.

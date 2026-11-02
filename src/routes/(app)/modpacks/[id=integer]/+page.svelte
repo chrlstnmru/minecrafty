@@ -10,20 +10,6 @@
 	import { toast } from 'svelte-sonner';
 	import * as v from 'valibot';
 
-	import {
-		addPackMod,
-		applyPackVersionChange,
-		deleteLocalPack,
-		getLocalPack,
-		packLoaderBuilds,
-		packMinecraftVersions,
-		previewPackVersionChange,
-		removePackFile,
-		removePackIcon,
-		setPackFileVersion,
-		setPackLoaderVersion,
-		updateLocalPack
-	} from '#lib/builder.remote.js';
 	import Combobox from '#lib/components/combobox.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
@@ -41,6 +27,20 @@
 	import { Input } from '#lib/components/ui/input/index.js';
 	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import {
+		addPackMod,
+		applyPackVersionChange,
+		deleteLocalPack,
+		getLocalPack,
+		packLoaderBuilds,
+		packMinecraftVersions,
+		previewPackVersionChange,
+		removePackFile,
+		removePackIcon,
+		setPackFileVersion,
+		setPackLoaderVersion,
+		updateLocalPack
+	} from '#lib/modpacks/builder.remote.js';
 	import { cn } from '#lib/utils.js';
 
 	import type { PageProps } from './$types';
