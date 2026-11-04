@@ -36,7 +36,7 @@
 										{#snippet child({ props })}
 											<Sidebar.MenuAction
 												{...props}
-												class="data-[state=open]:rotate-90"
+												class="w-6 data-[state=open]:rotate-90"
 												aria-label="Toggle instances"
 											>
 												<ChevronRightIcon />

@@ -190,6 +190,7 @@
 							<Progress
 								value={settled ? 1 : counted(progress) ? progress!.done : null}
 								max={settled ? 1 : counted(progress) ? progress!.total : 1}
+								aria-label="Install progress for {inst.name}"
 							/>
 						</div>
 					{:else}

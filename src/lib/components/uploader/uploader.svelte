@@ -368,6 +368,7 @@
 									class="mt-1 h-1"
 									value={current.sent ?? 0}
 									max={Math.max(item.file.size, 1)}
+									aria-label="Upload progress for {item.path}"
 								/>
 							{/if}
 						</Attachment.Content>
@@ -391,7 +392,11 @@
 
 	{#if busy}
 		<div class="grid gap-1">
-			<Progress value={progress.bytes} max={Math.max(progress.totalBytes, 1)} />
+			<Progress
+				value={progress.bytes}
+				max={Math.max(progress.totalBytes, 1)}
+				aria-label="Upload progress"
+			/>
 			<p class="text-xs text-muted-foreground">
 				Uploading {progress.files} of {progress.totalFiles}
 				{progress.totalFiles === 1 ? 'file' : 'files'} · {size(progress.bytes)} of {size(
