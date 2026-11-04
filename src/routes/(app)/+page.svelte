@@ -7,6 +7,7 @@
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import { toast } from 'svelte-sonner';
 
+	import CountBadge from '#lib/components/count-badge.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import PageHeader from '#lib/components/page-header.svelte';
 	import Sparkline from '#lib/components/sparkline.svelte';
@@ -83,6 +84,7 @@
 	);
 
 	const running = $derived(rows.filter((r) => r.state === 'running' || r.state === 'stopping'));
+	const stopped = $derived(rows.filter((r) => r.shown === 'stopped' || r.shown === 'exited'));
 	const problems = $derived(rows.filter((r) => r.shown === 'failed' || r.shown === 'installing'));
 	const playersOnline = $derived(running.reduce((n, r) => n + (r.players ?? 0), 0));
 	const serversMemory = $derived(running.reduce((n, r) => n + (r.rss ?? 0), 0));
@@ -208,6 +210,7 @@
 		{#if seesHost}
 			<StatCard
 				title="CPU"
+				loading={!stats}
 				value={stats?.host.cpu != null ? formatPercent(stats.host.cpu) : '–'}
 				hint={stats
 					? `${stats.host.cores} cores · host up ${formatDuration(stats.host.uptime * 1000)}`
@@ -218,6 +221,7 @@
 
 			<StatCard
 				title="Memory"
+				loading={!stats}
 				value={stats ? `${gb(stats.host.memUsed)} of ${gb(stats.host.memTotal)}` : '–'}
 				hint={stats ? `Servers use ${gb(serversMemory)}` : undefined}
 			>
@@ -232,6 +236,7 @@
 
 			<StatCard
 				title="Storage"
+				loading={!stats}
 				value={stats ? `${formatBytes(diskUsed)} used` : '–'}
 				hint={stats
 					? `${formatBytes(stats.storage.free)} free · servers ${formatBytes(stats.storage.instances)} · backups ${formatBytes(stats.storage.backups)}`
@@ -286,12 +291,18 @@
 			<Card.Action>
 				<Tabs.Root bind:value={filter}>
 					<Tabs.List>
-						<Tabs.Trigger value="all">All ({rows.length})</Tabs.Trigger>
-						<Tabs.Trigger value="running">Running ({running.length})</Tabs.Trigger>
-						<Tabs.Trigger value="stopped">Stopped</Tabs.Trigger>
-						{#if problems.length}<Tabs.Trigger value="problems"
-								>Problems ({problems.length})</Tabs.Trigger
-							>{/if}
+						<Tabs.Trigger value="all">All <CountBadge count={rows.length} /></Tabs.Trigger>
+						<Tabs.Trigger value="running">
+							Running <CountBadge count={running.length} />
+						</Tabs.Trigger>
+						<Tabs.Trigger value="stopped">
+							Stopped <CountBadge count={stopped.length} />
+						</Tabs.Trigger>
+						{#if problems.length}
+							<Tabs.Trigger value="problems">
+								Problems <CountBadge count={problems.length} />
+							</Tabs.Trigger>
+						{/if}
 					</Tabs.List>
 				</Tabs.Root>
 			</Card.Action>
