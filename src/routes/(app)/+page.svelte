@@ -226,7 +226,7 @@
 				hint={stats ? `Servers use ${gb(serversMemory)}` : undefined}
 			>
 				<div class="grid gap-2">
-					<Progress value={memShare} max={100} />
+					<Progress value={memShare} max={100} aria-label="Memory used" />
 					<Sparkline
 						values={stats?.history.mem.map((m) => (m / stats.host.memTotal) * 100) ?? []}
 						class="text-success"
@@ -242,7 +242,7 @@
 					? `${formatBytes(stats.storage.free)} free · servers ${formatBytes(stats.storage.instances)} · backups ${formatBytes(stats.storage.backups)}`
 					: undefined}
 			>
-				<Progress value={diskShare} max={100} />
+				<Progress value={diskShare} max={100} aria-label="Storage used" />
 			</StatCard>
 		{/if}
 

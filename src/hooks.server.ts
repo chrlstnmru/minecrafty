@@ -28,6 +28,12 @@ const securityHeaders: Handle = async ({ event, resolve }) => {
 	return response;
 };
 
+// preloading every font would fetch all its subsets; the Latin one is on every page
+const preloadFont: Handle = ({ event, resolve }) =>
+	resolve(event, {
+		preload: ({ type, path }) => type !== 'font' || path.includes('urbanist-latin-wght')
+	});
+
 const handleAccess: Handle = async ({ event, resolve }) => {
 	const { pathname } = event.url;
 
@@ -64,7 +70,7 @@ const handleAccess: Handle = async ({ event, resolve }) => {
 	return resolve(event);
 };
 
-export const handle = sequence(securityHeaders, handleAccess);
+export const handle = sequence(preloadFont, securityHeaders, handleAccess);
 
 export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
