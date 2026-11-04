@@ -674,7 +674,7 @@
 									<PencilIcon />
 								</Button>
 								<Button
-									variant="ghost"
+									variant="destructive-ghost"
 									size="icon"
 									aria-label="Delete the folder {folder.path}"
 									onclick={() => deletePaths([folder.path])}
@@ -701,7 +701,7 @@
 							{:else}
 								{#if file.pending}
 									<Button
-										variant="ghost"
+										variant="destructive-ghost"
 										size="icon"
 										class="ms-auto"
 										aria-label="Discard the new file {file.path}"
@@ -746,7 +746,7 @@
 										<PencilIcon />
 									</Button>
 									<Button
-										variant="ghost"
+										variant="destructive-ghost"
 										size="icon"
 										aria-label="Delete {file.path}"
 										onclick={() => deletePaths([file.path])}
@@ -796,7 +796,9 @@
 							</Button>
 							<Separator orientation="vertical" />
 						{/if}
-						<Button variant="ghost" onclick={discardEdits} disabled={!unsaved}>Discard</Button>
+						<Button variant="destructive-ghost" onclick={discardEdits} disabled={!unsaved}
+							>Discard</Button
+						>
 						<Button onclick={save} loading={drafts.saving} disabled={!unsaved}>Save</Button>
 					{/if}
 				</div>
@@ -926,7 +928,7 @@
 		onclear={() => (selection = new Set())}
 	>
 		{#if canWrite}
-			<Button variant="ghost" size="sm" onclick={bulkDelete}>
+			<Button variant="destructive-ghost" size="sm" onclick={bulkDelete}>
 				<TrashIcon />Delete
 			</Button>
 			<Button

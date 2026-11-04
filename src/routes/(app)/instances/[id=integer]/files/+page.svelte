@@ -703,7 +703,7 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={remove}>Delete</AlertDialog.Action>
+			<AlertDialog.Action variant="destructive" onclick={remove}>Delete</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
@@ -723,7 +723,7 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={removeSelected}>Delete</AlertDialog.Action>
+			<AlertDialog.Action variant="destructive" onclick={removeSelected}>Delete</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>
@@ -775,7 +775,7 @@
 					</Button>
 				{/if}
 				<Button
-					variant="ghost"
+					variant="destructive-ghost"
 					onclick={() => editing && drafts.revert(editing)}
 					disabled={!editing || !drafts.dirty(editing)}
 				>
@@ -835,7 +835,7 @@
 		raised={drafts.changeCount > 0}
 		onclear={() => table.resetRowSelection(true)}
 	>
-		<Button variant="ghost" size="sm" onclick={() => (bulkOpen = true)}>
+		<Button variant="destructive-ghost" size="sm" onclick={() => (bulkOpen = true)}>
 			<TrashIcon />Delete
 		</Button>
 		<Button

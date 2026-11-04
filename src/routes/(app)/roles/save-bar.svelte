@@ -41,7 +41,9 @@
 			{/if}
 		</p>
 		<div class="flex gap-1.5">
-			<Button variant="ghost" size="sm" onclick={ondiscard} disabled={saving}>Discard</Button>
+			<Button variant="destructive-ghost" size="sm" onclick={ondiscard} disabled={saving}
+				>Discard</Button
+			>
 			<Button size="sm" onclick={onsave} loading={saving} disabled={!canSave}>Save changes</Button>
 		</div>
 	</div>

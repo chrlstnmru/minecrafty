@@ -111,7 +111,8 @@
 				</Card.Description>
 			</Card.Header>
 			<Card.Footer>
-				<Button variant="destructive" onclick={() => (confirmDelete = true)}>Delete instance</Button
+				<Button variant="destructive-ghost" onclick={() => (confirmDelete = true)}
+					>Delete instance</Button
 				>
 			</Card.Footer>
 		</Card.Root>
@@ -126,7 +127,7 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={remove}>Delete</AlertDialog.Action>
+			<AlertDialog.Action variant="destructive" onclick={remove}>Delete</AlertDialog.Action>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

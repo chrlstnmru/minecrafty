@@ -184,7 +184,8 @@
 							</Button>
 						{/if}
 						{#if canDelete}
-							<Button variant="destructive" size="sm" onclick={() => askDelete(inst)}>Delete</Button
+							<Button variant="destructive-ghost" size="sm" onclick={() => askDelete(inst)}
+								>Delete</Button
 							>
 						{/if}
 					{:else}
@@ -201,7 +202,7 @@
 								Stop
 							</Button>
 							<Button
-								variant="destructive"
+								variant="destructive-ghost"
 								size="sm"
 								onClickPromise={() => run(killInstance, inst.id)}
 							>
@@ -210,7 +211,9 @@
 						{:else}
 							<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>Start</Button>
 							{#if canDelete}
-								<Button variant="ghost" size="sm" onclick={() => askDelete(inst)}>Delete</Button>
+								<Button variant="destructive-ghost" size="sm" onclick={() => askDelete(inst)}
+									>Delete</Button
+								>
 							{/if}
 						{/if}
 					{/if}
@@ -233,6 +236,7 @@
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
 			<AlertDialog.Action
+				variant="destructive"
 				onclick={() => {
 					const id = deleting.id;
 					deleteOpen = false;

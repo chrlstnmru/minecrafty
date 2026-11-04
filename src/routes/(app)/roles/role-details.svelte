@@ -142,7 +142,7 @@
 			</Field.Field>
 			{#if !role.lock}
 				<div>
-					<Button variant="destructive" size="sm" onclick={ondelete}>Delete role</Button>
+					<Button variant="destructive-ghost" size="sm" onclick={ondelete}>Delete role</Button>
 				</div>
 			{/if}
 		</Tabs.Content>
