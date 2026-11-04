@@ -234,12 +234,12 @@
 								<DropdownMenu.Content align="end">
 									{#if canKill}
 										<DropdownMenu.Item variant="destructive" onSelect={() => askKill(inst)}>
-											Kill…
+											Kill
 										</DropdownMenu.Item>
 									{/if}
 									{#if canRemove}
 										<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(inst)}>
-											Delete…
+											Delete
 										</DropdownMenu.Item>
 									{/if}
 								</DropdownMenu.Content>
