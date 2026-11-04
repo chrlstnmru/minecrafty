@@ -11,12 +11,12 @@ export type Planned = { version: modrinth.ModrinthVersion; dependencyOf: string 
 export const pickVersion = (versions: modrinth.ModrinthVersion[]) =>
 	versions.find((v) => v.version_type === 'release') ?? versions[0];
 
-/** The file to download for a version. Its name comes from a third party and is joined onto a path, so it must be a plain `.jar` name. */
-export function pickFile(version: modrinth.ModrinthVersion) {
+/** The file to download for a version. Its name comes from a third party and is joined onto a path, so it must be a plain name with that `extension`. */
+export function pickFile(version: modrinth.ModrinthVersion, extension = '.jar') {
 	const file = version.files.find((f) => f.primary) ?? version.files[0];
 	if (!file) throw new Error(`Version ${version.version_number} has no files`);
 	const name = basename(file.filename);
-	if (name !== file.filename || name.startsWith('.') || !name.endsWith('.jar'))
+	if (name !== file.filename || name.startsWith('.') || !name.endsWith(extension))
 		throw new Error(`Refusing unexpected file name "${file.filename}"`);
 	return { ...file, filename: name };
 }

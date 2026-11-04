@@ -162,7 +162,9 @@ export async function startImport(opts: ImportOptions) {
 export async function startImportLoaded(
 	pack: LoadedPack,
 	opts: Omit<ImportOptions, 'versionId'>,
-	origin: Partial<NewInstance>
+	origin: Partial<NewInstance>,
+	/** last step of the install, while it still holds the new instance */
+	afterInstall?: (instanceId: number, progress: jobs.Report) => Promise<void>
 ) {
 	if (!opts.eulaAccepted) throw new Error('You must accept the Minecraft EULA');
 	const { summary } = pack;
@@ -180,9 +182,15 @@ export async function startImportLoaded(
 		eulaAccepted: true,
 		...origin
 	});
-	const started = await jobs.start(row.id, 'install', (tools) => finishImport(row, pack, tools), {
-		what: 'modpack import'
-	});
+	const started = await jobs.start(
+		row.id,
+		'install',
+		async (tools) => {
+			await finishImport(row, pack, tools);
+			await afterInstall?.(row.id, tools.progress);
+		},
+		{ what: 'modpack import' }
+	);
 	return started.row;
 }
 

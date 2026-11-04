@@ -148,6 +148,13 @@
       "when": 1793365220647,
       "tag": "0020_audit_log",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1793795739834,
+      "tag": "0021_pack_server_resource_pack",
+      "breakpoints": true
     }
   ]
 }

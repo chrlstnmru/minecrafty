@@ -1,4 +1,5 @@
 <script lang="ts">
+	import ChevronDownIcon from '@tabler/icons-svelte/icons/chevron-down';
 	import SearchIcon from '@tabler/icons-svelte/icons/search';
 	import SearchOffIcon from '@tabler/icons-svelte/icons/search-off';
 
@@ -6,11 +7,13 @@
 	import SideTags from '#lib/components/side-tags.svelte';
 	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
+	import * as ButtonGroup from '#lib/components/ui/button-group/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
-	import { searchPackMods } from '#lib/modpacks/builder.remote.js';
+	import { searchPackMods, searchPackResourcePacks } from '#lib/modpacks/builder.remote.js';
 	import { searchMods } from '#lib/mods.remote.js';
 	import { searchPacks } from '#lib/packs.remote.js';
 	import { UrlParam } from '#lib/url-param.svelte.js';
@@ -23,18 +26,27 @@
 		actionLabel,
 		installedLabel = 'In use',
 		installedIds,
+		actions = [],
 		onInstall
 	}: {
 		/** the instance's id, or the pack's when `kind` is `pack` */
 		instanceId: number;
-		/** `mod`: mods or plugins for an instance; `pack`: mods for a modpack made in the builder */
-		kind?: 'resourcepack' | 'mod' | 'pack';
+		/** `mod`: mods or plugins for an instance; `pack` and `pack-resourcepack`: for a modpack made in the builder, whose id `instanceId` then is */
+		kind?: 'resourcepack' | 'mod' | 'pack' | 'pack-resourcepack';
 		noun: string;
 		description: string;
 		actionLabel: string;
 		installedLabel?: string;
 		/** project ids that are already installed or in use */
 		installedIds: Set<string>;
+		/** other things to do with a result, offered in the menu of a split button next to the main one */
+		actions?: {
+			label: string;
+			/** project ids this was already done for, shown as `doneLabel` and disabled */
+			done: Set<string>;
+			doneLabel: string;
+			run: (projectId: string, title: string) => Promise<void>;
+		}[];
 		onInstall: (projectId: string, title: string, versionId?: string) => Promise<void>;
 	} = $props();
 
@@ -57,9 +69,11 @@
 	const results = $derived(
 		kind === 'pack'
 			? searchPackMods({ id: instanceId, query: debounced, limit })
-			: kind === 'mod'
-				? searchMods({ id: instanceId, query: debounced, limit })
-				: searchPacks({ id: instanceId, query: debounced, limit })
+			: kind === 'pack-resourcepack'
+				? searchPackResourcePacks({ id: instanceId, query: debounced, limit })
+				: kind === 'mod'
+					? searchMods({ id: instanceId, query: debounced, limit })
+					: searchPacks({ id: instanceId, query: debounced, limit })
 	);
 
 	let picker = $state<{ projectId: string; title: string } | null>(null);
@@ -106,7 +120,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="flex items-baseline gap-2">
 								<span class="truncate text-sm font-medium">{hit.title}</span>
-								{#if kind !== 'resourcepack'}
+								{#if kind === 'mod' || kind === 'pack'}
 									<SideTags
 										clientSide={hit.client_side}
 										serverSide={hit.server_side}
@@ -119,7 +133,56 @@
 							</div>
 							<p class="line-clamp-1 text-xs text-muted-foreground">{hit.description}</p>
 						</div>
-						{#if installedIds.has(hit.project_id)}
+						{#if actions.length}
+							{@const installed = installedIds.has(hit.project_id)}
+							{#if !installed}
+								<Button
+									variant="ghost"
+									size="sm"
+									onclick={() => {
+										picker = { projectId: hit.project_id, title: hit.title };
+										pickerOpen = true;
+									}}
+								>
+									Versions
+								</Button>
+							{/if}
+							<ButtonGroup.Root>
+								{#if installed}
+									<Button size="sm" variant="secondary" disabled>{installedLabel}</Button>
+								{:else}
+									<Button size="sm" onClickPromise={() => onInstall(hit.project_id, hit.title)}>
+										{actionLabel}
+									</Button>
+								{/if}
+								<DropdownMenu.Root>
+									<DropdownMenu.Trigger>
+										{#snippet child({ props })}
+											<Button
+												{...props}
+												size="icon-sm"
+												variant={installed ? 'secondary' : 'default'}
+												class="border-s border-s-background/20"
+												aria-label="More for {hit.title}"
+											>
+												<ChevronDownIcon />
+											</Button>
+										{/snippet}
+									</DropdownMenu.Trigger>
+									<DropdownMenu.Content align="end">
+										{#each actions as action (action.label)}
+											{#if action.done.has(hit.project_id)}
+												<DropdownMenu.Item disabled>{action.doneLabel}</DropdownMenu.Item>
+											{:else}
+												<DropdownMenu.Item onSelect={() => action.run(hit.project_id, hit.title)}>
+													{action.label}
+												</DropdownMenu.Item>
+											{/if}
+										{/each}
+									</DropdownMenu.Content>
+								</DropdownMenu.Root>
+							</ButtonGroup.Root>
+						{:else if installedIds.has(hit.project_id)}
 							<Badge variant="mint">{installedLabel}</Badge>
 						{:else}
 							<Button
