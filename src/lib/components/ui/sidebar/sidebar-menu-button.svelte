@@ -86,7 +86,7 @@
 {#if !tooltipContent}
 	{@render Button({})}
 {:else}
-	<Tooltip.Root>
+	<Tooltip.Root delayDuration={0}>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
 				{@render Button({ props })}

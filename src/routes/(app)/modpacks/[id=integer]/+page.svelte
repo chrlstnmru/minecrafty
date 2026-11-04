@@ -3,17 +3,22 @@
 	import { page } from '$app/state';
 	import ArrowLeftIcon from '@tabler/icons-svelte/icons/arrow-left';
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
+	import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
+	import PackageIcon from '@tabler/icons-svelte/icons/package';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
-	import TrashIcon from '@tabler/icons-svelte/icons/trash';
+	import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
 	import { useSearchParams } from 'runed/kit';
 	import { toast } from 'svelte-sonner';
 	import * as v from 'valibot';
 
+	import type { ModListItem } from '#lib/mod-list.js';
+
 	import Combobox from '#lib/components/combobox.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
+	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import PackConfigs from '#lib/components/pack-configs.svelte';
@@ -22,10 +27,8 @@
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
-	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import * as Table from '#lib/components/ui/table/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import {
 		addPackMod,
@@ -58,20 +61,41 @@
 	// one. It is read from the page URL, which the server has, so the right tab is in the HTML; runed
 	// only reads the URL in the browser, so it is used to write it.
 	const TABS = ['mods', 'configs', 'settings'] as const;
+	const VIEWS = ['installed', 'browse'] as const;
 	const params = useSearchParams(
-		v.object({ tab: v.optional(v.fallback(v.picklist(TABS), 'mods'), 'mods') }),
+		v.object({
+			tab: v.optional(v.fallback(v.picklist(TABS), 'mods'), 'mods'),
+			view: v.optional(v.fallback(v.picklist(VIEWS), 'installed'), 'installed')
+		}),
 		{ pushHistory: false, noScroll: true }
 	);
 	const wanted = $derived(page.url.searchParams.get('tab'));
 	const tab = $derived(
 		TABS.find((name) => name === wanted && (name !== 'settings' || canWrite)) ?? 'mods'
 	);
+	// Browse is for adding, so it is open only to those who may change the pack
+	const view = $derived(
+		(canWrite && VIEWS.find((name) => name === page.url.searchParams.get('view'))) || 'installed'
+	);
+	const sections = $derived([
+		{ name: 'mods', label: 'Mods', icon: PackageIcon, count: pack.files.length },
+		{ name: 'configs', label: 'Configs', icon: FileCodeIcon, count: pack.overrides.length },
+		...(canWrite ? [{ name: 'settings', label: 'Settings', icon: SettingsIcon }] : [])
+	] as { name: (typeof TABS)[number]; label: string; icon: typeof PackageIcon; count?: number }[]);
 	let makingServer = $state(false);
 	let deleting = $state(false);
 
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
+	const items = $derived<ModListItem[]>(
+		(pack.files ?? []).map((file) => ({
+			...file,
+			file: file.path,
+			enabled: true,
+			fromModrinth: !!file.projectId
+		}))
+	);
 	const inPack = $derived(
 		new Set((pack.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
 	);
@@ -118,8 +142,6 @@
 			toast.error(message(e, 'Could not change the version'));
 		}
 	}
-
-	const sideLabel = (side: string | null) => (side === 'unsupported' ? 'no' : (side ?? '?'));
 
 	let iconInput = $state<HTMLInputElement>();
 	let iconBusy = $state(false);
@@ -271,13 +293,37 @@
 	</div>
 
 	{#if pack}
-		<Tabs.Root value={tab} onValueChange={(value) => (params.tab = value as (typeof TABS)[number])}>
-			<Tabs.List>
-				<Tabs.Trigger value="mods">Mods ({pack.files.length})</Tabs.Trigger>
-				<Tabs.Trigger value="configs">Configs ({pack.overrides.length})</Tabs.Trigger>
-				{#if canWrite}<Tabs.Trigger value="settings">Settings</Tabs.Trigger>{/if}
-			</Tabs.List>
-		</Tabs.Root>
+		<nav class="-mx-1 flex gap-1 overflow-x-auto px-1 pb-1" aria-label="Pack sections">
+			{#each sections as section (section.name)}
+				<Button
+					variant={tab === section.name ? 'secondary' : 'ghost'}
+					size="sm"
+					href="?tab={section.name}"
+					aria-current={tab === section.name ? 'page' : undefined}
+					data-sveltekit-replacestate
+				>
+					<section.icon />{section.label}
+					{#if section.count !== undefined}
+						<Badge variant="muted" class="tabular-nums">{section.count}</Badge>
+					{/if}
+				</Button>
+			{/each}
+		</nav>
+
+		{#if tab === 'mods'}
+			<Tabs.Root
+				value={view}
+				onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
+			>
+				<Tabs.List>
+					<Tabs.Trigger value="installed"
+						>Installed <Badge variant="muted" class="tabular-nums">{pack.files.length}</Badge
+						></Tabs.Trigger
+					>
+					{#if canWrite}<Tabs.Trigger value="browse">Browse</Tabs.Trigger>{/if}
+				</Tabs.List>
+			</Tabs.Root>
+		{/if}
 
 		<!-- the header and tabs stay put; the active tab scrolls inside this. Rows are max-content: cards clip their own overflow, so with auto
 		     rows they would shrink to fit this box instead of letting it scroll. The padding and matching
@@ -286,114 +332,48 @@
 			class={cn(
 				'-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1',
 				// the only row is the config editor, which fills the height
-				tab === 'configs' && 'grid-rows-1'
+				tab === 'configs' && 'grid-rows-1',
+				// the mods card grows to its rows, up to the height left, then scrolls its own list
+				tab === 'mods' && 'flex flex-col'
 			)}
 		>
 			{#if tab === 'mods'}
-				<Card.Root>
-					<Card.Content class="px-0">
-						{#if pack.files.length}
-							<Table.Root>
-								<Table.Header>
-									<Table.Row>
-										<Table.Head class="ps-6">Mod</Table.Head>
-										<Table.Head>Version</Table.Head>
-										<Table.Head>Client</Table.Head>
-										<Table.Head>Server</Table.Head>
-										<Table.Head class="pe-6"><span class="sr-only">Actions</span></Table.Head>
-									</Table.Row>
-								</Table.Header>
-								<Table.Body>
-									{#each pack.files as file (file.id)}
-										<Table.Row>
-											<Table.Cell class="ps-6">
-												<div class="flex min-w-0 items-center gap-3">
-													{#if file.iconUrl}
-														<img
-															src={file.iconUrl}
-															alt=""
-															class="size-8 shrink-0 rounded-md bg-muted"
-														/>
-													{:else}
-														<div class="size-8 shrink-0 rounded-md bg-muted"></div>
-													{/if}
-													<div class="grid min-w-0">
-														<span class="truncate text-sm font-medium">{file.title}</span>
-														<span class="truncate text-xs text-muted-foreground">
-															{file.dependencyOf
-																? 'Needed by another mod'
-																: file.projectId
-																	? file.path
-																	: `${file.path} · not from Modrinth`}
-														</span>
-													</div>
-												</div>
-											</Table.Cell>
-											<Table.Cell>
-												{#if file.projectId && canWrite}
-													<Button
-														variant="ghost"
-														size="sm"
-														onclick={() => {
-															picker = {
-																projectId: file.projectId!,
-																title: file.title,
-																fileId: file.id,
-																versionId: file.versionId ?? ''
-															};
-															pickerOpen = true;
-														}}
-													>
-														{file.versionNumber}
-													</Button>
-												{:else}
-													<span class="text-sm text-muted-foreground"
-														>{file.versionNumber ?? '–'}</span
-													>
-												{/if}
-											</Table.Cell>
-											<Table.Cell class="text-muted-foreground"
-												>{sideLabel(file.clientSide)}</Table.Cell
-											>
-											<Table.Cell class="text-muted-foreground"
-												>{sideLabel(file.serverSide)}</Table.Cell
-											>
-											<Table.Cell class="pe-6 text-end">
-												{#if canWrite}
-													<Button
-														variant="ghost"
-														size="icon"
-														aria-label="Remove {file.title}"
-														onClickPromise={() => remove(file.id, file.title)}
-													>
-														<TrashIcon />
-													</Button>
-												{/if}
-											</Table.Cell>
-										</Table.Row>
-									{/each}
-								</Table.Body>
-							</Table.Root>
-						{:else}
-							<Empty.Root class="p-8">
-								<Empty.Header>
-									<Empty.Title>No mods yet</Empty.Title>
-									<Empty.Description>
-										{canWrite ? 'Search below and add the first one.' : 'This pack has no mods.'}
-									</Empty.Description>
-								</Empty.Header>
-							</Empty.Root>
-						{/if}
-					</Card.Content>
-				</Card.Root>
-
-				{#if canWrite}
+				{#if view === 'installed'}
+					<Card.Root class="min-h-0">
+						<Card.Header>
+							<Card.Title>Mods in this pack</Card.Title>
+							<Card.Description>
+								Each one is pinned to a version. Servers made from the pack install exactly these.
+							</Card.Description>
+						</Card.Header>
+						<Card.Content class="flex min-h-0 flex-1 flex-col">
+							<ModList
+								{items}
+								noun="mod"
+								onVersions={canWrite
+									? (mod) => {
+											picker = {
+												projectId: mod.projectId!,
+												title: mod.title,
+												fileId: mod.id,
+												versionId: mod.versionId ?? ''
+											};
+											pickerOpen = true;
+										}
+									: undefined}
+								onRemove={canWrite ? (mod) => remove(mod.id, mod.title) : undefined}
+								onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
+							/>
+						</Card.Content>
+					</Card.Root>
+				{:else}
 					<PackBrowser
 						kind="pack"
 						instanceId={id}
 						noun="mod"
 						description="Mods for {pack.loader} on Minecraft {pack.mcVersion}. Required dependencies come with them, each pinned to one version."
 						actionLabel="Add"
+						installedLabel="In pack"
 						installedIds={inPack}
 						onInstall={add}
 					/>
