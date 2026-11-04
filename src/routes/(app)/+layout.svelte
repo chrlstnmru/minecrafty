@@ -2,13 +2,14 @@
 	import AppSidebar from '#lib/components/app-sidebar.svelte';
 	import SiteHeader from '#lib/components/site-header.svelte';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { followNav } from '#lib/live.svelte.js';
+	import { listNavInstances } from '#lib/instances.remote.js';
+	import { followInstances } from '#lib/live.svelte.js';
 
 	import type { LayoutProps } from './$types';
 
 	let { children, data }: LayoutProps = $props();
 
-	followNav();
+	followInstances(() => listNavInstances());
 </script>
 
 <Sidebar.Provider

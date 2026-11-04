@@ -9,7 +9,8 @@ import { CLOSE_BAD_MESSAGE, CLOSE_SIGNED_OUT, type ServerMessage } from '#lib/re
 import * as A from '#lib/server/access.js';
 import { db } from '#lib/server/db/index.js';
 import { instances, roles, sessions, users } from '#lib/server/db/schema.js';
-import { navInstances, serverDir } from '#lib/server/instances.js';
+import * as jobs from '#lib/server/instance-jobs.js';
+import { serverDir, visibleInstance } from '#lib/server/instances.js';
 import { userFromToken } from '#lib/server/sessions.js';
 import * as U from '#lib/server/user-admin.js';
 import { makeInstance } from '#test/instance.js';
@@ -152,46 +153,64 @@ describe('SocketSession', () => {
 });
 
 describe('the panel feeds', () => {
-	it('lists only the instances the user may see, without being asked for one', async () => {
+	it('sends the revisions of only the instances the user may see', async () => {
 		const other = makeInstance({ name: 'not yours' }).id;
 		const { fake, sent } = socket();
-		const session = new SocketSession(fake, await signIn('viewer', ['console']));
-		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'instances' }));
+		const token = await signIn('viewer', ['console']);
+		const session = new SocketSession(fake, token);
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'revs' }));
 		await until(() => sent.length === 1);
-		const rows = (sent[0] as { frame: { id: number; permissions: string[] }[] }).frame;
-		expect(rows.map((r) => r.id)).toEqual([id]);
-		expect(rows[0].permissions).toEqual(['console']);
-		expect(rows.some((r) => r.id === other)).toBe(false);
+		const revs = (sent[0] as { frame: Record<string, string> }).frame;
+		const row = await visibleInstance(userFromToken(token)!, id);
+		expect(revs).toEqual({ [id]: row!.rev });
+		expect(other in revs).toBe(false);
 		session.close();
 	});
 
-	it('sends the list again only when it changed', async () => {
+	it('sends new revisions only when an instance changed', async () => {
 		const { fake, sent } = socket();
 		const session = new SocketSession(fake, await signIn('root', 'owner'));
-		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'instances' }));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'revs' }));
 		await until(() => sent.length === 1);
 		await Bun.sleep(1200);
 		expect(sent).toHaveLength(1);
 		db.update(instances).set({ name: 'renamed' }).where(eq(instances.id, id)).run();
 		await until(() => sent.length === 2, 3000);
-		expect((sent[1] as { frame: { name: string }[] }).frame[0].name).toBe('renamed');
+		const [before, after] = sent.map((m) => (m as { frame: Record<string, string> }).frame);
+		expect(after[id]).not.toBe(before[id]);
 		session.close();
 	});
 
-	it('sends a new nav revision only when a name or state changed', async () => {
+	it('sends job progress without changing the revision', async () => {
 		const { fake, sent } = socket();
-		const token = await signIn('root', 'owner');
-		const session = new SocketSession(fake, token);
-		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'nav' }));
-		await until(() => sent.length === 1);
-		const first = (sent[0] as { frame: string }).frame;
-		expect(first).toBe((await navInstances(userFromToken(token)!)).rev);
-		db.update(instances).set({ ramMaxMb: 4096 }).where(eq(instances.id, id)).run();
-		await Bun.sleep(1200);
-		expect(sent).toHaveLength(1);
-		db.update(instances).set({ name: 'renamed' }).where(eq(instances.id, id)).run();
-		await until(() => sent.length === 2, 3000);
-		expect((sent[1] as { frame: string }).frame).not.toBe(first);
+		const session = new SocketSession(fake, await signIn('root', 'owner'));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'revs' }));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 2, feed: 'progress' }));
+		const frames = (sub: number) =>
+			sent.flatMap((m) => (m.type === 'frame' && m.sub === sub ? [m.frame] : []));
+		await until(() => frames(1).length === 1 && frames(2).length === 1);
+		expect(frames(2)[0]).toEqual({});
+
+		let report: (done: number) => void = () => {};
+		let finish: () => void = () => {};
+		const { finished } = await jobs.start(id, 'install', ({ progress }) => {
+			report = (done) => progress('Downloading', { done, total: 4 });
+			return new Promise<void>((resolve) => (finish = resolve));
+		});
+		await until(() => frames(1).length === 2, 3000);
+		report(1);
+		await until(
+			() => frames(2).some((f) => (f as Record<string, { done: number }>)[id]?.done === 1),
+			3000
+		);
+		report(2);
+		await until(
+			() => frames(2).some((f) => (f as Record<string, { done: number }>)[id]?.done === 2),
+			3000
+		);
+		expect(frames(1)).toHaveLength(2);
+		finish();
+		await finished;
 		session.close();
 	});
 

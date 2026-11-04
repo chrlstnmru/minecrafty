@@ -34,16 +34,16 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import { liveInstances } from '#lib/live.svelte.js';
+	import { followInstances, liveProgress } from '#lib/live.svelte.js';
 
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const canCreate = $derived(data.panel.includes('instances.create'));
 	const canDelete = $derived(data.panel.includes('instances.delete'));
-	const first = await listInstances();
-	const liveRows = liveInstances();
-	const instances = $derived(liveRows.current ?? first);
+	const instances = $derived(await listInstances());
+	followInstances(() => listInstances());
+	const jobs = liveProgress();
 
 	// modpack servers made before their icon was kept get it from Modrinth, once
 	let askedIcons = false;
@@ -146,7 +146,7 @@
 			{@const installing = inst.installState === 'installing' || settled}
 			{@const failed = inst.installState === 'failed'}
 			{@const active = inst.state === 'running' || inst.state === 'stopping'}
-			{@const progress = inst.progress}
+			{@const progress = installing ? (jobs.current?.[inst.id] ?? inst.progress) : null}
 			<Card.Root>
 				<Card.Header>
 					<div class="flex min-w-0 items-center gap-3">

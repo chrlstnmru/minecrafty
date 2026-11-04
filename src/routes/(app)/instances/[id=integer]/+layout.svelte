@@ -24,7 +24,7 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import { liveInstances, liveStats } from '#lib/live.svelte.js';
+	import { followInstance, liveStats } from '#lib/live.svelte.js';
 	import { MODULE_PERMISSION } from '#lib/permissions.js';
 
 	import type { LayoutProps } from './$types';
@@ -36,9 +36,8 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(await getInstance(id));
-	const all = liveInstances();
-	const row = $derived(all.current?.find((i) => i.id === id));
-	const status = $derived(row?.state ?? 'stopped');
+	followInstance(() => getInstance(id));
+	const status = $derived(instance.state);
 
 	// what the running server is using, a few seconds old
 	const live = liveStats();
@@ -55,7 +54,7 @@
 			.filter(Boolean)
 			.join(' · ')
 	);
-	const installState = $derived(row?.installState ?? 'ready');
+	const installState = $derived(instance.installState);
 	const active = $derived(status === 'running' || status === 'stopping');
 	const granted = $derived(instance?.permissions ?? []);
 	const canControl = $derived(granted.includes('control'));
