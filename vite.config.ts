@@ -6,13 +6,14 @@ import { defineConfig } from 'vite';
 
 import { SOCKET_PATH } from './src/lib/realtime/protocol';
 import { DEV_SOCKET_PORT } from './src/lib/realtime/server/dev-port';
+import { devSocketProxy } from './src/lib/realtime/server/dev-proxy';
 
 export default defineConfig({
 	// the release workflow sets the tag; any other build reports itself as "dev"
 	define: { __MINECRAFTY_VERSION__: JSON.stringify(process.env.MINECRAFTY_BUILD_VERSION ?? '') },
-	// the live feeds' socket runs on a server of its own in dev (see realtime/server/serve.ts)
-	server: { proxy: { [SOCKET_PATH]: { target: `ws://127.0.0.1:${DEV_SOCKET_PORT}`, ws: true } } },
 	plugins: [
+		// the live feeds' socket runs on a server of its own in dev (see realtime/server/serve.ts)
+		devSocketProxy(SOCKET_PATH, DEV_SOCKET_PORT),
 		tailwindcss(),
 		// resizes and re-encodes the loader icons at build time
 		enhancedImages(),
