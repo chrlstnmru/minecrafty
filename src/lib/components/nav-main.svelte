@@ -4,12 +4,12 @@
 
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { listInstances } from '#lib/instances.remote.js';
+	import { liveInstances } from '#lib/live.svelte.js';
 	import { isActive, type NavItem } from '#lib/nav.js';
 
 	let { items }: { items: NavItem[] } = $props();
 
-	const instances = listInstances();
+	const instances = liveInstances();
 </script>
 
 <Sidebar.Group>

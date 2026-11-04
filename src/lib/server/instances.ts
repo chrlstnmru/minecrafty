@@ -6,6 +6,7 @@ import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
 
 import { canRetryInstall } from '#lib/instance-origin.js';
 
+import { permissionsFor, visibleInstanceIds, type Actor } from './access';
 import { backupsDir, instanceDir, runnerCommand, serverDir } from './config';
 import { db } from './db';
 import { instances } from './db/schema';
@@ -179,6 +180,16 @@ export async function listInstances() {
 		})
 	);
 }
+
+/** The instances `user` may see, each with what they may do on it, for the pages' lists. */
+export async function visibleInstances(user: Actor) {
+	const visible = visibleInstanceIds(user);
+	return (await listInstances())
+		.filter((r) => !visible || visible.includes(r.id))
+		.map((r) => ({ ...r, permissions: permissionsFor(user, r.id) }));
+}
+
+export type VisibleInstance = Awaited<ReturnType<typeof visibleInstances>>[number];
 
 /** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */
 export async function javaFor(inst: Instance): Promise<JavaMajor> {

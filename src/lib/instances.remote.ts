@@ -5,7 +5,7 @@ import * as v from 'valibot';
 import { backfillPackIcons } from '#lib/modpacks/server/modpacks.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
-import { permissionsFor, visibleInstanceIds } from '#lib/server/access.js';
+import { permissionsFor } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
 import { requireInstance, requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
@@ -15,23 +15,8 @@ import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib
 
 const id = idSchema;
 
-// there is no runner event for "instance changed", so the stream samples the panel's view of them
-export const listInstances = query.live(async function* () {
-	const user = requireUser();
-	let last = '';
-	while (true) {
-		const visible = visibleInstanceIds(user);
-		const rows = (await instances.listInstances())
-			.filter((r) => !visible || visible.includes(r.id))
-			.map((r) => ({ ...r, permissions: permissionsFor(user, r.id) }));
-		const json = JSON.stringify(rows);
-		if (json !== last) {
-			last = json;
-			yield rows;
-		}
-		await Bun.sleep(1000);
-	}
-});
+/** The instances the user may see as they are now; the `instances` feed keeps them current. */
+export const listInstances = query(async () => instances.visibleInstances(requireUser()));
 
 export const getInstance = query(id, async (instanceId) => {
 	const user = requireInstance(instanceId);

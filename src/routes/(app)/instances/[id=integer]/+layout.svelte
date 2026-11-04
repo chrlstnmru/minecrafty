@@ -20,13 +20,12 @@
 	import {
 		getInstance,
 		killInstance,
-		listInstances,
 		restartInstance,
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
+	import { liveInstances, liveStats } from '#lib/live.svelte.js';
 	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
-	import { liveStats } from '#lib/stats.remote.js';
 
 	import type { LayoutProps } from './$types';
 
@@ -37,7 +36,7 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(await getInstance(id));
-	const all = listInstances();
+	const all = liveInstances();
 	const row = $derived(all.current?.find((i) => i.id === id));
 	const status = $derived(row?.state ?? 'stopped');
 

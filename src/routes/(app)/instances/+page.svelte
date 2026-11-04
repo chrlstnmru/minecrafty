@@ -26,13 +26,16 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
+	import { liveInstances } from '#lib/live.svelte.js';
 
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const canCreate = $derived(data.panel.includes('instances.create'));
 	const canDelete = $derived(data.panel.includes('instances.delete'));
-	const instances = $derived(await listInstances());
+	const first = await listInstances();
+	const liveRows = liveInstances();
+	const instances = $derived(liveRows.current ?? first);
 
 	// modpack servers made before their icon was kept get it from Modrinth, once
 	let askedIcons = false;

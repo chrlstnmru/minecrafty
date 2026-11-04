@@ -11,7 +11,8 @@
 	import { Label } from '#lib/components/ui/label/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { isFromPack } from '#lib/instance-origin.js';
-	import { getInstance, listInstances } from '#lib/instances.remote.js';
+	import { getInstance } from '#lib/instances.remote.js';
+	import { liveInstances } from '#lib/live.svelte.js';
 	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
 	import { updateKind } from '#lib/versions.js';
 
@@ -19,7 +20,7 @@
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the page and the browser hydrates the same markup
 	const info = $derived(await loaderStatus(id));
-	const all = listInstances();
+	const all = liveInstances();
 	const row = $derived(all.current?.find((i) => i.id === id));
 	const installing = $derived(row?.installState === 'installing');
 	const running = $derived(row?.state === 'running' || row?.state === 'stopping');

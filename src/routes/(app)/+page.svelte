@@ -27,14 +27,17 @@
 		startInstance,
 		stopInstance
 	} from '#lib/instances.remote.js';
-	import { liveStats, overviewNow } from '#lib/stats.remote.js';
+	import { liveInstances, liveStats } from '#lib/live.svelte.js';
+	import { overviewNow } from '#lib/stats.remote.js';
 
 	import type { PageProps } from './$types';
 
 	let { data }: PageProps = $props();
 	const canCreate = $derived(data.panel.includes('instances.create'));
 	const seesHost = $derived(data.panel.includes('host.view'));
-	const instances = $derived(await listInstances());
+	const first = await listInstances();
+	const liveRows = liveInstances();
+	const instances = $derived(liveRows.current ?? first);
 	const live = liveStats();
 	const stats = $derived(live.current);
 	const overview = overviewNow();

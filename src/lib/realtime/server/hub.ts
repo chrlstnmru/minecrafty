@@ -11,13 +11,17 @@ import {
 	CLOSE_SIGNED_OUT,
 	type FeedFrames,
 	type FeedName,
+	type InstanceFeed,
+	type PanelFeed,
 	type ServerMessage
 } from '#lib/realtime/protocol.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { check } from '#lib/server/access.js';
+import { visibleInstances } from '#lib/server/instances.js';
 import * as live from '#lib/server/live-server.js';
 import { followLog } from '#lib/server/logs.js';
-import { sessionToken, userFromToken } from '#lib/server/sessions.js';
+import { sessionToken, userFromToken, type SessionUser } from '#lib/server/sessions.js';
+import { statsFor } from '#lib/server/stats.js';
 import { sleep } from '#lib/sleep.js';
 
 export type Socket = {
@@ -27,12 +31,17 @@ export type Socket = {
 	close(code: number, reason: string): void;
 };
 
-type Feed<F extends FeedName> = {
+type ForInstance<F extends InstanceFeed> = {
 	permission: InstancePermission;
 	open(instanceId: number, signal: AbortSignal): AsyncIterable<FeedFrames[F]>;
 };
 
-const feeds: { [F in FeedName]: Feed<F> } = {
+/** `user` is looked up again on every call, so a role change shows in the next frame. */
+type ForPanel<F extends PanelFeed> = {
+	open(user: () => SessionUser | null, signal: AbortSignal): AsyncIterable<FeedFrames[F]>;
+};
+
+const instanceFeeds: { [F in InstanceFeed]: ForInstance<F> } = {
 	console: {
 		permission: 'console',
 		open: (id, signal) =>
@@ -45,12 +54,41 @@ const feeds: { [F in FeedName]: Feed<F> } = {
 	log: { permission: 'logs', open: (id, signal) => followLog(id, 500, signal) }
 };
 
+/** Yields `read(user)` every `ms`, skipping a value equal to the last one sent. */
+async function* sample<T>(
+	user: () => SessionUser | null,
+	read: (user: SessionUser) => Promise<T>,
+	ms: number,
+	signal: AbortSignal
+) {
+	let last = '';
+	while (!signal.aborted) {
+		const who = user();
+		if (!who) return;
+		const value = await read(who);
+		const json = JSON.stringify(value);
+		if (json !== last) {
+			last = json;
+			yield value;
+		}
+		await sleep(ms, signal);
+	}
+}
+
+// there is no event for "an instance changed", so both sample the panel's view of things
+const panelFeeds: { [F in PanelFeed]: ForPanel<F> } = {
+	instances: { open: (user, signal) => sample(user, visibleInstances, 1000, signal) },
+	stats: { open: (user, signal) => sample(user, statsFor, 3000, signal) }
+};
+
+const isPanel = (feed: FeedName): feed is PanelFeed => feed in panelFeeds;
+
 const messageSchema = v.variant('type', [
 	v.object({
 		type: v.literal('subscribe'),
 		sub: v.pipe(v.number(), v.integer(), v.minValue(0)),
-		feed: v.picklist(Object.keys(feeds) as FeedName[]),
-		instance: idSchema
+		feed: v.picklist([...Object.keys(instanceFeeds), ...Object.keys(panelFeeds)] as FeedName[]),
+		instance: v.optional(idSchema)
 	}),
 	v.object({ type: v.literal('unsubscribe'), sub: v.pipe(v.number(), v.integer(), v.minValue(0)) })
 ]);
@@ -75,7 +113,7 @@ export function admit(request: Request): { token: string } | Response {
 	return { token: sessionToken(request.headers.get('cookie')) ?? '' };
 }
 
-type Running = { feed: FeedName; instance: number; stop: AbortController };
+type Running = { feed: FeedName; instance?: number; stop: AbortController };
 
 /** The feeds of one socket. Call {@link SocketSession.close} when the socket closes. */
 export class SocketSession {
@@ -125,15 +163,18 @@ export class SocketSession {
 		for (const sub of [...this.#running.keys()]) this.#stop(sub);
 	}
 
-	#refusal(user: NonNullable<ReturnType<typeof userFromToken>>, feed: FeedName, instance: number) {
-		const result = check(user, instance, feeds[feed].permission);
+	#refusal(user: SessionUser, feed: FeedName, instance: number | undefined) {
+		// a panel feed only shows what its user may see, so being signed in is enough
+		if (isPanel(feed)) return null;
+		if (instance === undefined) return { status: 400, message: 'This feed needs an instance' };
+		const result = check(user, instance, instanceFeeds[feed].permission);
 		if (result === 'unknown') return { status: 404, message: 'Instance not found' };
 		if (result === 'denied')
 			return { status: 403, message: 'You do not have permission to see this' };
 		return null;
 	}
 
-	#start(sub: number, feed: FeedName, instance: number) {
+	#start(sub: number, feed: FeedName, instance: number | undefined) {
 		const user = userFromToken(this.token);
 		if (!user) {
 			this.socket.close(CLOSE_SIGNED_OUT, 'Signed out');
@@ -148,7 +189,10 @@ export class SocketSession {
 
 		const stop = new AbortController();
 		this.#running.set(sub, { feed, instance, stop });
-		void this.#pump(sub, feeds[feed].open(instance, stop.signal), stop.signal);
+		const frames = isPanel(feed)
+			? panelFeeds[feed].open(() => userFromToken(this.token), stop.signal)
+			: instanceFeeds[feed].open(instance!, stop.signal);
+		void this.#pump(sub, frames as AsyncIterable<FeedFrames[FeedName]>, stop.signal);
 	}
 
 	async #pump(sub: number, frames: AsyncIterable<FeedFrames[FeedName]>, signal: AbortSignal) {

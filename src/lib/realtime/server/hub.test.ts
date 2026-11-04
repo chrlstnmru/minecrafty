@@ -1,3 +1,4 @@
+import { eq } from 'drizzle-orm';
 import { appendFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
@@ -146,5 +147,55 @@ describe('SocketSession', () => {
 		db.delete(sessions).run();
 		session.recheck();
 		expect(closed).toEqual([CLOSE_SIGNED_OUT]);
+	});
+});
+
+describe('the panel feeds', () => {
+	it('lists only the instances the user may see, without being asked for one', async () => {
+		const other = makeInstance({ name: 'not yours' }).id;
+		const { fake, sent } = socket();
+		const session = new SocketSession(fake, await signIn('viewer', ['console']));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'instances' }));
+		await until(() => sent.length === 1);
+		const rows = (sent[0] as { frame: { id: number; permissions: string[] }[] }).frame;
+		expect(rows.map((r) => r.id)).toEqual([id]);
+		expect(rows[0].permissions).toEqual(['console']);
+		expect(rows.some((r) => r.id === other)).toBe(false);
+		session.close();
+	});
+
+	it('sends the list again only when it changed', async () => {
+		const { fake, sent } = socket();
+		const session = new SocketSession(fake, await signIn('root', 'owner'));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'instances' }));
+		await until(() => sent.length === 1);
+		await Bun.sleep(1200);
+		expect(sent).toHaveLength(1);
+		db.update(instances).set({ name: 'renamed' }).where(eq(instances.id, id)).run();
+		await until(() => sent.length === 2, 3000);
+		expect((sent[1] as { frame: { name: string }[] }).frame[0].name).toBe('renamed');
+		session.close();
+	});
+
+	it('hides the host from a user without host.view', async () => {
+		const { fake, sent } = socket();
+		const session = new SocketSession(fake, await signIn('viewer', ['console']));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'stats' }));
+		await until(() => sent.length === 1, 5000);
+		expect(sent[0]).toMatchObject({
+			sub: 1,
+			frame: { host: { cpu: null, cores: 0 }, storage: { total: 0 } }
+		});
+		session.close();
+	});
+
+	it('refuses an instance feed asked for without an instance', async () => {
+		const { fake, sent } = socket();
+		const session = new SocketSession(fake, await signIn('root', 'owner'));
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'log' }));
+		expect(sent).toEqual([
+			{ type: 'error', sub: 1, status: 400, message: 'This feed needs an instance' }
+		]);
+		session.close();
 	});
 });

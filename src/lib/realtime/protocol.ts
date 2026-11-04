@@ -2,15 +2,27 @@
 // each subscription has an id the page picks, and frames come back tagged with it.
 
 import type { ConsoleFrame } from '#lib/console-frames.js';
+import type { VisibleInstance } from '#lib/server/instances.js';
 import type { LogFrame } from '#lib/server/logs.js';
+import type { Snapshot } from '#lib/server/stats.js';
 
 export const SOCKET_PATH = '/_ws';
 
-export type FeedFrames = { console: ConsoleFrame; log: LogFrame };
+export type FeedFrames = {
+	console: ConsoleFrame;
+	log: LogFrame;
+	instances: VisibleInstance[];
+	stats: Snapshot;
+};
 export type FeedName = keyof FeedFrames;
 
+/** Feeds about the whole panel rather than one instance; they are subscribed without an instance. */
+export const PANEL_FEEDS = ['instances', 'stats'] as const satisfies readonly FeedName[];
+export type PanelFeed = (typeof PANEL_FEEDS)[number];
+export type InstanceFeed = Exclude<FeedName, PanelFeed>;
+
 export type ClientMessage =
-	| { type: 'subscribe'; sub: number; feed: FeedName; instance: number }
+	| { type: 'subscribe'; sub: number; feed: FeedName; instance?: number }
 	| { type: 'unsubscribe'; sub: number };
 
 export type FeedError = { status: number; message: string };
