@@ -19,7 +19,7 @@
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
-	import { TAIL_LINES } from '#lib/log-files.js';
+	import { newLines, TAIL_LINES } from '#lib/log-files.js';
 	import { listLogs, readLog, searchLog } from '#lib/logs.remote.js';
 	import { liveFeed } from '#lib/realtime/feed.svelte.js';
 
@@ -71,11 +71,29 @@
 	const widest = $derived(rows.reduce((max, row) => Math.max(max, row.text.length), 0));
 
 	let epoch: number | null = null;
+	let reloading: Promise<void> | null = null;
+	let reloadAgain = false;
 
 	$effect(() => {
 		void tail?.current;
 		appended = [];
 	});
+
+	// frames are ignored while the log is read again, so reads never pile up
+	function reload() {
+		appended = [];
+		if (reloading) {
+			reloadAgain = true;
+			return;
+		}
+		reloading = (tail?.refresh() ?? Promise.resolve()).finally(() => {
+			reloading = null;
+			if (reloadAgain) {
+				reloadAgain = false;
+				reload();
+			}
+		});
+	}
 
 	$effect(() => {
 		if (!live) {
@@ -87,18 +105,14 @@
 		untrack(() => {
 			if (epoch !== null && frame.epoch !== epoch) {
 				epoch = frame.epoch;
-				appended = [];
-				void tail?.refresh();
+				reload();
 				return;
 			}
 			epoch = frame.epoch;
-			const known = (tail?.current?.total ?? 0) + appended.length;
-			const fresh = frame.lines.filter((line) => line.n > known);
-			if (fresh.length) appended = [...appended, ...fresh].slice(-MAX_LIVE_LINES);
-			if (frame.total !== known + fresh.length) {
-				appended = [];
-				void tail?.refresh();
-			}
+			if (!tail?.current || reloading) return;
+			const fresh = newLines(tail.current.total + appended.length, frame);
+			if (fresh === 'reload') reload();
+			else if (fresh.length) appended = [...appended, ...fresh].slice(-MAX_LIVE_LINES);
 		});
 	});
 
