@@ -6,6 +6,7 @@ import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
 import { serveSocketsForDev, serveSocketsWithBun } from '#lib/realtime/server/serve.js';
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
+import { restartBackground } from '#lib/server/background.js';
 import { recoverInterruptedJobs } from '#lib/server/instance-jobs.js';
 import { autoStartInstances } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
@@ -76,16 +77,19 @@ export const init: ServerInit = () => {
 		return user ? { id: user.id, name: user.username } : null;
 	});
 	if (!hasUsers()) announceSetupToken();
-	pruneAudit();
-	setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
 	recoverInterruptedJobs();
 	sweepUploads();
-	// scheduled tasks run from here on, once a minute
-	startScheduler();
-	// CPU, memory, players and folder sizes, for the dashboard
-	startStats();
-	// a newer Minecrafty release, shown to the owner; nothing is installed unless they ask
-	startUpdateChecks();
+	restartBackground((onStop) => {
+		pruneAudit();
+		const prune = setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
+		onStop(() => clearInterval(prune));
+		// scheduled tasks run from here on, once a minute
+		onStop(startScheduler());
+		// CPU, memory, players and folder sizes, for the dashboard
+		onStop(startStats());
+		// a newer Minecrafty release, shown to the owner; nothing is installed unless they ask
+		onStop(startUpdateChecks());
+	});
 	// don't hold up the panel while Java servers boot
 	void autoStartInstances();
 	// On SIGTERM or SIGINT the adapter stops taking requests, then waits for the process to end on
