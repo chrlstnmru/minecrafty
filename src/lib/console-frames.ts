@@ -20,12 +20,14 @@ export const OVERLAP_LINES = 200;
 type Subscription = { nextBatch(): Promise<ServerMessage[] | null>; close(): void };
 
 /**
- * The frames of one instance's console, for ever. `subscribe` reaches its runner (null when there
- * is none yet, or it has exited); `sleep` waits before looking again.
+ * The frames of one instance's console until `signal` aborts. `subscribe` reaches its runner (null
+ * when there is none yet, or it has exited); `sleep` waits before looking again and should return
+ * early once `signal` aborts.
  */
 export async function* framesFrom(
 	subscribe: (resume: { after: number; run?: number }) => Promise<Subscription | null>,
-	sleep: (ms: number) => Promise<unknown>
+	sleep: (ms: number) => Promise<unknown>,
+	signal?: AbortSignal
 ): AsyncGenerator<ConsoleFrame> {
 	let state: ConsoleFrame['state'] = 'stopped';
 	let run: number | null = null;
@@ -35,8 +37,12 @@ export async function* framesFrom(
 	yield { state, run, lines: tail };
 
 	// the runner may not exist yet (or exit and be replaced), so keep looking for one
-	while (true) {
+	while (!signal?.aborted) {
 		const sub = await subscribe({ after, run: run ?? undefined });
+		if (signal?.aborted) {
+			sub?.close();
+			return;
+		}
 		if (!sub) {
 			if (state !== 'stopped') {
 				state = 'stopped';
@@ -45,9 +51,12 @@ export async function* framesFrom(
 			await sleep(1000);
 			continue;
 		}
+		// a quiet server sends nothing, so a stop must end the wait for the next batch
+		const stop = () => sub.close();
+		signal?.addEventListener('abort', stop, { once: true });
 		try {
 			let batch;
-			while ((batch = await sub.nextBatch())) {
+			while ((batch = await sub.nextBatch()) && !signal?.aborted) {
 				const fresh: ConsoleLine[] = [];
 				for (const msg of batch) {
 					if (msg.type === 'log') {
@@ -66,6 +75,7 @@ export async function* framesFrom(
 				tail = tail.slice(-OVERLAP_LINES);
 			}
 		} finally {
+			signal?.removeEventListener('abort', stop);
 			sub.close();
 		}
 	}

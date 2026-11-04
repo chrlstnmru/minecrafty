@@ -13,7 +13,8 @@
 		type ConsoleFrame,
 		type ConsoleRow
 	} from '#lib/console-frames.js';
-	import { consoleStream, sendCommand } from '#lib/instances.remote.js';
+	import { sendCommand } from '#lib/instances.remote.js';
+	import { liveFeed } from '#lib/realtime/feed.svelte.js';
 
 	let { id, status = $bindable('stopped') }: { id: number; status?: string } = $props();
 
@@ -26,7 +27,7 @@
 		if (add.length) rows = [...rows, ...add].slice(-MAX_LINES);
 	}
 
-	const stream = $derived(consoleStream(id));
+	const stream = $derived(liveFeed('console', id));
 
 	$effect(() => {
 		// restart the view when switching instances
@@ -130,11 +131,14 @@
 				{status === 'stopped' ? 'The server is not running.' : 'Waiting for output…'}
 			</div>
 		{/each}
+		{#if stream.error}
+			<p class="mt-2 font-sans text-destructive" role="alert">{stream.error.message}</p>
+		{/if}
 	</div>
 	<form onsubmit={submit} class="flex gap-2">
 		<InputGroup.Root>
 			<InputGroup.Addon align="inline-start">
-				{#if !stream.connected}
+				{#if !stream.connected && !stream.error}
 					<Spinner />
 				{:else}
 					<MathGreaterIcon />

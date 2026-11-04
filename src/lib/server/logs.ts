@@ -1,6 +1,7 @@
 import { lstatSync, readdirSync, type Stats } from 'node:fs';
 
 import { LOG_NAME } from '../log-files';
+import { sleep } from '../sleep';
 import { resolveSafe } from './files';
 
 export type LogFile = { name: string; size: number; modified: number; compressed: boolean };
@@ -136,7 +137,11 @@ async function countLines(absolute: string) {
  * are appended. Only complete lines are sent. A live query keeps just the latest pending frame,
  * so each frame repeats the last {@link FOLLOW_OVERLAP} lines.
  */
-export async function* followLog(instanceId: number, pollMs = 500): AsyncGenerator<LogFrame> {
+export async function* followLog(
+	instanceId: number,
+	pollMs = 500,
+	signal?: AbortSignal
+): AsyncGenerator<LogFrame> {
 	const { absolute } = resolveSafe(instanceId, 'logs/latest.log');
 	const stat = (): Stats | null => {
 		try {
@@ -155,8 +160,9 @@ export async function* followLog(instanceId: number, pollMs = 500): AsyncGenerat
 	let recent: LogLine[] = [];
 	yield { epoch, total, lines: recent };
 
-	for (;;) {
-		await Bun.sleep(pollMs);
+	while (!signal?.aborted) {
+		await sleep(pollMs, signal);
+		if (signal?.aborted) return;
 		const now = stat();
 		const replaced = now === null ? identity !== null : now.ino !== identity || now.size < offset;
 		if (replaced) {

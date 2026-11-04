@@ -2,7 +2,6 @@ import { command, form, query } from '$app/server';
 import { error, invalid } from '@sveltejs/kit';
 import * as v from 'valibot';
 
-import { framesFrom } from '#lib/console-frames.js';
 import { backfillPackIcons } from '#lib/modpacks/server/modpacks.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
@@ -154,12 +153,6 @@ export const restartInstance = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'control');
 	await userFacing(() => instances.restartInstance(instanceId));
 	record({ action: 'instance.restart', summary: 'Restarted the server', instanceId });
-});
-
-/** Live console for one instance (see `console-frames.ts`). */
-export const consoleStream = query.live(id, async function* (instanceId) {
-	requirePermission(instanceId, 'console');
-	yield* framesFrom((resume) => live.subscribe(instanceId, resume), Bun.sleep);
 });
 
 export const sendCommand = command(

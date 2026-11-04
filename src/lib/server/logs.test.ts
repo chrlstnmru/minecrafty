@@ -198,4 +198,13 @@ describe('followLog', () => {
 		expect(frames.at(-1)!.lines.at(-1)).toEqual({ n: 1, text: 'first' });
 		await follow.return(undefined);
 	});
+
+	it('ends at once when stopped', async () => {
+		const stop = new AbortController();
+		const follow = followLog(id, 60_000, stop.signal);
+		await next(follow);
+		const pending = follow.next();
+		stop.abort();
+		expect(await pending).toEqual({ done: true, value: undefined });
+	});
 });
