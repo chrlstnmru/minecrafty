@@ -6,7 +6,7 @@
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import * as Sheet from '#lib/components/ui/sheet/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
-	import { packModVersions } from '#lib/modpacks/builder.remote.js';
+	import { packModVersions, packResourcePackVersions } from '#lib/modpacks/builder.remote.js';
 	import { modVersions } from '#lib/mods.remote.js';
 	import { packVersions } from '#lib/packs.remote.js';
 
@@ -25,8 +25,8 @@
 		projectId: string;
 		title: string;
 		noun: string;
-		/** `pack`: a mod of a modpack made in the builder, where `instanceId` is the pack's id */
-		kind?: 'mod' | 'resourcepack' | 'pack';
+		/** `pack` and `pack-resourcepack`: for a modpack made in the builder, where `instanceId` is the pack's id */
+		kind?: 'mod' | 'resourcepack' | 'pack' | 'pack-resourcepack';
 		/** set when changing an installed mod; that version is marked and not selectable */
 		currentVersionId?: string;
 		onSelect: (versionId: string) => Promise<void>;
@@ -44,7 +44,9 @@
 				? modVersions({ id: instanceId, projectId })
 				: kind === 'pack'
 					? packModVersions({ id: instanceId, projectId })
-					: packVersions({ id: instanceId, projectId })
+					: kind === 'pack-resourcepack'
+						? packResourcePackVersions({ id: instanceId, projectId })
+						: packVersions({ id: instanceId, projectId })
 	);
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });

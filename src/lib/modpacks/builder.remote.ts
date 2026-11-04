@@ -130,6 +130,55 @@ export const setPackFileVersion = command(
 	}
 );
 
+export const searchPackResourcePacks = query(
+	packSearchSchema,
+	async ({ id, query: text, limit }) => {
+		requirePanel('modpacks.read');
+		return userFacing(() => packs.searchResourcePacks(id, text, limit));
+	}
+);
+
+export const packResourcePackVersions = query(packProjectArgs, async ({ id, projectId }) => {
+	requirePanel('modpacks.read');
+	return userFacing(() => packs.listResourcePackVersions(id, projectId));
+});
+
+export const addPackResourcePack = command(
+	addPackModSchema,
+	async ({ id, projectId, versionId }) => {
+		requirePanel('modpacks.write');
+		const result = await userFacing(() => packs.addResourcePack(id, projectId, versionId));
+		record({
+			action: 'pack.mod',
+			summary: `Added the resource pack ${result.title} to the modpack ${packName(id)}`
+		});
+		await refreshed(id);
+		return result;
+	}
+);
+
+/** Sets the server resource pack that servers made from the pack start with. */
+export const setPackServerPack = command(addPackModSchema, async ({ id, projectId, versionId }) => {
+	requirePanel('modpacks.write');
+	const result = await userFacing(() => packs.setServerPack(id, projectId, versionId));
+	record({
+		action: 'pack.mod',
+		summary: `Set the server resource pack of the modpack ${packName(id)} to ${result.title}`
+	});
+	await refreshed(id);
+	return result;
+});
+
+export const clearPackServerPack = command(packArgs, async ({ id }) => {
+	requirePanel('modpacks.write');
+	await userFacing(async () => packs.clearServerPack(id));
+	record({
+		action: 'pack.mod',
+		summary: `Removed the server resource pack of the modpack ${packName(id)}`
+	});
+	await refreshed(id);
+});
+
 /** The loader builds on offer for the pack's Minecraft version, newest first. */
 export const packLoaderBuilds = query(packArgs, async ({ id }) => {
 	requirePanel('modpacks.read');

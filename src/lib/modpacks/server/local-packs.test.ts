@@ -59,15 +59,16 @@ vi.mock('#lib/server/loaders.js', async (original) => ({
 }));
 
 const searches = vi.hoisted(() => [] as Record<string, unknown>[]);
-const lookups = vi.hoisted(() => ({ versionLists: 0 }));
+const lookups = vi.hoisted(() => ({ versionLists: 0, loaders: {} as Record<string, string[]> }));
 
 vi.mock('#lib/server/modrinth.js', () => ({
 	searchProjects: async (opts: Record<string, unknown>) => {
 		searches.push(opts);
 		return { hits: [], total_hits: 0 };
 	},
-	listVersions: async (project: string, _loaders: string[], mc?: string) => {
+	listVersions: async (project: string, loaders: string[], mc?: string) => {
 		lookups.versionLists++;
+		lookups.loaders[project] = loaders;
 		return (fake.versions as Version[])
 			.filter((v) => v.project_id === project && (!mc || v.game_versions.includes(mc)))
 			.toSorted((a, b) => b.version_number.localeCompare(a.version_number));
@@ -156,9 +157,20 @@ beforeEach(() => {
 		version('sodium', '3.0-beta', ['1.21.1'], [], 'beta'),
 		version('fabric-api', '9.0', ['1.20.1', '1.21.1']),
 		version('lithium', '1.0', ['1.21.1']),
-		version('clientmod', '1.0', ['1.21.1'])
+		version('clientmod', '1.0', ['1.21.1']),
+		resourcePack('fresh', '2.0', ['1.21.1']),
+		resourcePack('fresh', '1.0', ['1.20.1', '1.21.1']),
+		resourcePack('newonly', '1.0', ['1.21.1'])
 	);
 });
+
+// a resource pack: no loader of its own, and a .zip
+const resourcePack = (project: string, number: string, mc: string[]): Version => {
+	const v = version(project, number, mc);
+	v.loaders = ['minecraft'];
+	v.files[0]!.filename = `${project}-${number}.zip`;
+	return v;
+};
 
 const make = (mc = '1.21.1') => P.createPack({ name: 'My pack', loader: 'fabric', mcVersion: mc });
 
@@ -894,5 +906,91 @@ describe('the icon', () => {
 		P.removeIcon(pack.id);
 		expect(P.iconFile(pack.id)).toBeNull();
 		expect(P.iconFile(copy.id)).not.toBeNull();
+	});
+});
+
+describe('resource packs', () => {
+	it('adds a client resource pack to resourcepacks/, for players only, looked up with no loader', async () => {
+		const pack = await make();
+		const result = await P.addResourcePack(pack.id, 'fresh');
+		expect(result).toEqual({ title: 'FRESH', version: '2.0' });
+		expect(lookups.loaders.fresh).toEqual([]);
+		const file = P.listFiles(pack.id).find((f) => f.projectId === 'fresh')!;
+		expect(file).toMatchObject({
+			path: 'resourcepacks/fresh-2.0.zip',
+			clientSide: 'required',
+			serverSide: 'unsupported'
+		});
+		expect(P.isResourcePack(file)).toBe(true);
+		expect(P.buildIndex(pack.id).files[0]).toMatchObject({
+			path: 'resourcepacks/fresh-2.0.zip',
+			env: { client: 'required', server: 'unsupported' }
+		});
+		await expect(P.addResourcePack(pack.id, 'fresh')).rejects.toThrow('Already in the pack');
+	});
+
+	it('pins a chosen version, and refuses one for another Minecraft version', async () => {
+		const pack = await make('1.20.1');
+		await expect(P.addResourcePack(pack.id, 'fresh', 'fresh-2.0')).rejects.toThrow(
+			'not for Minecraft 1.20.1'
+		);
+		await P.addResourcePack(pack.id, 'fresh', 'fresh-1.0');
+		const file = P.listFiles(pack.id).find((f) => f.projectId === 'fresh')!;
+		expect(file.path).toBe('resourcepacks/fresh-1.0.zip');
+	});
+
+	it('re-pins a resource pack to another version in resourcepacks/', async () => {
+		const pack = await make();
+		await P.addResourcePack(pack.id, 'fresh');
+		const file = P.listFiles(pack.id).find((f) => f.projectId === 'fresh')!;
+		await P.setModVersion(pack.id, file.id, 'fresh-1.0');
+		expect(P.listFiles(pack.id).find((f) => f.id === file.id)!.path).toBe(
+			'resourcepacks/fresh-1.0.zip'
+		);
+	});
+
+	it('carries resource packs and the server pack over a Minecraft version change', async () => {
+		const pack = await make();
+		await P.addMod(pack.id, 'sodium');
+		await P.addResourcePack(pack.id, 'fresh');
+		await P.setServerPack(pack.id, 'fresh');
+		const preview = await P.previewVersionChange(pack.id, '1.20.1');
+		expect(preview.compatible.map((c) => c.title)).toContain('FRESH');
+		await P.applyVersionChange(pack.id, '1.20.1', true);
+		const after = P.getPack(pack.id);
+		expect(after.files.find((f) => f.projectId === 'fresh')!.path).toBe(
+			'resourcepacks/fresh-1.0.zip'
+		);
+		expect(after).toMatchObject({ serverPackProjectId: 'fresh', serverPackVersionNumber: '1.0' });
+	});
+
+	it('drops the server pack when it has no version for the new Minecraft version', async () => {
+		const pack = await make();
+		await P.setServerPack(pack.id, 'newonly');
+		await P.applyVersionChange(pack.id, '1.20.1', true);
+		expect(P.getPack(pack.id).serverPackProjectId).toBeNull();
+	});
+});
+
+describe('the server resource pack', () => {
+	it('is set, kept on a copy, and cleared, each a new revision', async () => {
+		const pack = await make();
+		expect(await P.setServerPack(pack.id, 'fresh')).toEqual({ title: 'FRESH', version: '2.0' });
+		expect(P.getPack(pack.id)).toMatchObject({
+			serverPackProjectId: 'fresh',
+			serverPackVersionId: 'fresh-2.0',
+			serverPackTitle: 'FRESH',
+			revision: 2
+		});
+		const copy = P.duplicatePack(pack.id);
+		expect(P.getPack(copy.id).serverPackProjectId).toBe('fresh');
+		P.clearServerPack(pack.id);
+		expect(P.getPack(pack.id)).toMatchObject({ serverPackProjectId: null, revision: 3 });
+	});
+
+	it('is not part of the .mrpack', async () => {
+		const pack = await make();
+		await P.setServerPack(pack.id, 'fresh');
+		expect(P.buildIndex(pack.id).files).toEqual([]);
 	});
 });

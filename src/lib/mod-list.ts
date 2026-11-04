@@ -23,6 +23,8 @@ export type ModListItem = {
 	/** whether Modrinth knows it, so it has versions, updates and a project page; otherwise it is Local */
 	fromModrinth: boolean;
 	update?: { versionNumber: string };
+	/** a role this item has in the list, shown next to its name */
+	tag?: { label: string; title: string };
 };
 
 export type SideTag = 'server' | 'client';

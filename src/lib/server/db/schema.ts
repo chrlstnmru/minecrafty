@@ -202,6 +202,12 @@ export const localPacks = sqliteTable('local_packs', {
 	loader: text('loader', { enum: ['fabric', 'quilt', 'forge', 'neoforge'] }).notNull(),
 	loaderVersion: text('loader_version'),
 	mcVersion: text('mc_version').notNull(),
+	// the server resource pack that servers made from the pack start with; not part of the .mrpack
+	serverPackProjectId: text('server_pack_project_id'),
+	serverPackVersionId: text('server_pack_version_id'),
+	serverPackVersionNumber: text('server_pack_version_number'),
+	serverPackTitle: text('server_pack_title'),
+	serverPackIconUrl: text('server_pack_icon_url'),
 	// goes up with every saved change
 	revision: integer('revision').notNull().default(1),
 	createdAt: integer('created_at', { mode: 'timestamp' })

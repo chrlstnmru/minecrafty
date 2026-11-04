@@ -22,6 +22,7 @@ import { isHostCode } from '#lib/server/host-code.js';
 import { isKnownVersion, latestBuild, loaderBuilds } from '#lib/server/loaders.js';
 import { pickFile, pickVersion, resolveMods } from '#lib/server/mod-resolver.js';
 import * as modrinth from '#lib/server/modrinth.js';
+import { useAsServerPackHeld } from '#lib/server/packs.js';
 import { zipChunks, type ZipEntry } from '#lib/server/zip-writer.js';
 
 import { startImportLoaded, summarize, type LoadedPack } from './modpacks';
@@ -231,7 +232,12 @@ export function duplicatePack(id: number) {
 				description: source.description,
 				loader: source.loader,
 				loaderVersion: source.loaderVersion,
-				mcVersion: source.mcVersion
+				mcVersion: source.mcVersion,
+				serverPackProjectId: source.serverPackProjectId,
+				serverPackVersionId: source.serverPackVersionId,
+				serverPackVersionNumber: source.serverPackVersionNumber,
+				serverPackTitle: source.serverPackTitle,
+				serverPackIconUrl: source.serverPackIconUrl
 			})
 			.returning()
 			.get();
@@ -267,13 +273,24 @@ export async function searchMods(packId: number, query: string, limit: number) {
 const sideOf = (value: string | null | undefined) =>
 	value === 'required' || value === 'optional' || value === 'unsupported' ? value : null;
 
+/** Where a pack keeps client resource packs; everything else it downloads is a mod. */
+export const RESOURCE_PACKS = 'resourcepacks';
+
+export const isResourcePack = (file: { path: string }) => under(file.path, RESOURCE_PACKS);
+
+/** The Modrinth loaders to match for a file: resource packs have none of their own. */
+const loadersFor = (pack: LocalPack, file: { path: string }) =>
+	isResourcePack(file) ? [] : [pack.loader];
+
 const rowFor = (
 	packId: number,
 	version: modrinth.ModrinthVersion,
 	project: modrinth.ModrinthProject | undefined,
-	dependencyOf: string | null
+	dependencyOf: string | null,
+	folder: 'mods' | typeof RESOURCE_PACKS = 'mods'
 ): typeof localPackFiles.$inferInsert => {
-	const file = pickFile(version);
+	const resourcePack = folder === RESOURCE_PACKS;
+	const file = pickFile(version, resourcePack ? '.zip' : '.jar');
 	return {
 		packId,
 		projectId: version.project_id,
@@ -281,13 +298,14 @@ const rowFor = (
 		versionNumber: version.version_number,
 		title: project?.title ?? version.project_id,
 		iconUrl: project?.icon_url ?? null,
-		path: `mods/${file.filename}`,
+		path: `${folder}/${file.filename}`,
 		downloads: JSON.stringify([file.url]),
 		sha1: file.hashes.sha1,
 		sha512: file.hashes.sha512,
 		size: file.size,
-		clientSide: sideOf(project?.client_side),
-		serverSide: sideOf(project?.server_side),
+		// a client resource pack is for players' launchers; a server never loads it
+		clientSide: resourcePack ? 'required' : sideOf(project?.client_side),
+		serverSide: resourcePack ? 'unsupported' : sideOf(project?.server_side),
 		dependencyOf
 	};
 };
@@ -343,6 +361,93 @@ export function removeFile(packId: number, fileId: number) {
 	bump(packId);
 }
 
+/** Searches Modrinth for resource packs for this pack's Minecraft version. */
+export async function searchResourcePacks(packId: number, query: string, limit: number) {
+	const pack = requirePack(packId);
+	const res = await modrinth.searchProjects({
+		query,
+		type: 'resourcepack',
+		loaders: [],
+		mc: pack.mcVersion,
+		limit
+	});
+	return { hits: res.hits, total: res.total_hits };
+}
+
+/** A resource pack's versions for this pack's Minecraft version, newest first. */
+async function resourcePackVersions(pack: LocalPack, projectId: string) {
+	return modrinth.listVersions(projectId, [], pack.mcVersion);
+}
+
+/** The chosen version of a resource pack, else its newest release, else its newest. */
+async function chooseResourcePack(pack: LocalPack, projectId: string, versionId?: string) {
+	const versions = await resourcePackVersions(pack, projectId);
+	const version = versionId ? versions.find((v) => v.id === versionId) : pickVersion(versions);
+	if (!version)
+		throw new Error(
+			versionId
+				? `That version is not for Minecraft ${pack.mcVersion}`
+				: `No version for Minecraft ${pack.mcVersion} was found`
+		);
+	return version;
+}
+
+/** Adds a client resource pack to the .mrpack's resourcepacks/, pinned to a version. */
+export async function addResourcePack(packId: number, projectId: string, versionId?: string) {
+	const pack = requirePack(packId);
+	if (listFiles(packId).some((f) => f.projectId === projectId))
+		throw new Error('Already in the pack');
+	const version = await chooseResourcePack(pack, projectId, versionId);
+	const [project] = await modrinth.getProjects([projectId]);
+	const row = rowFor(packId, version, project, null, RESOURCE_PACKS);
+	db.insert(localPackFiles).values(row).run();
+	bump(packId);
+	return { title: row.title, version: row.versionNumber ?? '' };
+}
+
+/** A resource pack's versions that fit this pack, newest first; for the versions sheet. */
+export async function listResourcePackVersions(packId: number, projectId: string) {
+	return (await resourcePackVersions(requirePack(packId), projectId)).map((v) => ({
+		id: v.id,
+		versionNumber: v.version_number,
+		versionType: v.version_type,
+		publishedAt: v.date_published
+	}));
+}
+
+/** Sets the server resource pack that servers made from this pack start with. */
+export async function setServerPack(packId: number, projectId: string, versionId?: string) {
+	const pack = requirePack(packId);
+	const version = await chooseResourcePack(pack, projectId, versionId);
+	const [project] = await modrinth.getProjects([projectId]);
+	db.update(localPacks)
+		.set({
+			serverPackProjectId: projectId,
+			serverPackVersionId: version.id,
+			serverPackVersionNumber: version.version_number,
+			serverPackTitle: project?.title ?? projectId,
+			serverPackIconUrl: project?.icon_url ?? null
+		})
+		.where(eq(localPacks.id, packId))
+		.run();
+	bump(packId);
+	return { title: project?.title ?? projectId, version: version.version_number };
+}
+
+const NO_SERVER_PACK = {
+	serverPackProjectId: null,
+	serverPackVersionId: null,
+	serverPackVersionNumber: null,
+	serverPackTitle: null,
+	serverPackIconUrl: null
+};
+
+export function clearServerPack(packId: number) {
+	requirePack(packId);
+	db.update(localPacks).set(NO_SERVER_PACK).where(eq(localPacks.id, packId)).run();
+	bump(packId);
+}
+
 /** Every version of a project that runs in this pack, newest first. */
 export async function listModVersions(packId: number, projectId: string) {
 	const pack = requirePack(packId);
@@ -361,12 +466,18 @@ export async function setModVersion(packId: number, fileId: number, versionId: s
 	const row = listFiles(packId).find((f) => f.id === fileId);
 	if (!row?.projectId)
 		throw new Error('That file is not from Modrinth, so it has no other versions');
-	const version = (await modrinth.listVersions(row.projectId, [pack.loader], pack.mcVersion)).find(
-		(v) => v.id === versionId
-	);
+	const version = (
+		await modrinth.listVersions(row.projectId, loadersFor(pack, row), pack.mcVersion)
+	).find((v) => v.id === versionId);
 	if (!version) throw new Error(`That version does not run on ${pack.loader} ${pack.mcVersion}`);
 	const project = (await modrinth.getProjects([row.projectId]))[0];
-	const { packId: _p, ...next } = rowFor(packId, version, project, row.dependencyOf);
+	const { packId: _p, ...next } = rowFor(
+		packId,
+		version,
+		project,
+		row.dependencyOf,
+		isResourcePack(row) ? RESOURCE_PACKS : 'mods'
+	);
 	db.update(localPackFiles).set(next).where(eq(localPackFiles.id, fileId)).run();
 	bump(packId);
 }
@@ -397,7 +508,7 @@ async function planVersionChange(pack: LocalPack, mcVersion: string) {
 			continue;
 		}
 		const found = pickVersion(
-			await modrinth.listVersions(file.projectId, [pack.loader], mcVersion)
+			await modrinth.listVersions(file.projectId, loadersFor(pack, file), mcVersion)
 		);
 		if (found) {
 			chosen.set(file.id, found);
@@ -436,6 +547,18 @@ export async function applyVersionChange(
 			`${preview.incompatible.length} mods have no version for Minecraft ${mcVersion}; remove them first`
 		);
 	const loaderVersion = (await latestBuild(pack.loader, mcVersion)) ?? null;
+	// the server pack follows the Minecraft version too, and is dropped when it has none for it
+	const serverPackVersion = pack.serverPackProjectId
+		? pickVersion(await modrinth.listVersions(pack.serverPackProjectId, [], mcVersion))
+		: undefined;
+	const serverPack = !pack.serverPackProjectId
+		? {}
+		: serverPackVersion
+			? {
+					serverPackVersionId: serverPackVersion.id,
+					serverPackVersionNumber: serverPackVersion.version_number
+				}
+			: NO_SERVER_PACK;
 	const projects = new Map(
 		(await modrinth.getProjects(files.flatMap((f) => (f.projectId ? [f.projectId] : [])))).map(
 			(p) => [p.id, p]
@@ -447,7 +570,13 @@ export async function applyVersionChange(
 		const file = byId.get(item.id)!;
 		rows.set(
 			item.id,
-			rowFor(packId, chosen.get(item.id)!, projects.get(file.projectId!), file.dependencyOf)
+			rowFor(
+				packId,
+				chosen.get(item.id)!,
+				projects.get(file.projectId!),
+				file.dependencyOf,
+				isResourcePack(file) ? RESOURCE_PACKS : 'mods'
+			)
 		);
 	}
 	db.transaction((tx) => {
@@ -457,7 +586,10 @@ export async function applyVersionChange(
 		}
 		for (const item of preview.incompatible)
 			tx.delete(localPackFiles).where(eq(localPackFiles.id, item.id)).run();
-		tx.update(localPacks).set({ mcVersion, loaderVersion }).where(eq(localPacks.id, packId)).run();
+		tx.update(localPacks)
+			.set({ mcVersion, loaderVersion, ...serverPack })
+			.where(eq(localPacks.id, packId))
+			.run();
 	});
 	bump(packId);
 	return { updated: rows.size, removed: preview.incompatible.length };
@@ -776,10 +908,26 @@ export async function startInstall(
 	if (!listFiles(packId).length)
 		throw new Error('Add at least one mod before making a server from this pack');
 	const loaded = await loadLocalPack(packId);
-	return startImportLoaded(loaded, opts, {
-		packName: pack.name,
-		packIconUrl: iconUrlOf(pack.id),
-		fromPackId: pack.id,
-		fromPackRevision: pack.revision
-	});
+	const serverPack = pack.serverPackProjectId
+		? { projectId: pack.serverPackProjectId, versionId: pack.serverPackVersionId ?? undefined }
+		: null;
+	return startImportLoaded(
+		loaded,
+		opts,
+		{
+			packName: pack.name,
+			packIconUrl: iconUrlOf(pack.id),
+			fromPackId: pack.id,
+			fromPackRevision: pack.revision
+		},
+		serverPack
+			? async (instanceId, progress) => {
+					progress('Setting the server resource pack');
+					// the server works without it, so a pack Modrinth no longer serves does not fail the install
+					await useAsServerPackHeld(instanceId, serverPack.projectId, serverPack.versionId).catch(
+						() => undefined
+					);
+				}
+			: undefined
+	);
 }

@@ -33,7 +33,8 @@
 		onUpdateAll,
 		onRemove,
 		onBrowse,
-		filterable = true
+		filterable = true,
+		empty
 	}: {
 		items: ModListItem[];
 		noun: string;
@@ -48,6 +49,8 @@
 		onBrowse?: () => void;
 		/** shows the filter box and chips; off for a list that holds one item at most */
 		filterable?: boolean;
+		/** what the empty list says, and what its Browse button is called, when the noun alone reads wrong */
+		empty?: { title: string; description: string; action: string };
 	} = $props();
 
 	const query = new UrlParam('filter');
@@ -85,13 +88,16 @@
 	<Empty.Root class="border">
 		<Empty.Header>
 			<Empty.Media variant="icon"><PackageOffIcon /></Empty.Media>
-			<Empty.Title>No {noun}s yet</Empty.Title>
+			<Empty.Title>{empty?.title ?? `No ${noun}s yet`}</Empty.Title>
 			<Empty.Description>
-				{onBrowse ? `Find ${noun}s to add under Browse.` : `There are no ${noun}s here.`}
+				{empty?.description ??
+					(onBrowse ? `Find ${noun}s to add under Browse.` : `There are no ${noun}s here.`)}
 			</Empty.Description>
 		</Empty.Header>
 		{#if onBrowse}
-			<Empty.Content><Button onclick={onBrowse}>Browse {noun}s</Button></Empty.Content>
+			<Empty.Content>
+				<Button onclick={onBrowse}>{empty?.action ?? `Browse ${noun}s`}</Button>
+			</Empty.Content>
 		{/if}
 	</Empty.Root>
 {:else}
@@ -161,6 +167,16 @@
 						>
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{item.title}</span>
+								{#if item.tag}
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<Badge {...props} variant="warning">{item.tag?.label}</Badge>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content>{item.tag?.title}</Tooltip.Content>
+									</Tooltip.Root>
+								{/if}
 								{#if !item.fromModrinth}
 									<Tooltip.Root>
 										<Tooltip.Trigger>

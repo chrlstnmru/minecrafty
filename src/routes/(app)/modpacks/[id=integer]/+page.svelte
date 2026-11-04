@@ -5,6 +5,7 @@
 	import DownloadIcon from '@tabler/icons-svelte/icons/download';
 	import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
 	import PackageIcon from '@tabler/icons-svelte/icons/package';
+	import PaletteIcon from '@tabler/icons-svelte/icons/palette';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 	import UploadIcon from '@tabler/icons-svelte/icons/upload';
@@ -15,6 +16,7 @@
 	import type { ModListItem } from '#lib/mod-list.js';
 
 	import Combobox from '#lib/components/combobox.svelte';
+	import CountBadge from '#lib/components/count-badge.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
@@ -32,6 +34,8 @@
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import {
 		addPackMod,
+		addPackResourcePack,
+		clearPackServerPack,
 		applyPackVersionChange,
 		deleteLocalPack,
 		getLocalPack,
@@ -41,6 +45,7 @@
 		removePackFile,
 		removePackIcon,
 		setPackFileVersion,
+		setPackServerPack,
 		setPackLoaderVersion,
 		updateLocalPack
 	} from '#lib/modpacks/builder.remote.js';
@@ -60,7 +65,7 @@
 	// The selected tab lives in the URL (?tab=configs), so a reload or a shared link opens the same
 	// one. It is read from the page URL, which the server has, so the right tab is in the HTML; runed
 	// only reads the URL in the browser, so it is used to write it.
-	const TABS = ['mods', 'configs', 'settings'] as const;
+	const TABS = ['mods', 'resource-packs', 'configs', 'settings'] as const;
 	const VIEWS = ['installed', 'browse'] as const;
 	const params = useSearchParams(
 		v.object({
@@ -77,8 +82,17 @@
 	const view = $derived(
 		(canWrite && VIEWS.find((name) => name === page.url.searchParams.get('view'))) || 'installed'
 	);
+	const isResourcePack = (file: { path: string }) => file.path.startsWith('resourcepacks/');
+	const modFiles = $derived((pack.files ?? []).filter((f) => !isResourcePack(f)));
+	const resourcePacks = $derived((pack.files ?? []).filter(isResourcePack));
 	const sections = $derived([
-		{ name: 'mods', label: 'Mods', icon: PackageIcon, count: pack.files.length },
+		{ name: 'mods', label: 'Mods', icon: PackageIcon, count: modFiles.length },
+		{
+			name: 'resource-packs',
+			label: 'Resource packs',
+			icon: PaletteIcon,
+			count: resourcePacks.length + (pack.serverPackProjectId ? 1 : 0)
+		},
 		{ name: 'configs', label: 'Configs', icon: FileCodeIcon, count: pack.overrides.length },
 		...(canWrite ? [{ name: 'settings', label: 'Settings', icon: SettingsIcon }] : [])
 	] as { name: (typeof TABS)[number]; label: string; icon: typeof PackageIcon; count?: number }[]);
@@ -88,15 +102,45 @@
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
 
-	const items = $derived<ModListItem[]>(
-		(pack.files ?? []).map((file) => ({
-			...file,
-			key: String(file.id),
-			file: file.path,
-			enabled: true,
-			fromModrinth: !!file.projectId
-		}))
+	const asItem = (file: (typeof pack.files)[number]): ModListItem => ({
+		...file,
+		key: String(file.id),
+		file: file.path,
+		enabled: true,
+		fromModrinth: !!file.projectId
+	});
+	const items = $derived(modFiles.map(asItem));
+	// every client pack runs only in the game, so a Client tag on each would say nothing
+	const playerPackItems = $derived(
+		resourcePacks.map((file) => ({ ...asItem(file), clientSide: null, serverSide: null }))
 	);
+	const serverPackItems = $derived<ModListItem[]>(
+		pack.serverPackProjectId
+			? [
+					{
+						key: 'server-pack',
+						id: null,
+						projectId: pack.serverPackProjectId,
+						title: pack.serverPackTitle ?? pack.serverPackProjectId,
+						iconUrl: pack.serverPackIconUrl,
+						file: '',
+						versionNumber: pack.serverPackVersionNumber,
+						versionId: pack.serverPackVersionId,
+						dependencyOf: null,
+						clientSide: null,
+						serverSide: null,
+						enabled: true,
+						fromModrinth: true,
+						tag: {
+							label: 'Server pack',
+							title: 'Servers made from this pack start with it. It is not in the .mrpack.'
+						}
+					}
+				]
+			: []
+	);
+	// the server pack first, then the packs for players
+	const resourcePackItems = $derived([...serverPackItems, ...playerPackItems]);
 	const inPack = $derived(
 		new Set((pack.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
 	);
@@ -104,9 +148,24 @@
 	let picker = $state<{
 		projectId: string;
 		title: string;
-		fileId: number;
 		versionId: string;
+		kind: 'pack' | 'pack-resourcepack';
+		onSelect: (versionId: string) => Promise<void>;
 	} | null>(null);
+
+	function pickVersion(item: ModListItem, kind: 'pack' | 'pack-resourcepack') {
+		picker = {
+			projectId: item.projectId!,
+			title: item.title,
+			versionId: item.versionId ?? '',
+			kind,
+			onSelect: (versionId) =>
+				item.id === null
+					? useServerPack(item.projectId!, item.title, versionId)
+					: repin(item, versionId)
+		};
+		pickerOpen = true;
+	}
 	let pickerOpen = $state(false);
 
 	async function add(projectId: string, title: string, versionId?: string) {
@@ -134,13 +193,41 @@
 		}
 	}
 
-	async function repin(versionId: string) {
-		if (!picker) return;
+	async function repin(item: ModListItem, versionId: string) {
 		try {
-			await setPackFileVersion({ id, fileId: picker.fileId, versionId });
-			toast.success(`Changed ${picker.title}`);
+			await setPackFileVersion({ id, fileId: item.id!, versionId });
+			toast.success(`Changed ${item.title}`);
 		} catch (e) {
 			toast.error(message(e, 'Could not change the version'));
+		}
+	}
+
+	async function addResourcePack(projectId: string, title: string, versionId?: string) {
+		try {
+			await addPackResourcePack({ id, projectId, versionId });
+			toast.success(`Added ${title}`);
+		} catch (e) {
+			toast.error(message(e, `Could not add ${title}`));
+		}
+	}
+
+	async function useServerPack(projectId: string, title: string, versionId?: string) {
+		try {
+			const result = await setPackServerPack({ id, projectId, versionId });
+			toast.success(`${title} is now the server resource pack`, {
+				description: `${result.version}. Servers made from this pack start with it.`
+			});
+		} catch (e) {
+			toast.error(message(e, 'Could not set the server resource pack'));
+		}
+	}
+
+	async function clearServerPack() {
+		try {
+			await clearPackServerPack({ id });
+			toast.success('Server resource pack removed');
+		} catch (e) {
+			toast.error(message(e, 'Remove failed'));
 		}
 	}
 
@@ -304,22 +391,21 @@
 					data-sveltekit-replacestate
 				>
 					<section.icon />{section.label}
-					{#if section.count !== undefined}
-						<Badge variant="muted" class="tabular-nums">{section.count}</Badge>
-					{/if}
+					{#if section.count !== undefined}<CountBadge count={section.count} />{/if}
 				</Button>
 			{/each}
 		</nav>
 
-		{#if tab === 'mods'}
+		{#if tab === 'mods' || tab === 'resource-packs'}
 			<Tabs.Root
 				value={view}
 				onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
 			>
 				<Tabs.List>
 					<Tabs.Trigger value="installed"
-						>Installed <Badge variant="muted" class="tabular-nums">{pack.files.length}</Badge
-						></Tabs.Trigger
+						>Installed <CountBadge
+							count={tab === 'mods' ? modFiles.length : resourcePackItems.length}
+						/></Tabs.Trigger
 					>
 					{#if canWrite}<Tabs.Trigger value="browse">Browse</Tabs.Trigger>{/if}
 				</Tabs.List>
@@ -334,8 +420,8 @@
 				'-m-1 grid min-h-0 flex-1 auto-rows-max content-start gap-4 overflow-y-auto p-1',
 				// the only row is the config editor, which fills the height
 				tab === 'configs' && 'grid-rows-1',
-				// the mods card grows to its rows, up to the height left, then scrolls its own list
-				tab === 'mods' && 'flex flex-col'
+				// the list's card grows to its rows, up to the height left, then scrolls its own list
+				(tab === 'mods' || tab === 'resource-packs') && 'flex flex-col'
 			)}
 		>
 			{#if tab === 'mods'}
@@ -351,17 +437,7 @@
 							<ModList
 								{items}
 								noun="mod"
-								onVersions={canWrite
-									? (mod) => {
-											picker = {
-												projectId: mod.projectId!,
-												title: mod.title,
-												fileId: mod.id!,
-												versionId: mod.versionId ?? ''
-											};
-											pickerOpen = true;
-										}
-									: undefined}
+								onVersions={canWrite ? (mod) => pickVersion(mod, 'pack') : undefined}
 								onRemove={canWrite ? (mod) => remove(mod.id!, mod.title) : undefined}
 								onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
 							/>
@@ -377,6 +453,48 @@
 						installedLabel="In pack"
 						installedIds={inPack}
 						onInstall={add}
+					/>
+				{/if}
+			{:else if tab === 'resource-packs'}
+				{#if view === 'installed'}
+					<Card.Root class="min-h-0">
+						<Card.Header>
+							<Card.Title>Resource packs in this pack</Card.Title>
+							<Card.Description>
+								Packs for players go in the .mrpack for their launchers. The server pack does not:
+								servers made from this pack prompt players to download it.
+							</Card.Description>
+						</Card.Header>
+						<Card.Content class="flex min-h-0 flex-1 flex-col">
+							<ModList
+								items={resourcePackItems}
+								noun="resource pack"
+								onVersions={canWrite ? (item) => pickVersion(item, 'pack-resourcepack') : undefined}
+								onRemove={canWrite
+									? (item) => (item.id === null ? clearServerPack() : remove(item.id, item.title))
+									: undefined}
+								onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
+							/>
+						</Card.Content>
+					</Card.Root>
+				{:else}
+					<PackBrowser
+						kind="pack-resourcepack"
+						instanceId={id}
+						noun="resource pack"
+						description="For Minecraft {pack.mcVersion}. Add puts one in the .mrpack for players' launchers; the menu next to it makes one the server pack instead."
+						actionLabel="Add"
+						installedLabel="In pack"
+						installedIds={inPack}
+						onInstall={addResourcePack}
+						actions={[
+							{
+								label: 'Use as server pack',
+								done: new Set(pack.serverPackProjectId ? [pack.serverPackProjectId] : []),
+								doneLabel: 'The server pack',
+								run: useServerPack
+							}
+						]}
 					/>
 				{/if}
 			{:else if tab === 'settings' && canWrite}
@@ -549,13 +667,13 @@
 {#if picker}
 	<ModVersionsSheet
 		bind:open={pickerOpen}
-		kind="pack"
+		kind={picker.kind}
 		instanceId={id}
 		projectId={picker.projectId}
 		title={picker.title}
-		noun="mod"
+		noun={picker.kind === 'pack' ? 'mod' : 'resource pack'}
 		currentVersionId={picker.versionId}
-		onSelect={repin}
+		onSelect={picker.onSelect}
 	/>
 {/if}
 

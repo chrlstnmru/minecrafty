@@ -6,6 +6,7 @@
 
 	import type { ModListItem } from '#lib/mod-list.js';
 
+	import CountBadge from '#lib/components/count-badge.svelte';
 	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
@@ -205,10 +206,7 @@
 			onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
 		>
 			<Tabs.List>
-				<Tabs.Trigger value="installed"
-					>Installed <Badge variant="muted" class="tabular-nums">{items.length}</Badge
-					></Tabs.Trigger
-				>
+				<Tabs.Trigger value="installed">Installed <CountBadge count={items.length} /></Tabs.Trigger>
 				<Tabs.Trigger value="browse">Browse</Tabs.Trigger>
 			</Tabs.List>
 		</Tabs.Root>
