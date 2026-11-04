@@ -191,8 +191,8 @@
 						</div>
 					{:else}
 						{@const control = inst.permissions.includes('control')}
-						{@const canKill = control && active}
-						{@const canRemove = canDelete && (failed || !active)}
+						{@const killable = !failed && active}
+						{@const removable = failed || !active}
 						{#if failed}
 							{#if canRetryInstall(inst) && inst.permissions.includes('settings')}
 								<Button size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
@@ -216,7 +216,7 @@
 							{/if}
 							<Button variant="ghost" size="sm" href="/instances/{inst.id}">Console</Button>
 						{/if}
-						{#if canKill || canRemove}
+						{#if control || canDelete}
 							<DropdownMenu.Root>
 								<DropdownMenu.Trigger>
 									{#snippet child({ props })}
@@ -231,16 +231,17 @@
 										</Button>
 									{/snippet}
 								</DropdownMenu.Trigger>
-								<DropdownMenu.Content align="end">
-									{#if canKill}
-										<DropdownMenu.Item variant="destructive" onSelect={() => askKill(inst)}>
-											Kill
-										</DropdownMenu.Item>
+								<DropdownMenu.Content align="end" class="min-w-32">
+									<!-- what the state rules out stays visible, greyed, with what to do; what a role rules out is hidden -->
+									{#if control}
+										{@render menuItem('Kill', killable ? '' : 'The server is not running', () =>
+											askKill(inst)
+										)}
 									{/if}
-									{#if canRemove}
-										<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(inst)}>
-											Delete
-										</DropdownMenu.Item>
+									{#if canDelete}
+										{@render menuItem('Delete', removable ? '' : 'Stop the server first', () =>
+											askDelete(inst)
+										)}
 									{/if}
 								</DropdownMenu.Content>
 							</DropdownMenu.Root>
@@ -251,6 +252,18 @@
 		{/each}
 	</div>
 </div>
+
+<!-- a dangerous menu item; with a `blocked` reason it is disabled and says why on hover -->
+{#snippet menuItem(label: string, blocked: string, onSelect: () => void)}
+	{#if blocked}
+		<!-- the wrapper carries the title, since a disabled item ignores the pointer -->
+		<div title={blocked}>
+			<DropdownMenu.Item variant="destructive" disabled>{label}</DropdownMenu.Item>
+		</div>
+	{:else}
+		<DropdownMenu.Item variant="destructive" {onSelect}>{label}</DropdownMenu.Item>
+	{/if}
+{/snippet}
 
 <NewInstanceSheet bind:open={createOpen} canUsePacks={data.panel.includes('modpacks.read')} />
 

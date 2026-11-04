@@ -238,7 +238,13 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
-			<AlertDialog.Action variant="destructive" onclick={() => run(killInstance)}>
+			<AlertDialog.Action
+				variant="destructive"
+				onclick={() => {
+					confirmKill = false;
+					run(killInstance);
+				}}
+			>
 				Kill
 			</AlertDialog.Action>
 		</AlertDialog.Footer>
