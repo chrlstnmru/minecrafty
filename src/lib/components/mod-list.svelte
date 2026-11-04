@@ -32,7 +32,8 @@
 		onUpdate,
 		onUpdateAll,
 		onRemove,
-		onBrowse
+		onBrowse,
+		filterable = true
 	}: {
 		items: ModListItem[];
 		noun: string;
@@ -45,6 +46,8 @@
 		onRemove?: (item: ModListItem) => Promise<void>;
 		/** offered when nothing is installed */
 		onBrowse?: () => void;
+		/** shows the filter box and chips; off for a list that holds one item at most */
+		filterable?: boolean;
 	} = $props();
 
 	const query = new UrlParam('filter');
@@ -93,42 +96,44 @@
 	</Empty.Root>
 {:else}
 	<div class="flex min-h-0 flex-1 flex-col gap-3">
-		<div class="flex flex-wrap items-center gap-2">
-			<InputGroup.Root class="w-full sm:w-64">
-				<InputGroup.Addon align="inline-start"><FilterIcon /></InputGroup.Addon>
-				<InputGroup.Input
-					bind:value={query.value}
-					placeholder="Filter {noun}s"
-					aria-label="Filter {noun}s by name or file"
-					autocomplete="off"
-					spellcheck="false"
-				/>
-			</InputGroup.Root>
-			{#if filters.length > 1}
-				<ToggleGroup.Root
-					type="single"
-					size="sm"
-					spacing={1}
-					aria-label="Show"
-					bind:value={() => filter, (next) => next && (show.value = next)}
-				>
-					{#each filters as f (f.value)}
-						<ToggleGroup.Item
-							value={f.value}
-							class="px-2.5 text-muted-foreground tabular-nums data-[state=on]:bg-secondary data-[state=on]:text-foreground"
-						>
-							{f.label}
-							<Badge variant="muted" class="tabular-nums">{counts[f.value]}</Badge>
-						</ToggleGroup.Item>
-					{/each}
-				</ToggleGroup.Root>
-			{/if}
-			{#if onUpdateAll && counts.updates}
-				<Button size="sm" class="ms-auto" onClickPromise={onUpdateAll}>
-					Update all ({counts.updates})
-				</Button>
-			{/if}
-		</div>
+		{#if filterable}
+			<div class="flex flex-wrap items-center gap-2">
+				<InputGroup.Root class="w-full sm:w-64">
+					<InputGroup.Addon align="inline-start"><FilterIcon /></InputGroup.Addon>
+					<InputGroup.Input
+						bind:value={query.value}
+						placeholder="Filter {noun}s"
+						aria-label="Filter {noun}s by name or file"
+						autocomplete="off"
+						spellcheck="false"
+					/>
+				</InputGroup.Root>
+				{#if filters.length > 1}
+					<ToggleGroup.Root
+						type="single"
+						size="sm"
+						spacing={1}
+						aria-label="Show"
+						bind:value={() => filter, (next) => next && (show.value = next)}
+					>
+						{#each filters as f (f.value)}
+							<ToggleGroup.Item
+								value={f.value}
+								class="px-2.5 text-muted-foreground tabular-nums data-[state=on]:bg-secondary data-[state=on]:text-foreground"
+							>
+								{f.label}
+								<Badge variant="muted" class="tabular-nums">{counts[f.value]}</Badge>
+							</ToggleGroup.Item>
+						{/each}
+					</ToggleGroup.Root>
+				{/if}
+				{#if onUpdateAll && counts.updates}
+					<Button size="sm" class="ms-auto" onClickPromise={onUpdateAll}>
+						Update all ({counts.updates})
+					</Button>
+				{/if}
+			</div>
+		{/if}
 
 		{#if shown.length}
 			<ul class="min-h-0 flex-1 divide-y overflow-y-auto">
@@ -214,10 +219,12 @@
 								{/snippet}
 							</DropdownMenu.Trigger>
 							<DropdownMenu.Content align="end" class="w-60">
-								<DropdownMenu.Label class="truncate text-xs font-normal text-muted-foreground">
-									{item.file}
-								</DropdownMenu.Label>
-								<DropdownMenu.Separator />
+								{#if item.file}
+									<DropdownMenu.Label class="truncate text-xs font-normal text-muted-foreground">
+										{item.file}
+									</DropdownMenu.Label>
+									<DropdownMenu.Separator />
+								{/if}
 								{#if item.update && onUpdate}
 									<DropdownMenu.Item onSelect={() => onUpdate(item)}>
 										Update to {item.update.versionNumber}

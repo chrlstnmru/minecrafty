@@ -1,21 +1,51 @@
 <script lang="ts">
 	import { page } from '$app/state';
+	import { useSearchParams } from 'runed/kit';
 	import { toast } from 'svelte-sonner';
+	import * as v from 'valibot';
+
+	import type { ModListItem } from '#lib/mod-list.js';
 
 	import * as Form from '#lib/components/form/index.js';
+	import ModList from '#lib/components/mod-list.svelte';
+	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
+	import { Badge } from '#lib/components/ui/badge/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import { Separator } from '#lib/components/ui/separator/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
 	import { packOptionsSchema } from '#lib/schemas/packs.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const current = $derived(serverPack(id));
-	const installedIds = $derived(
-		new Set(current.current?.pack ? [current.current.pack.projectId] : [])
+	const pack = $derived(current.current?.pack ?? null);
+	const installedIds = $derived(new Set(pack ? [pack.projectId] : []));
+	const items = $derived<ModListItem[]>(
+		pack
+			? [
+					{
+						key: String(pack.id),
+						id: pack.id,
+						projectId: pack.projectId,
+						title: pack.title,
+						iconUrl: pack.iconUrl,
+						// a server pack is a download link for players, not a file on this host
+						file: '',
+						versionNumber: pack.versionNumber,
+						versionId: pack.versionId,
+						dependencyOf: null,
+						clientSide: null,
+						serverSide: null,
+						enabled: true,
+						fromModrinth: pack.source === 'modrinth'
+					}
+				]
+			: []
 	);
 	const { required, prompt } = setPackOptions.fields;
 
@@ -25,6 +55,19 @@
 		if (!c) return;
 		setPackOptions.fields.set({ id, required: c.required, prompt: c.prompt });
 	});
+
+	// The open tab lives in the URL (?view=browse), so a reload keeps it. Read from the page URL,
+	// which the server has; runed only reads it in the browser, so it is used to write it.
+	const VIEWS = ['installed', 'browse'] as const;
+	const params = useSearchParams(
+		v.object({ view: v.optional(v.fallback(v.picklist(VIEWS), 'installed'), 'installed') }),
+		{ pushHistory: false, noScroll: true }
+	);
+	const view = $derived(
+		VIEWS.find((name) => name === page.url.searchParams.get('view')) ?? 'installed'
+	);
+
+	let pickerOpen = $state(false);
 
 	const message = (e: unknown, fallback: string) =>
 		(e as { body?: { message?: string } }).body?.message ?? fallback;
@@ -50,84 +93,105 @@
 	}
 </script>
 
-<div class="grid gap-4">
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>Server resource pack</Card.Title>
-			<Card.Description>
-				Players are prompted to download this pack from Modrinth when they join. Nothing is stored
-				on this host. Changes apply the next time the server starts.
-			</Card.Description>
-		</Card.Header>
-		<Card.Content class="grid gap-4">
-			{#if !current.current}
-				<div class="flex items-center gap-3" role="status" aria-label="Loading">
-					<Skeleton class="size-10 shrink-0" />
-					<div class="grid flex-1 gap-2">
-						<Skeleton class="h-3.5 w-1/3" />
-						<Skeleton class="h-3 w-1/5" />
-					</div>
-				</div>
-			{:else if current.current?.pack}
-				{@const pack = current.current.pack}
-				<div class="flex items-center gap-3">
-					{#if pack.iconUrl}
-						<img src={pack.iconUrl} alt="" class="size-10 shrink-0 rounded-md bg-muted" />
+<div class="flex min-h-0 flex-1 flex-col gap-4">
+	<Tabs.Root
+		value={view}
+		onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
+	>
+		<Tabs.List>
+			<Tabs.Trigger value="installed">
+				Installed <Badge variant="muted" class="tabular-nums">{items.length}</Badge>
+			</Tabs.Trigger>
+			<Tabs.Trigger value="browse">Browse</Tabs.Trigger>
+		</Tabs.List>
+	</Tabs.Root>
+
+	<!-- the tabs stay put and the open tab scrolls; the padding keeps a card's ring from being clipped -->
+	<div class="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1">
+		{#if view === 'installed'}
+			<Card.Root>
+				<Card.Header>
+					<Card.Title>Server resource pack</Card.Title>
+					<Card.Description>
+						Players are prompted to download this pack from Modrinth when they join. Nothing is
+						stored on this host. Changes apply the next time the server starts.
+					</Card.Description>
+				</Card.Header>
+				<Card.Content class="grid gap-4">
+					{#if !current.current}
+						<SkeletonRows count={1} />
 					{:else}
-						<div class="size-10 shrink-0 rounded-md bg-muted"></div>
+						{#if current.current.externalUrl}
+							<p class="text-sm text-muted-foreground">
+								A pack is set in server.properties outside this panel:
+								<span class="font-mono break-all">{current.current.externalUrl}</span>
+							</p>
+						{/if}
+						{#if pack || !current.current.externalUrl}
+							<ModList
+								{items}
+								noun="resource pack"
+								filterable={false}
+								onVersions={() => (pickerOpen = true)}
+								onRemove={(item) => clear(item.id!)}
+								onBrowse={() => (params.view = 'browse')}
+							/>
+						{/if}
 					{/if}
-					<div class="min-w-0 flex-1">
-						<span class="truncate text-sm font-medium">{pack.title}</span>
-						<p class="truncate text-xs text-muted-foreground">{pack.versionNumber}</p>
-					</div>
-					<Button variant="destructive-ghost" size="sm" onClickPromise={() => clear(pack.id)}
-						>Remove</Button
+
+					<Separator />
+
+					<Form.Root
+						schema={packOptionsSchema}
+						remoteFunction={setPackOptions}
+						onSubmitted={(succeeded) => {
+							if (succeeded) toast.success('Options saved');
+						}}
 					>
-				</div>
-			{:else if current.current?.externalUrl}
-				<p class="text-sm text-muted-foreground">
-					A pack is set in server.properties outside this panel:
-					<span class="font-mono break-all">{current.current.externalUrl}</span>
-				</p>
-			{:else}
-				<p class="text-sm text-muted-foreground">No server resource pack is set.</p>
-			{/if}
-
-			<Form.Root
-				schema={packOptionsSchema}
-				remoteFunction={setPackOptions}
-				onSubmitted={(succeeded) => {
-					if (succeeded) toast.success('Options saved');
-				}}
-			>
-				{#snippet children({ pending })}
-					<input {...setPackOptions.fields.id.as('number')} type="hidden" />
-					<Field.Group>
-						<Form.Checkbox
-							field={required}
-							label="Require the pack (players who decline are kicked)"
-						/>
-						<Form.Input
-							label="Prompt message"
-							field={prompt}
-							placeholder="Shown with the download prompt"
-						/>
-						<Form.Errors form={setPackOptions} />
-						<div>
-							<Button type="submit" variant="outline" loading={pending > 0}>Save options</Button>
-						</div>
-					</Field.Group>
-				{/snippet}
-			</Form.Root>
-		</Card.Content>
-	</Card.Root>
-
-	<PackBrowser
-		instanceId={id}
-		noun="resource pack"
-		description="From Modrinth, for this Minecraft version. Choosing one replaces the current server pack."
-		actionLabel="Use as server pack"
-		{installedIds}
-		onInstall={use}
-	/>
+						{#snippet children({ pending })}
+							<input {...setPackOptions.fields.id.as('number')} type="hidden" />
+							<Field.Group>
+								<Form.Checkbox
+									field={required}
+									label="Require the pack (players who decline are kicked)"
+								/>
+								<Form.Input
+									label="Prompt message"
+									field={prompt}
+									placeholder="Shown with the download prompt"
+								/>
+								<Form.Errors form={setPackOptions} />
+								<div>
+									<Button type="submit" variant="outline" loading={pending > 0}>Save options</Button
+									>
+								</div>
+							</Field.Group>
+						{/snippet}
+					</Form.Root>
+				</Card.Content>
+			</Card.Root>
+		{:else}
+			<PackBrowser
+				instanceId={id}
+				noun="resource pack"
+				description="From Modrinth, for this Minecraft version. Choosing one replaces the current server pack."
+				actionLabel="Use as server pack"
+				{installedIds}
+				onInstall={use}
+			/>
+		{/if}
+	</div>
 </div>
+
+{#if pack}
+	<ModVersionsSheet
+		bind:open={pickerOpen}
+		kind="resourcepack"
+		instanceId={id}
+		projectId={pack.projectId}
+		title={pack.title}
+		noun="resource pack"
+		currentVersionId={pack.versionId}
+		onSelect={(versionId) => use(pack!.projectId, pack!.title, versionId)}
+	/>
+{/if}
