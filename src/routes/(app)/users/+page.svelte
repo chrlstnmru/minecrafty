@@ -224,18 +224,30 @@
 			})}
 		{/if}
 		{#if u.id !== data.user.id && u.canManage}
-			{@render tip('Delete the account', TrashIcon, 'Delete user', () => {
-				removing = [u];
-			})}
+			{@render tip(
+				'Delete the account',
+				TrashIcon,
+				'Delete user',
+				() => {
+					removing = [u];
+				},
+				true
+			)}
 		{/if}
 	</div>
 {/snippet}
 
-{#snippet tip(text: string, Icon: typeof KeyIcon, label: string, run: () => void)}
+{#snippet tip(text: string, Icon: typeof KeyIcon, label: string, run: () => void, danger = false)}
 	<Tooltip.Root>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="icon" aria-label={label} onclick={run}>
+				<Button
+					{...props}
+					variant={danger ? 'destructive-ghost' : 'ghost'}
+					size="icon"
+					aria-label={label}
+					onclick={run}
+				>
 					<Icon />
 				</Button>
 			{/snippet}

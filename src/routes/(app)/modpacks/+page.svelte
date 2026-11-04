@@ -151,16 +151,28 @@
 		)}
 		{#if canWrite}
 			{@render tip('Make a copy', CopyIcon, 'Duplicate', () => duplicate(p))}
-			{@render tip('Delete the pack', TrashIcon, 'Delete', () => (removing = p))}
+			{@render tip('Delete the pack', TrashIcon, 'Delete', () => (removing = p), true)}
 		{/if}
 	</div>
 {/snippet}
 
-{#snippet tip(text: string, Icon: typeof DownloadIcon, label: string, run: () => void)}
+{#snippet tip(
+	text: string,
+	Icon: typeof DownloadIcon,
+	label: string,
+	run: () => void,
+	danger = false
+)}
 	<Tooltip.Root>
 		<Tooltip.Trigger>
 			{#snippet child({ props })}
-				<Button {...props} variant="ghost" size="icon" aria-label="{label} pack" onclick={run}>
+				<Button
+					{...props}
+					variant={danger ? 'destructive-ghost' : 'ghost'}
+					size="icon"
+					aria-label="{label} pack"
+					onclick={run}
+				>
 					<Icon />
 				</Button>
 			{/snippet}
