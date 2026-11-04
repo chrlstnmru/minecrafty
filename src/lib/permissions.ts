@@ -179,9 +179,11 @@ export const MODULE_PERMISSION: Record<string, InstancePermission> = {
 	files: 'files',
 	properties: 'properties',
 	mods: 'mods',
+	modpack: 'modpack',
 	'resource-packs': 'resource-packs',
 	backups: 'backups',
 	schedules: 'schedules',
+	loader: 'loader',
 	audit: 'audit',
 	settings: 'settings'
 };
