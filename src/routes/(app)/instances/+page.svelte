@@ -14,6 +14,7 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import { formatBytes } from '#lib/format.js';
 	import { canRetryInstall } from '#lib/instance-origin.js';
 	import {
@@ -52,6 +53,10 @@
 				: p.total > 1
 					? ` · ${p.done}/${p.total}`
 					: '';
+
+	// a step without counts (installing, getting Java) gets a moving bar, not an empty one
+	const counted = (p: { done: number; total: number; bytes?: boolean } | null) =>
+		!!p && (p.bytes ? p.total > 0 : p.total > 1);
 
 	// When an install finishes the card would flip to its buttons before the bar reaches the end.
 	// It stays an installing card for a moment, the bar filling up, then hands over.
@@ -140,30 +145,35 @@
 						<StatusPill state={installing ? 'installing' : failed ? 'failed' : inst.state} />
 					</Card.Action>
 				</Card.Header>
-				{#if installing}
-					<Card.Content class="grid gap-2">
-						<Progress
-							value={settled ? 1 : progress ? progress.done : 0}
-							max={settled ? 1 : Math.max(progress?.total ?? 1, 1)}
-						/>
-						<p class="text-xs text-muted-foreground">
-							{settled ? 'Installed' : (progress?.label ?? 'Starting')}{settled
-								? ''
-								: progressDetail(progress)}
-						</p>
-					</Card.Content>
-				{:else if failed}
+				{#if failed}
 					<Card.Content>
-						<p class="text-sm text-destructive" role="alert">
-							{inst.installMessage ?? 'The install failed.'}
-						</p>
+						<Tooltip.Root>
+							<Tooltip.Trigger>
+								{#snippet child({ props })}
+									<p {...props} class="line-clamp-2 text-sm text-destructive" role="alert">
+										{inst.installMessage ?? 'The install failed.'}
+									</p>
+								{/snippet}
+							</Tooltip.Trigger>
+							<Tooltip.Content class="max-w-sm">
+								{inst.installMessage ?? 'The install failed.'}
+							</Tooltip.Content>
+						</Tooltip.Root>
 					</Card.Content>
 				{/if}
-				<Card.Footer class="flex flex-wrap gap-2">
+				<Card.Footer class="flex min-h-6 flex-wrap gap-2">
 					{#if installing}
-						<p class="text-xs text-muted-foreground">
-							{settled ? 'Ready to start.' : 'You can leave this page; the install keeps going.'}
-						</p>
+						<div class="grid w-full gap-1">
+							<p class="truncate text-xs text-muted-foreground">
+								{settled ? 'Installed' : (progress?.label ?? 'Starting')}{settled
+									? ''
+									: progressDetail(progress)}
+							</p>
+							<Progress
+								value={settled ? 1 : counted(progress) ? progress!.done : null}
+								max={settled ? 1 : counted(progress) ? progress!.total : 1}
+							/>
+						</div>
 					{:else if failed}
 						{#if canRetryInstall(inst) && inst.permissions.includes('settings')}
 							<Button variant="outline" size="sm" onClickPromise={() => run(retryInstall, inst.id)}>

@@ -118,6 +118,7 @@
 }
 
 @theme inline {
+	--animate-progress-slide: progress-slide 1.4s ease-in-out infinite;
 	--font-sans: 'Urbanist Variable', sans-serif;
 	--font-heading: 'Urbanist Variable', sans-serif;
 	--color-tint-cyan: var(--tint-cyan);
@@ -249,5 +250,15 @@
 	[data-closed],
 	[data-state='closed'] {
 		@apply fill-mode-forwards;
+	}
+}
+
+/* the indeterminate progress bar: a stripe that runs across while a step has no counts */
+@keyframes progress-slide {
+	from {
+		transform: translateX(-100%);
+	}
+	to {
+		transform: translateX(300%);
 	}
 }
