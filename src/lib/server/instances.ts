@@ -6,13 +6,13 @@ import type { LaunchSpec, RunnerStatus } from '#runner/protocol.js';
 
 import { canRetryInstall } from '#lib/instance-origin.js';
 
-import { backupsDir, instanceDir, javaOverride, runnerCommand, serverDir } from './config';
+import { backupsDir, instanceDir, runnerCommand, serverDir } from './config';
 import { db } from './db';
 import { instances } from './db/schema';
 import * as jobs from './instance-jobs';
-import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
+import { JAVA_MAJORS, javaCommand, requiredJavaMajor, type JavaMajor } from './java';
 import * as live from './live-server';
-import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
+import { installServer, launchArgs, type Loader } from './loaders';
 import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;
@@ -105,23 +105,18 @@ export function insertInstance(input: NewInstance) {
 
 /** Installs the loader's server files, telling `progress` what it is doing. */
 export async function installBase(row: Instance, progress: jobs.Report) {
-	const mc = row.mcVersion;
 	const loader = row.loader as Loader;
-	let java: string | undefined;
-	if (needsJavaToInstall(loader)) {
-		progress('Getting Java ready');
-		java = javaOverride ?? (await ensureJava(await requiredJavaMajor(mc)));
-	}
 	await installServer({
 		serverDir: serverDir(row.id),
 		loader,
-		mc,
+		mc: row.mcVersion,
 		build: row.loaderVersion ?? undefined,
-		java,
 		report: (step, done, total) =>
-			step === 'installing'
-				? progress(`Installing ${loader}`)
-				: progress('Downloading the server', { done: done ?? 0, total: total ?? 0, bytes: true })
+			step === 'java'
+				? progress('Getting Java ready')
+				: step === 'installing'
+					? progress(`Installing ${loader}`)
+					: progress('Downloading the server', { done: done ?? 0, total: total ?? 0, bytes: true })
 	});
 }
 
@@ -243,7 +238,7 @@ export async function startInstance(id: number) {
 
 	const java = await javaFor(inst);
 	const spec: LaunchSpec = {
-		command: javaOverride ?? (await ensureJava(java)),
+		command: await javaCommand(java),
 		args: javaArgs(server, inst, java, launch),
 		cwd: server
 	};

@@ -4,15 +4,14 @@ import { dirname, join } from 'node:path';
 
 import { writeBackup } from '#lib/server/backups.js';
 import { sha1 } from '#lib/server/change-set.js';
-import { javaOverride } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
 import { installedMods } from '#lib/server/db/schema.js';
 import * as jobs from '#lib/server/instance-jobs.js';
 import { getInstance, serverDir } from '#lib/server/instances.js';
-import { ensureJava, requiredJavaMajor } from '#lib/server/java.js';
-import { installServer, launchArgs, needsJavaToInstall, type Loader } from '#lib/server/loaders.js';
+import { javaChoiceAfter, requiredJavaMajor } from '#lib/server/java.js';
+import { installServer, type Loader } from '#lib/server/loaders.js';
 import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from '#lib/server/mods.js';
-import { mergeStaged, removeStale } from '#lib/server/staged-install.js';
+import { mergeStaged } from '#lib/server/staged-install.js';
 
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import { downloadFiles, packFileHashes, trackMods, type LoadedPack } from './modpacks';
@@ -213,15 +212,11 @@ export async function startModpackUpdate(
 			const staging = makeStaging();
 			if (plan.loaderChange) {
 				progress('Installing the new server');
-				const java = needsJavaToInstall(plan.loader)
-					? (javaOverride ?? (await ensureJava(await requiredJavaMajor(plan.mcVersion))))
-					: undefined;
 				await installServer({
 					serverDir: staging,
 					loader: plan.loader,
 					mc: plan.mcVersion,
-					build: plan.loaderVersion ?? undefined,
-					java
+					build: plan.loaderVersion ?? undefined
 				});
 			}
 			await downloadFiles(
@@ -242,8 +237,7 @@ export async function startModpackUpdate(
 			const replaced = plan.download.filter((d) => d.disabled).map((d) => d.file.path + DISABLED);
 			for (const path of [...plan.remove, ...plan.removeConfigs, ...replaced])
 				rmSync(join(server, path), { force: true });
-			if (plan.loaderChange) removeStale(server, plan.loader);
-			mergeStaged(server, staging);
+			mergeStaged(server, staging, plan.loaderChange ? { freshInstall: plan.loader } : {});
 
 			// the Mods tab follows the files: drop what changed or went, record what is new
 			const gone = [...plan.remove, ...plan.download.map((d) => d.file.path)];
@@ -277,9 +271,9 @@ export async function startModpackUpdate(
 			};
 			writeManifest(instanceId, manifest);
 
-			if (plan.loaderChange) launchArgs(server, plan.loader);
-			const needed = await requiredJavaMajor(plan.mcVersion);
-			const resetJava = plan.loaderChange && inst.javaMajor !== null && inst.javaMajor < needed;
+			const java = plan.loaderChange
+				? javaChoiceAfter(inst.javaMajor, await requiredJavaMajor(plan.mcVersion))
+				: { javaMajor: inst.javaMajor, note: '' };
 
 			const parts = [
 				plan.download.length ? `${plan.download.length} files downloaded` : null,
@@ -290,7 +284,7 @@ export async function startModpackUpdate(
 				set: {
 					mcVersion: plan.mcVersion,
 					loaderVersion: plan.loaderVersion,
-					javaMajor: resetJava ? null : inst.javaMajor,
+					javaMajor: java.javaMajor,
 					...source.recordVersion(plan),
 					packName: plan.name,
 					packIconUrl: pack.summary.iconUrl
@@ -298,7 +292,7 @@ export async function startModpackUpdate(
 				message:
 					`Updated ${plan.name} from ${from} to ${plan.versionNumber}` +
 					(parts.length ? `: ${parts.join(', ')}.` : '.') +
-					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : ''),
+					java.note,
 				details: plan.kept.length
 					? [`Left as they were, because you changed them (${plan.kept.length}):`, ...plan.kept]
 					: undefined

@@ -4,6 +4,7 @@ import { join, relative } from 'node:path';
 
 import { compareVersions } from '../versions';
 import { downloadFile, type Download, type Hash, type OnProgress } from './download';
+import { javaCommand, requiredJavaMajor } from './java';
 
 export { LOADERS, type Loader } from '../loader-list';
 import type { Loader } from '../loader-list';
@@ -286,25 +287,29 @@ async function runInstaller(java: string, args: string[], cwd: string) {
 
 /**
  * Puts a runnable server into `serverDir`: a plain jar for most loaders, or the output of the
- * loader's installer for Quilt, Forge and NeoForge (`java` is required for those).
+ * loader's installer for Quilt, Forge and NeoForge, run with the Java that `mc` needs.
  */
 export async function installServer(opts: {
 	serverDir: string;
 	loader: Loader;
 	mc: string;
 	build?: string;
-	java?: string;
-	/** told what is happening: the download with its byte counts, then the installer's run */
-	report?: (step: 'downloading' | 'installing', done?: number, total?: number) => void;
+	/** told what is happening: getting Java, the download with its byte counts, the installer's run */
+	report?: (step: 'java' | 'downloading' | 'installing', done?: number, total?: number) => void;
 }) {
-	const { serverDir, loader, mc, build, java, report } = opts;
+	const { serverDir, loader, mc, build, report } = opts;
 	const onBytes: OnProgress = (done, total) => report?.('downloading', done, total);
-	const download = await resolveDownload(loader, mc, build);
 	if (!needsJavaToInstall(loader)) {
-		await downloadFile(join(serverDir, 'server.jar'), download, onBytes);
+		await downloadFile(
+			join(serverDir, 'server.jar'),
+			await resolveDownload(loader, mc, build),
+			onBytes
+		);
 		return;
 	}
-	if (!java) throw new Error(`Installing ${loader} needs Java`);
+	report?.('java');
+	const java = await javaCommand(await requiredJavaMajor(mc));
+	const download = await resolveDownload(loader, mc, build);
 
 	const installer = join(serverDir, 'installer.jar');
 	try {

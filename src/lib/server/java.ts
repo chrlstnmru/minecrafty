@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { dataDir } from './config';
+import { dataDir, javaOverride } from './config';
 
 // Temurin LTS releases; Mojang also asks for 16 (1.17), which 17 runs fine
 export const JAVA_MAJORS = [8, 17, 21, 25] as const;
@@ -73,6 +73,21 @@ function findJava(dir: string, depth = 0): string | null {
 		}
 	}
 	return null;
+}
+
+/** The java to run for `major`: MINECRAFTY_JAVA when set, else a Temurin JRE, downloaded on first use. */
+export const javaCommand = (major: JavaMajor) =>
+	javaOverride ? Promise.resolve(javaOverride) : ensureJava(major);
+
+/**
+ * The Java choice an instance keeps after moving to a Minecraft version that needs `needed`: a
+ * version chosen by hand that is too old for it goes back to automatic, and `note` says so in
+ * the update's message.
+ */
+export function javaChoiceAfter(chosen: number | null, needed: JavaMajor) {
+	return chosen !== null && chosen < needed
+		? { javaMajor: null, note: ` Java is now chosen automatically, as ${needed} is needed.` }
+		: { javaMajor: chosen, note: '' };
 }
 
 const installing = new Map<number, Promise<string>>();

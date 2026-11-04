@@ -49,10 +49,10 @@ vi.mock(
 	async () => (await import('#test/fake-runner.js')).fakeRunnerClient
 );
 
-vi.mock('#lib/server/java.js', () => ({
+vi.mock('#lib/server/java.js', async (original) => ({
+	...(await original<typeof import('#lib/server/java.js')>()),
 	ensureJava: async () => '/fake/java',
-	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17),
-	JAVA_MAJORS: [8, 17, 21, 25]
+	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17)
 }));
 
 vi.mock('#lib/server/loaders.js', async (original) => ({

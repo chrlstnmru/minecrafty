@@ -3,7 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { mergeStaged, removeStale } from './staged-install';
+import { mergeStaged } from './staged-install';
 
 let server: string;
 let staging: string;
@@ -64,24 +64,33 @@ describe('mergeStaged', () => {
 	});
 });
 
-describe('removeStale', () => {
+describe('mergeStaged with a fresh install', () => {
 	it('removes only what the old loader install left behind', () => {
 		put(server, 'libraries/net/neoforged/old/unix_args.txt', 'old');
 		put(server, 'run.sh', 'old');
 		put(server, 'mods/a.jar', 'mod');
 		put(server, 'world/level.dat', 'level');
-		removeStale(server, 'neoforge');
-		expect(existsSync(join(server, 'libraries'))).toBe(false);
+		put(staging, 'libraries/net/neoforged/new/unix_args.txt', 'new');
+		mergeStaged(server, staging, { freshInstall: 'neoforge' });
+		expect(existsSync(join(server, 'libraries/net/neoforged/old'))).toBe(false);
+		expect(read(server, 'libraries/net/neoforged/new/unix_args.txt')).toBe('new');
 		expect(existsSync(join(server, 'run.sh'))).toBe(false);
 		expect(existsSync(join(server, 'mods/a.jar'))).toBe(true);
 		expect(existsSync(join(server, 'world/level.dat'))).toBe(true);
 	});
 
 	it('removes nothing for loaders that only replace server.jar', () => {
-		put(server, 'server.jar', 'jar');
 		put(server, 'libraries/x', 'paper libs');
-		removeStale(server, 'paper');
-		expect(existsSync(join(server, 'server.jar'))).toBe(true);
+		put(staging, 'server.jar', 'jar');
+		mergeStaged(server, staging, { freshInstall: 'paper' });
+		expect(read(server, 'server.jar')).toBe('jar');
 		expect(existsSync(join(server, 'libraries/x'))).toBe(true);
+	});
+
+	it('throws when the merged server cannot be started', () => {
+		put(staging, 'notes.txt', 'no jar here');
+		expect(() => mergeStaged(server, staging, { freshInstall: 'paper' })).toThrow(
+			/server\.jar is missing/
+		);
 	});
 });
