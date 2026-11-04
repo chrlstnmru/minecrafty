@@ -64,8 +64,9 @@
 		}
 	}
 
-	let name = $state(pack.name);
-	let description = $state(pack.description);
+	// what is typed, until the pack changes (a save, or another pack); then the saved values again
+	let name = $derived(pack.name);
+	let description = $derived(pack.description);
 
 	const dirty = $derived(!!pack && (name !== pack.name || description !== pack.description));
 
