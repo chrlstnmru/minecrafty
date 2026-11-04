@@ -2,7 +2,7 @@
 // each subscription has an id the page picks, and frames come back tagged with it.
 
 import type { ConsoleFrame } from '#lib/console-frames.js';
-import type { VisibleInstance } from '#lib/server/instances.js';
+import type { Progress } from '#lib/server/instance-jobs.js';
 import type { LogFrame } from '#lib/server/logs.js';
 import type { Snapshot } from '#lib/server/stats.js';
 
@@ -11,15 +11,16 @@ export const SOCKET_PATH = '/_ws';
 export type FeedFrames = {
 	console: ConsoleFrame;
 	log: LogFrame;
-	instances: VisibleInstance[];
-	/** the `rev` of `listNavInstances`; a new one means refetch it */
-	nav: string;
+	/** each visible instance's `rev` by id; a query holding an older one refetches */
+	revs: Record<string, string>;
+	/** each visible instance's running job progress by id */
+	progress: Record<string, Progress>;
 	stats: Snapshot;
 };
 export type FeedName = keyof FeedFrames;
 
 /** Feeds about the whole panel rather than one instance; they are subscribed without an instance. */
-export const PANEL_FEEDS = ['instances', 'nav', 'stats'] as const satisfies readonly FeedName[];
+export const PANEL_FEEDS = ['revs', 'progress', 'stats'] as const satisfies readonly FeedName[];
 export type PanelFeed = (typeof PANEL_FEEDS)[number];
 export type InstanceFeed = Exclude<FeedName, PanelFeed>;
 

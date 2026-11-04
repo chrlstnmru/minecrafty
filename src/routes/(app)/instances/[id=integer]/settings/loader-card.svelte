@@ -13,7 +13,7 @@
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { isFromPack } from '#lib/instance-origin.js';
 	import { getInstance } from '#lib/instances.remote.js';
-	import { liveInstances } from '#lib/live.svelte.js';
+	import { liveProgress } from '#lib/live.svelte.js';
 	import { loaderBuilds, loaderStatus, updateLoader } from '#lib/loader.remote.js';
 	import { updateKind } from '#lib/versions.js';
 
@@ -21,8 +21,8 @@
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the page and the browser hydrates the same markup
 	const info = $derived(await loaderStatus(id));
-	const all = liveInstances();
-	const row = $derived(all.current?.find((i) => i.id === id));
+	const row = $derived(getInstance(id).current);
+	const progress = liveProgress();
 	const installing = $derived(row?.installState === 'installing');
 	const running = $derived(row?.state === 'running' || row?.state === 'stopping');
 
@@ -209,7 +209,7 @@
 
 				{#if installing}
 					<p class="flex items-center gap-2 text-sm text-muted-foreground" role="status">
-						<Spinner />{row?.progress?.label ?? 'Updating'}…
+						<Spinner />{progress.current?.[id]?.label ?? 'Updating'}…
 					</p>
 				{/if}
 

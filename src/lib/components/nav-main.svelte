@@ -9,7 +9,7 @@
 
 	let { items }: { items: NavItem[] } = $props();
 
-	const instances = $derived((await listNavInstances()).instances);
+	const instances = $derived(await listNavInstances());
 </script>
 
 <Sidebar.Group>

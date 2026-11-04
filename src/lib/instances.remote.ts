@@ -5,7 +5,6 @@ import * as v from 'valibot';
 import { backfillPackIcons } from '#lib/modpacks/server/modpacks.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { createInstanceSchema, updateInstanceSchema } from '#lib/schemas/instance.js';
-import { permissionsFor } from '#lib/server/access.js';
 import { record } from '#lib/server/audit.js';
 import { requireInstance, requirePanel, requirePermission, requireUser } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
@@ -15,22 +14,17 @@ import { LOADERS, getMinecraftVersions, isKnownVersion, latestBuild } from '#lib
 
 const id = idSchema;
 
-/** The instances the user may see as they are now; the `instances` feed keeps them current. */
+/** The instances the user may see; the `revs` feed says when to refetch it. */
 export const listInstances = query(async () => instances.visibleInstances(requireUser()));
 
-/** The small list the sidebar and breadcrumbs render; the `nav` feed says when to refetch it. */
+/** The small list the sidebar and breadcrumbs render; the `revs` feed says when to refetch it. */
 export const listNavInstances = query(async () => instances.navInstances(requireUser()));
 
+/** One instance as the lists show it; the `revs` feed says when to refetch it. */
 export const getInstance = query(id, async (instanceId) => {
-	const user = requireInstance(instanceId);
-	const row = instances.getInstance(instanceId);
+	const row = await instances.visibleInstance(requireInstance(instanceId), instanceId);
 	if (!row) error(404, 'Instance not found');
-	// the RCON password is for the panel's own use
-	const { rconPassword: _secret, ...visible } = row;
-	return {
-		...visible,
-		permissions: permissionsFor(user, instanceId)
-	};
+	return row;
 });
 
 const loader = v.picklist(LOADERS);

@@ -166,20 +166,31 @@ export function getInstance(id: number) {
 	return db.select().from(instances).where(eq(instances.id, id)).get();
 }
 
+type Row = typeof instances.$inferSelect;
+
+async function withStatus({ rconPassword: _secret, ...row }: Row) {
+	const s = await live.status(row.id);
+	return {
+		...row,
+		state: (s?.state ?? 'stopped') as InstanceState,
+		pid: s?.pid ?? null,
+		startedAt: s?.startedAt ?? null,
+		progress: jobs.jobState(row.id).progress
+	};
+}
+
 export async function listInstances() {
-	const rows = db.select().from(instances).all();
-	return Promise.all(
-		rows.map(async ({ rconPassword: _secret, ...row }) => {
-			const s = await live.status(row.id);
-			return {
-				...row,
-				state: (s?.state ?? 'stopped') as InstanceState,
-				pid: s?.pid ?? null,
-				startedAt: s?.startedAt ?? null,
-				progress: jobs.jobState(row.id).progress
-			};
-		})
-	);
+	return Promise.all(db.select().from(instances).all().map(withStatus));
+}
+
+/**
+ * Tags a row with `rev`, which changes whenever anything the pages show of it does. Progress is
+ * left out: it ticks many times a second, so it has its own feed instead of refetching the row.
+ */
+function withRev<T extends { progress: unknown }>(row: T) {
+	const { progress: _ticks, ...rest } = row;
+	const rev = createHash('sha1').update(JSON.stringify(rest)).digest('base64url').slice(0, 12);
+	return { ...row, rev };
 }
 
 /** The instances `user` may see, each with what they may do on it, for the pages' lists. */
@@ -187,19 +198,51 @@ export async function visibleInstances(user: Actor) {
 	const visible = visibleInstanceIds(user);
 	return (await listInstances())
 		.filter((r) => !visible || visible.includes(r.id))
-		.map((r) => ({ ...r, permissions: permissionsFor(user, r.id) }));
+		.map((r) => withRev({ ...r, permissions: permissionsFor(user, r.id) }));
 }
 
 export type VisibleInstance = Awaited<ReturnType<typeof visibleInstances>>[number];
 
-/**
- * What the sidebar and breadcrumbs show of each instance `user` may see. `rev` changes whenever
- * the list does; the `nav` feed sends only `rev`, and the page refetches when it differs.
- */
+/** One instance as {@link visibleInstances} lists it; the caller has checked that `user` may see it. */
+export async function visibleInstance(
+	user: Actor,
+	id: number
+): Promise<VisibleInstance | undefined> {
+	const row = getInstance(id);
+	return row && withRev({ ...(await withStatus(row)), permissions: permissionsFor(user, id) });
+}
+
+/** What the sidebar and breadcrumbs show of each instance `user` may see. */
 export async function navInstances(user: Actor) {
-	const list = (await visibleInstances(user)).map(({ id, name, state }) => ({ id, name, state }));
-	const rev = createHash('sha1').update(JSON.stringify(list)).digest('base64url').slice(0, 12);
-	return { rev, instances: list };
+	return (await visibleInstances(user)).map(({ id, name, state, rev }) => ({
+		id,
+		name,
+		state,
+		rev
+	}));
+}
+
+/** The `rev` of each instance `user` may see, keyed by id: what the `revs` feed sends. */
+export async function instanceRevs(user: Actor) {
+	return Object.fromEntries((await visibleInstances(user)).map((r) => [r.id, r.rev]));
+}
+
+/** The progress of each job running on an instance `user` may see, keyed by id. */
+export function visibleProgress(user: Actor) {
+	const visible = visibleInstanceIds(user);
+	const ids = db
+		.select({ id: instances.id })
+		.from(instances)
+		.all()
+		.map((r) => r.id);
+	return Object.fromEntries(
+		ids
+			.filter((id) => !visible || visible.includes(id))
+			.flatMap((id) => {
+				const progress = jobs.jobState(id).progress;
+				return progress ? [[id, progress]] : [];
+			})
+	);
 }
 
 /** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */

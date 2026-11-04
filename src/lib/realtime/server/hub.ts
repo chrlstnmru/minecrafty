@@ -17,7 +17,7 @@ import {
 } from '#lib/realtime/protocol.js';
 import { idSchema } from '#lib/schemas/common.js';
 import { check } from '#lib/server/access.js';
-import { navInstances, visibleInstances } from '#lib/server/instances.js';
+import { instanceRevs, visibleProgress } from '#lib/server/instances.js';
 import * as live from '#lib/server/live-server.js';
 import { followLog } from '#lib/server/logs.js';
 import { sessionToken, userFromToken, type SessionUser } from '#lib/server/sessions.js';
@@ -77,10 +77,8 @@ async function* sample<T>(
 
 // there is no event for "an instance changed", so both sample the panel's view of things
 const panelFeeds: { [F in PanelFeed]: ForPanel<F> } = {
-	instances: { open: (user, signal) => sample(user, visibleInstances, 1000, signal) },
-	nav: {
-		open: (user, signal) => sample(user, async (who) => (await navInstances(who)).rev, 1000, signal)
-	},
+	revs: { open: (user, signal) => sample(user, instanceRevs, 1000, signal) },
+	progress: { open: (user, signal) => sample(user, async (u) => visibleProgress(u), 500, signal) },
 	stats: { open: (user, signal) => sample(user, statsFor, 3000, signal) }
 };
 

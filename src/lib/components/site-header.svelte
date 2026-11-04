@@ -11,7 +11,7 @@
 	const nav = $derived(await listNavInstances());
 	const section = $derived(findNavItem(page.url.pathname));
 	const instance = $derived(
-		page.params.id ? nav.instances.find((i) => i.id === Number(page.params.id)) : undefined
+		page.params.id ? nav.find((i) => i.id === Number(page.params.id)) : undefined
 	);
 </script>
 
