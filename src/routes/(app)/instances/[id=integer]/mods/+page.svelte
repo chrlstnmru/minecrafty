@@ -17,9 +17,12 @@
 	import {
 		installMod,
 		installedMods,
+		localMods,
+		removeLocalMod,
 		modUpdates,
 		refreshModSides,
 		removeMod,
+		setLocalModEnabled,
 		setModEnabled,
 		updateMod
 	} from '#lib/mods.remote.js';
@@ -30,6 +33,7 @@
 	// Starts the list and the update check together; the await below joins the request in flight.
 	$effect.pre(() => {
 		void installedMods(id).current;
+		void localMods(id).current;
 		void modUpdates(id).current;
 	});
 	// what the loader can install needs no request: the layout has loaded the instance already
@@ -41,19 +45,38 @@
 	);
 	// awaited, so the server renders the list and the browser hydrates the same markup
 	const installed = $derived(await installedMods(id));
+	const local = $derived(await localMods(id));
 	const installedIds = $derived(new Set(installed.map((m) => m.projectId)));
 
 	const updates = $derived(modUpdates(id));
 	const updateByMod = $derived(new Map(updates.current?.map((u) => [u.modId, u])));
 	const items = $derived<ModListItem[]>(
-		installed.map((mod) => {
-			const update = updateByMod.get(mod.id);
-			return {
-				...mod,
-				fromModrinth: mod.source === 'modrinth',
-				update: update && { versionNumber: update.versionNumber }
-			};
-		})
+		[
+			...installed.map((mod) => {
+				const update = updateByMod.get(mod.id);
+				return {
+					...mod,
+					key: String(mod.id),
+					fromModrinth: mod.source === 'modrinth',
+					update: update && { versionNumber: update.versionNumber }
+				};
+			}),
+			...local.map((jar) => ({
+				key: jar.file,
+				id: null,
+				projectId: null,
+				title: jar.name,
+				iconUrl: null,
+				file: jar.file,
+				versionNumber: null,
+				versionId: null,
+				dependencyOf: null,
+				clientSide: null,
+				serverSide: null,
+				enabled: jar.enabled,
+				fromModrinth: false
+			}))
+		].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
 	);
 
 	// The open tab lives in the URL (?view=browse), so a reload keeps it. Read from the page URL,
@@ -135,6 +158,26 @@
 		}
 	}
 
+	async function toggleLocal(file: string, title: string, enabled: boolean) {
+		try {
+			await setLocalModEnabled({ id, file, enabled });
+			toast.success(`${enabled ? 'Enabled' : 'Disabled'} ${title}`, {
+				description: 'Restart the server to apply.'
+			});
+		} catch (e) {
+			toast.error(message(e, 'Could not change it'));
+		}
+	}
+
+	async function removeLocal(file: string, title: string) {
+		try {
+			await removeLocalMod({ id, file });
+			toast.success(`Removed ${title}`);
+		} catch (e) {
+			toast.error(message(e, 'Remove failed'));
+		}
+	}
+
 	async function remove(modId: number, title: string) {
 		try {
 			await removeMod({ id, modId });
@@ -163,7 +206,7 @@
 		>
 			<Tabs.List>
 				<Tabs.Trigger value="installed"
-					>Installed <Badge variant="muted" class="tabular-nums">{installed.length}</Badge
+					>Installed <Badge variant="muted" class="tabular-nums">{items.length}</Badge
 					></Tabs.Trigger
 				>
 				<Tabs.Trigger value="browse">Browse</Tabs.Trigger>
@@ -191,19 +234,23 @@
 						<ModList
 							{items}
 							noun={info.noun}
-							onToggle={(mod, on) => toggle(mod.id, mod.title, on)}
+							onToggle={(mod, on) =>
+								mod.id === null
+									? toggleLocal(mod.file, mod.title, on)
+									: toggle(mod.id, mod.title, on)}
 							onVersions={(mod) => {
 								picker = {
 									projectId: mod.projectId!,
 									title: mod.title,
-									modId: mod.id,
+									modId: mod.id!,
 									currentVersionId: mod.versionId ?? ''
 								};
 								pickerOpen = true;
 							}}
-							onUpdate={(mod) => change(mod.id, mod.title)}
+							onUpdate={(mod) => change(mod.id!, mod.title)}
 							onUpdateAll={updateAll}
-							onRemove={(mod) => remove(mod.id, mod.title)}
+							onRemove={(mod) =>
+								mod.id === null ? removeLocal(mod.file, mod.title) : remove(mod.id, mod.title)}
 							onBrowse={() => (params.view = 'browse')}
 						/>
 					</Card.Content>

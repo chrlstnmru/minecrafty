@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { existsSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { modSupport } from '#lib/mod-support.js';
@@ -257,6 +257,60 @@ export function remove(instanceId: number, modId: number) {
 	// `file` is stored relative to the server folder and was validated when written
 	rmSync(join(serverDir(instanceId), row.file), { force: true });
 	db.delete(installedMods).where(eq(installedMods.id, row.id)).run();
+}
+
+/** A jar in the mods (or plugins) folder that the panel did not install, such as one uploaded in Files. */
+export type LocalMod = {
+	/** path relative to the server folder, e.g. mods/journeymap.jar.disabled */
+	file: string;
+	/** the file name without .jar and .disabled */
+	name: string;
+	enabled: boolean;
+};
+
+const isJar = (name: string) => name.endsWith('.jar') || name.endsWith('.jar' + DISABLED_SUFFIX);
+
+/** The untracked jars in the instance's mods or plugins folder, by name; only that folder, not below it. */
+export function listLocal(instanceId: number): LocalMod[] {
+	const { folder } = modSupport(instanceRow(instanceId).loader);
+	const dir = join(serverDir(instanceId), folder);
+	if (!existsSync(dir)) return [];
+	const tracked = new Set(listInstalled(instanceId).map((m) => m.file.replace(/\.disabled$/, '')));
+	return readdirSync(dir, { withFileTypes: true })
+		.filter((entry) => entry.isFile() && isJar(entry.name))
+		.map((entry) => {
+			const enabled = !entry.name.endsWith(DISABLED_SUFFIX);
+			const jar = enabled ? entry.name : entry.name.slice(0, -DISABLED_SUFFIX.length);
+			return { file: `${folder}/${entry.name}`, jar: `${folder}/${jar}`, enabled };
+		})
+		.filter((m) => !tracked.has(m.jar))
+		.map(({ file, jar, enabled }) => ({ file, name: jar.slice(folder.length + 1, -4), enabled }))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+/** The untracked jar `file` names, checked: a bare jar name in the mods folder that the panel does not track. */
+function localJar(instanceId: number, file: string) {
+	const local = listLocal(instanceId).find((m) => m.file === file);
+	if (!local) throw new Error(`${file} is not an untracked jar in this server's mods folder`);
+	return local;
+}
+
+/** Turns an untracked jar on or off by renaming it, as `setEnabled` does for installed mods. */
+export function setLocalEnabled(instanceId: number, file: string, enabled: boolean) {
+	assertWritable(instanceId);
+	const local = localJar(instanceId, file);
+	if (local.enabled === enabled) return;
+	const next = enabled ? file.slice(0, -DISABLED_SUFFIX.length) : file + DISABLED_SUFFIX;
+	const root = serverDir(instanceId);
+	if (existsSync(join(root, next))) throw new Error(`${next} already exists`);
+	renameSync(join(root, file), join(root, next));
+}
+
+/** Deletes an untracked jar. */
+export function removeLocal(instanceId: number, file: string) {
+	assertWritable(instanceId);
+	localJar(instanceId, file);
+	rmSync(join(serverDir(instanceId), file), { force: true });
 }
 
 /** Fills in where mods run for rows recorded before that was kept; returns how many it filled. */

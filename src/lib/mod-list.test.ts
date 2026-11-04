@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { countByFilter, filterMods, reason, sideTags, type ModListItem } from './mod-list';
 
 const mod = (over: Partial<ModListItem>): ModListItem => ({
+	key: 'k',
 	id: 1,
 	projectId: 'P',
 	title: 'Mod',
@@ -45,6 +46,11 @@ describe('filterMods', () => {
 		expect(filterMods(items, 'all', '  ')).toHaveLength(3);
 	});
 
+	it('narrows to local mods', () => {
+		const local = [...items, mod({ id: null, key: 'f', title: 'journeymap', fromModrinth: false })];
+		expect(filterMods(local, 'local', '').map((m) => m.title)).toEqual(['journeymap']);
+	});
+
 	it('narrows to the chosen filter', () => {
 		expect(filterMods(items, 'updates', '').map((m) => m.id)).toEqual([1]);
 		expect(filterMods(items, 'disabled', '').map((m) => m.id)).toEqual([2]);
@@ -52,7 +58,13 @@ describe('filterMods', () => {
 	});
 
 	it('counts each filter', () => {
-		expect(countByFilter(items)).toEqual({ all: 3, updates: 1, disabled: 1, 'client-only': 1 });
+		expect(countByFilter(items)).toEqual({
+			all: 3,
+			updates: 1,
+			disabled: 1,
+			'client-only': 1,
+			local: 0
+		});
 	});
 });
 
@@ -64,8 +76,8 @@ describe('reason', () => {
 		expect(reason(mod({ dependencyOf: 'GONE' }), titles)).toBe('Added as a dependency');
 	});
 
-	it('marks files Modrinth does not know, and is quiet otherwise', () => {
-		expect(reason(mod({ fromModrinth: false }), titles)).toBe('Not from Modrinth');
+	it('is quiet for a mod somebody chose, from Modrinth or not', () => {
 		expect(reason(mod({}), titles)).toBeNull();
+		expect(reason(mod({ fromModrinth: false }), titles)).toBeNull();
 	});
 });

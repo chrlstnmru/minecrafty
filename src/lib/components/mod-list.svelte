@@ -14,12 +14,12 @@
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Switch } from '#lib/components/ui/switch/index.js';
 	import * as ToggleGroup from '#lib/components/ui/toggle-group/index.js';
+	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
 	import {
 		MOD_FILTERS,
 		countByFilter,
 		filterMods,
 		reason,
-		type ModFilter,
 		type ModListItem
 	} from '#lib/mod-list.js';
 	import { UrlParam } from '#lib/url-param.svelte.js';
@@ -66,12 +66,15 @@
 	);
 
 	const filters = $derived(
-		[
-			{ value: 'all', label: `All ${counts.all}` },
-			{ value: 'updates', label: `Updates ${counts.updates}` },
-			{ value: 'disabled', label: `Disabled ${counts.disabled}` },
-			{ value: 'client-only', label: `Client only ${counts['client-only']}` }
-		].filter((f) => f.value === 'all' || counts[f.value as ModFilter] > 0)
+		(
+			[
+				{ value: 'all', label: 'All' },
+				{ value: 'updates', label: 'Updates' },
+				{ value: 'disabled', label: 'Disabled' },
+				{ value: 'client-only', label: 'Client only' },
+				{ value: 'local', label: 'Local' }
+			] as const
+		).filter((f) => f.value === 'all' || counts[f.value] > 0)
 	);
 </script>
 
@@ -115,6 +118,7 @@
 							class="px-2.5 text-muted-foreground tabular-nums data-[state=on]:bg-secondary data-[state=on]:text-foreground"
 						>
 							{f.label}
+							<Badge variant="muted" class="tabular-nums">{counts[f.value]}</Badge>
 						</ToggleGroup.Item>
 					{/each}
 				</ToggleGroup.Root>
@@ -128,7 +132,7 @@
 
 		{#if shown.length}
 			<ul class="min-h-0 flex-1 divide-y overflow-y-auto">
-				{#each shown as { item, why } (item.id)}
+				{#each shown as { item, why } (item.key)}
 					<li class="flex items-center gap-3 py-2">
 						{#if onToggle}
 							<Switch
@@ -152,6 +156,18 @@
 						>
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{item.title}</span>
+								{#if !item.fromModrinth}
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<Badge {...props} variant="outline">Local</Badge>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content
+											>Not from Modrinth, so it has no versions or updates here.</Tooltip.Content
+										>
+									</Tooltip.Root>
+								{/if}
 								{#if !item.enabled}<Badge variant="muted">Disabled</Badge>{/if}
 							</div>
 							{#if why}<p class="truncate text-xs text-muted-foreground">{why}</p>{/if}
@@ -185,7 +201,7 @@
 								</Button>
 							{:else}
 								<span class="truncate px-2.5 text-sm text-muted-foreground tabular-nums">
-									{item.versionNumber ?? 'Unknown'}
+									{item.versionNumber ?? '–'}
 								</span>
 							{/if}
 						</div>
