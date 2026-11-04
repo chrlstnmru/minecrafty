@@ -262,13 +262,18 @@ export async function tick(now: Date, deps: Deps = realDeps) {
 /** Starts the once-a-minute clock. Does nothing if it already runs. */
 let timer: ReturnType<typeof setTimeout> | null = null;
 export function startScheduler() {
-	if (timer) return;
+	const stop = () => {
+		if (timer) clearTimeout(timer);
+		timer = null;
+	};
+	if (timer) return stop;
 	const loop = () => {
 		void tick(new Date());
 		// aim just after the minute turns, so "04:00" runs at 04:00 and not a moment before
 		timer = setTimeout(loop, 60_000 - (Date.now() % 60_000) + 200);
 	};
 	timer = setTimeout(loop, 60_000 - (Date.now() % 60_000) + 200);
+	return stop;
 }
 
 /** Forgets which minute was last handled; for tests. */

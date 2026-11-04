@@ -167,10 +167,14 @@ export function requestUpdate(version: string) {
 	);
 }
 
-/** Checks a minute after start, then once a day. */
+/** Checks a minute after start, then once a day; returns how to stop. */
 export function startUpdateChecks() {
-	setTimeout(() => void checkForUpdate(), 60_000).unref();
-	setInterval(() => void checkForUpdate(), 24 * 60 * 60 * 1000).unref();
+	const first = setTimeout(() => void checkForUpdate(), 60_000).unref();
+	const daily = setInterval(() => void checkForUpdate(), 24 * 60 * 60 * 1000).unref();
+	return () => {
+		clearTimeout(first);
+		clearInterval(daily);
+	};
 }
 
 /** For tests: forget the last check. */

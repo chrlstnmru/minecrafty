@@ -199,9 +199,13 @@ export async function refreshSizes() {
 	for (const id of sizes.keys()) if (!ids.has(id)) sizes.delete(id);
 }
 
-/** Starts reading every few seconds, and measuring folders every few minutes. */
+/** Starts reading every few seconds, and measuring folders every few minutes; returns how to stop. */
 export function startStats() {
-	if (timers.length) return;
+	const stop = () => {
+		for (const timer of timers) clearTimeout(timer);
+		timers = [];
+	};
+	if (timers.length) return stop;
 	const take = () =>
 		sampler.sample().then(
 			(snapshot) => (latest = snapshot),
@@ -209,8 +213,12 @@ export function startStats() {
 		);
 	void take();
 	// the first measure waits a moment so the panel's start is not slowed down by it
-	setTimeout(() => void refreshSizes(), 5000);
-	timers = [setInterval(take, 3000), setInterval(() => void refreshSizes(), 5 * 60_000)];
+	timers = [
+		setTimeout(() => void refreshSizes(), 5000),
+		setInterval(take, 3000),
+		setInterval(() => void refreshSizes(), 5 * 60_000)
+	];
+	return stop;
 }
 
 /** The snapshot as `user` may see it: the host and the disk need `host.view`, and only the servers they may view are listed. */
