@@ -8,6 +8,7 @@
 	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
+	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import { viewParam } from '#lib/installed-browse.svelte.js';
@@ -25,6 +26,7 @@
 		setModEnabled,
 		updateMod
 	} from '#lib/mods.remote.js';
+	import { rendered } from '#lib/rendered.js';
 	import { cn } from '#lib/utils.js';
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
@@ -36,46 +38,48 @@
 		void modUpdates(id).current;
 	});
 	// what the loader can install needs no request: the layout has loaded the instance already
-	const instance = $derived(getInstance(id).current);
+	const instance = $derived(await rendered(getInstance(id)));
 	const info = $derived(
 		instance
 			? { ...modSupport(instance.loader), loader: instance.loader, mcVersion: instance.mcVersion }
 			: undefined
 	);
-	// awaited, so the server renders the list and the browser hydrates the same markup
-	const installed = $derived(await installedMods(id));
-	const local = $derived(await localMods(id));
-	const installedIds = $derived(new Set(installed.map((m) => m.projectId)));
+	const lists = $derived(await Promise.all([rendered(installedMods(id)), rendered(localMods(id))]));
+	const installed = $derived(lists[0]);
+	const local = $derived(lists[1]);
+	const installedIds = $derived(new Set(installed?.map((m) => m.projectId)));
 
 	const updates = $derived(modUpdates(id));
 	const updateByMod = $derived(new Map(updates.current?.map((u) => [u.modId, u])));
-	const items = $derived<ModListItem[]>(
-		[
-			...installed.map((mod) => {
-				const update = updateByMod.get(mod.id);
-				return {
-					...mod,
-					key: String(mod.id),
-					fromModrinth: mod.source === 'modrinth',
-					update: update && { versionNumber: update.versionNumber }
-				};
-			}),
-			...local.map((jar) => ({
-				key: jar.file,
-				id: null,
-				projectId: null,
-				title: jar.name,
-				iconUrl: null,
-				file: jar.file,
-				versionNumber: null,
-				versionId: null,
-				dependencyOf: null,
-				clientSide: null,
-				serverSide: null,
-				enabled: jar.enabled,
-				fromModrinth: false
-			}))
-		].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
+	const items = $derived<ModListItem[] | undefined>(
+		installed &&
+			local &&
+			[
+				...installed.map((mod) => {
+					const update = updateByMod.get(mod.id);
+					return {
+						...mod,
+						key: String(mod.id),
+						fromModrinth: mod.source === 'modrinth',
+						update: update && { versionNumber: update.versionNumber }
+					};
+				}),
+				...local.map((jar) => ({
+					key: jar.file,
+					id: null,
+					projectId: null,
+					title: jar.name,
+					iconUrl: null,
+					file: jar.file,
+					versionNumber: null,
+					versionId: null,
+					dependencyOf: null,
+					clientSide: null,
+					serverSide: null,
+					enabled: jar.enabled,
+					fromModrinth: false
+				}))
+			].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
 	);
 
 	const view = viewParam();
@@ -122,7 +126,7 @@
 
 	async function updateAll() {
 		for (const u of updates.current ?? []) {
-			const title = installed.find((m) => m.id === u.modId)?.title ?? 'mod';
+			const title = installed?.find((m) => m.id === u.modId)?.title ?? 'mod';
 			await change(u.modId, title);
 		}
 	}
@@ -131,7 +135,7 @@
 	let askedSides: number | null = null;
 	$effect(() => {
 		if (askedSides === id) return;
-		if (installed.some((m) => m.source === 'modrinth' && (!m.clientSide || !m.serverSide))) {
+		if (installed?.some((m) => m.source === 'modrinth' && (!m.clientSide || !m.serverSide))) {
 			askedSides = id;
 			void refreshModSides(id).catch(() => undefined);
 		}
@@ -190,7 +194,7 @@
 	</Card.Root>
 {:else if info}
 	<div class="flex min-h-0 flex-1 flex-col gap-4">
-		<InstalledBrowseTabs {view} count={items.length} />
+		<InstalledBrowseTabs {view} count={items?.length ?? 0} />
 
 		<!-- the tabs stay put and the open tab scrolls; rows are max-content so cards are not squashed to fit, and the padding keeps their ring from being clipped -->
 		<div
@@ -210,28 +214,32 @@
 						</Card.Description>
 					</Card.Header>
 					<Card.Content class="flex min-h-0 flex-1 flex-col">
-						<ModList
-							{items}
-							noun={info.noun}
-							onToggle={(mod, on) =>
-								mod.id === null
-									? toggleLocal(mod.file, mod.title, on)
-									: toggle(mod.id, mod.title, on)}
-							onVersions={(mod) => {
-								picker = {
-									projectId: mod.projectId!,
-									title: mod.title,
-									modId: mod.id!,
-									currentVersionId: mod.versionId ?? ''
-								};
-								pickerOpen = true;
-							}}
-							onUpdate={(mod) => change(mod.id!, mod.title)}
-							onUpdateAll={updateAll}
-							onRemove={(mod) =>
-								mod.id === null ? removeLocal(mod.file, mod.title) : remove(mod.id, mod.title)}
-							onBrowse={() => (view.current = 'browse')}
-						/>
+						{#if !items}
+							<SkeletonRows />
+						{:else}
+							<ModList
+								{items}
+								noun={info.noun}
+								onToggle={(mod, on) =>
+									mod.id === null
+										? toggleLocal(mod.file, mod.title, on)
+										: toggle(mod.id, mod.title, on)}
+								onVersions={(mod) => {
+									picker = {
+										projectId: mod.projectId!,
+										title: mod.title,
+										modId: mod.id!,
+										currentVersionId: mod.versionId ?? ''
+									};
+									pickerOpen = true;
+								}}
+								onUpdate={(mod) => change(mod.id!, mod.title)}
+								onUpdateAll={updateAll}
+								onRemove={(mod) =>
+									mod.id === null ? removeLocal(mod.file, mod.title) : remove(mod.id, mod.title)}
+								onBrowse={() => (view.current = 'browse')}
+							/>
+						{/if}
 					</Card.Content>
 				</Card.Root>
 			{:else}
