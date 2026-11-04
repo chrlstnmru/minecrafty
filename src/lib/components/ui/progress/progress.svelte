@@ -23,9 +23,16 @@
 	{max}
 	{...restProps}
 >
-	<div
-		data-slot="progress-indicator"
-		class="size-full flex-1 bg-primary transition-transform duration-500 ease-out motion-reduce:transition-none"
-		style="transform: translateX(-{100 - (100 * (value ?? 0)) / (max ?? 1)}%)"
-	></div>
+	{#if value == null}
+		<div
+			data-slot="progress-indicator"
+			class="h-full w-1/3 animate-progress-slide bg-primary motion-reduce:w-full motion-reduce:animate-none motion-reduce:opacity-40"
+		></div>
+	{:else}
+		<div
+			data-slot="progress-indicator"
+			class="size-full flex-1 bg-primary transition-transform duration-500 ease-out motion-reduce:transition-none"
+			style="transform: translateX(-{100 - (100 * value) / (max ?? 1)}%)"
+		></div>
+	{/if}
 </ProgressPrimitive.Root>
