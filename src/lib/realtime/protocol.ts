@@ -12,12 +12,14 @@ export type FeedFrames = {
 	console: ConsoleFrame;
 	log: LogFrame;
 	instances: VisibleInstance[];
+	/** the `rev` of `listNavInstances`; a new one means refetch it */
+	nav: string;
 	stats: Snapshot;
 };
 export type FeedName = keyof FeedFrames;
 
 /** Feeds about the whole panel rather than one instance; they are subscribed without an instance. */
-export const PANEL_FEEDS = ['instances', 'stats'] as const satisfies readonly FeedName[];
+export const PANEL_FEEDS = ['instances', 'nav', 'stats'] as const satisfies readonly FeedName[];
 export type PanelFeed = (typeof PANEL_FEEDS)[number];
 export type InstanceFeed = Exclude<FeedName, PanelFeed>;
 

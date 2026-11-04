@@ -5,13 +5,13 @@
 	import * as Breadcrumb from '#lib/components/ui/breadcrumb/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { liveInstances } from '#lib/live.svelte.js';
+	import { listNavInstances } from '#lib/instances.remote.js';
 	import { findNavItem } from '#lib/nav.js';
 
-	const instances = liveInstances();
+	const nav = $derived(await listNavInstances());
 	const section = $derived(findNavItem(page.url.pathname));
 	const instance = $derived(
-		page.params.id ? instances.current?.find((i) => i.id === Number(page.params.id)) : undefined
+		page.params.id ? nav.instances.find((i) => i.id === Number(page.params.id)) : undefined
 	);
 </script>
 

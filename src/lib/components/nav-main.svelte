@@ -4,12 +4,12 @@
 
 	import * as Collapsible from '#lib/components/ui/collapsible/index.js';
 	import * as Sidebar from '#lib/components/ui/sidebar/index.js';
-	import { liveInstances } from '#lib/live.svelte.js';
+	import { listNavInstances } from '#lib/instances.remote.js';
 	import { isActive, type NavItem } from '#lib/nav.js';
 
 	let { items }: { items: NavItem[] } = $props();
 
-	const instances = liveInstances();
+	const instances = $derived((await listNavInstances()).instances);
 </script>
 
 <Sidebar.Group>
@@ -31,7 +31,7 @@
 										</a>
 									{/snippet}
 								</Sidebar.MenuButton>
-								{#if instances.current?.length}
+								{#if instances.length}
 									<Collapsible.Trigger>
 										{#snippet child({ props })}
 											<Sidebar.MenuAction
@@ -45,7 +45,7 @@
 									</Collapsible.Trigger>
 									<Collapsible.Content>
 										<Sidebar.MenuSub>
-											{#each instances.current as instance (instance.id)}
+											{#each instances as instance (instance.id)}
 												<Sidebar.MenuSubItem>
 													<Sidebar.MenuSubButton
 														isActive={isActive(`/instances/${instance.id}`, page.url.pathname)}
