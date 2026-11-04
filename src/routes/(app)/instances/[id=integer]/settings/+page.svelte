@@ -4,12 +4,16 @@
 	import { toast } from 'svelte-sonner';
 
 	import * as Form from '#lib/components/form/index.js';
+	import SkeletonCard from '#lib/components/skeleton-card.svelte';
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { isFromPack } from '#lib/instance-origin.js';
 	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
+	import { loaderStatus } from '#lib/loader.remote.js';
+	import { modpackStatus } from '#lib/modpacks/modpack-update.remote.js';
+	import { rendered } from '#lib/rendered.js';
 	import { updateInstanceSchema } from '#lib/schemas/instance.js';
 
 	import type { PageProps } from './$types';
@@ -19,13 +23,21 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
-	const instance = $derived(getInstance(id));
-	const granted = $derived(instance.current?.permissions ?? []);
+	const instance = $derived(await rendered(getInstance(id)));
+	const granted = $derived(instance?.permissions ?? []);
+	const showPack = $derived(granted.includes('modpack') && !!instance && isFromPack(instance));
+	// the cards await these too; loaded here first so each card has a skeleton while they load
+	const cards = $derived(
+		await Promise.all([
+			granted.includes('loader') ? rendered(loaderStatus(id)) : null,
+			showPack ? rendered(modpackStatus(id)) : null
+		])
+	);
 	const { name, port, ramMinMb, ramMaxMb, javaMajor, jvmArgs, autoStart } = updateInstance.fields;
 
 	// load the stored values into the form when the instance changes or after a save
 	$effect(() => {
-		const i = instance.current;
+		const i = instance;
 		if (!i) return;
 		updateInstance.fields.set({
 			id: i.id,
@@ -110,9 +122,11 @@
 		</Card.Root>
 	{/if}
 
-	{#if granted.includes('loader')}<LoaderCard />{/if}
-	{#if granted.includes('modpack') && instance.current && isFromPack(instance.current)}
-		<ModpackCard />
+	{#if granted.includes('loader')}
+		{#if cards[0]}<LoaderCard />{:else}<SkeletonCard title="Loader" />{/if}
+	{/if}
+	{#if showPack}
+		{#if cards[1]}<ModpackCard />{:else}<SkeletonCard title="Modpack" />{/if}
 	{/if}
 
 	{#if data.panel.includes('instances.delete')}
@@ -135,7 +149,7 @@
 <AlertDialog.Root bind:open={confirmDelete}>
 	<AlertDialog.Content>
 		<AlertDialog.Header>
-			<AlertDialog.Title>Delete {instance.current?.name}?</AlertDialog.Title>
+			<AlertDialog.Title>Delete {instance?.name}?</AlertDialog.Title>
 			<AlertDialog.Description>This cannot be undone.</AlertDialog.Description>
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
