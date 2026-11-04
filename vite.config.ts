@@ -4,9 +4,9 @@ import { sveltekit } from '@sveltejs/kit/vite';
 import tailwindcss from '@tailwindcss/vite';
 import { defineConfig } from 'vite';
 
-import { SOCKET_PATH } from './src/lib/realtime/protocol';
-import { DEV_SOCKET_PORT } from './src/lib/realtime/server/dev-port';
-import { devSocketProxy } from './src/lib/realtime/server/dev-proxy';
+import { SOCKET_PATH } from './src/lib/realtime/protocol.ts';
+import { DEV_SOCKET_PORT } from './src/lib/realtime/server/dev-port.ts';
+import { devSocketProxy } from './src/lib/realtime/server/dev-proxy.ts';
 
 export default defineConfig({
 	// the release workflow sets the tag; any other build reports itself as "dev"
