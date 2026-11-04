@@ -1,5 +1,9 @@
 <script lang="ts">
+	import DotsIcon from '@tabler/icons-svelte/icons/dots';
+	import PlayerPlayFilledIcon from '@tabler/icons-svelte/icons/player-play-filled';
+	import PlayerStopFilledIcon from '@tabler/icons-svelte/icons/player-stop-filled';
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
+	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
 	import { toast } from 'svelte-sonner';
 	import { prefersReducedMotion } from 'svelte/motion';
@@ -12,6 +16,7 @@
 	import * as AlertDialog from '#lib/components/ui/alert-dialog/index.js';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
+	import * as DropdownMenu from '#lib/components/ui/dropdown-menu/index.js';
 	import * as Empty from '#lib/components/ui/empty/index.js';
 	import { Progress } from '#lib/components/ui/progress/index.js';
 	import * as Tooltip from '#lib/components/ui/tooltip/index.js';
@@ -79,6 +84,13 @@
 	});
 
 	let createOpen = $state(false);
+	let killing = $state<{ id: number; name: string }>({ id: 0, name: '' });
+	let killOpen = $state(false);
+	const askKill = (inst: { id: number; name: string }) => {
+		killing = { id: inst.id, name: inst.name };
+		killOpen = true;
+	};
+
 	let deleting = $state<{ id: number; name: string }>({ id: 0, name: '' });
 	let deleteOpen = $state(false);
 	const askDelete = (inst: { id: number; name: string }) => {
@@ -164,7 +176,7 @@
 						</Tooltip.Root>
 					</Card.Content>
 				{/if}
-				<Card.Footer class="flex min-h-6 flex-wrap gap-2">
+				<Card.Footer class="flex min-h-6 flex-wrap items-center gap-2">
 					{#if installing}
 						<div class="grid w-full gap-1">
 							<p class="truncate text-xs text-muted-foreground">
@@ -177,44 +189,61 @@
 								max={settled ? 1 : counted(progress) ? progress!.total : 1}
 							/>
 						</div>
-					{:else if failed}
-						{#if canRetryInstall(inst) && inst.permissions.includes('settings')}
-							<Button variant="outline" size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
-								Retry
-							</Button>
-						{/if}
-						{#if canDelete}
-							<Button variant="destructive-ghost" size="sm" onclick={() => askDelete(inst)}
-								>Delete</Button
-							>
-						{/if}
 					{:else}
-						<Button variant="secondary" size="sm" href="/instances/{inst.id}">Console</Button>
-						{#if !inst.permissions.includes('control')}
-							<!-- viewing only -->
-						{:else if active}
-							<Button
-								variant="outline"
-								size="sm"
-								disabled={inst.state === 'stopping'}
-								onClickPromise={() => run(stopInstance, inst.id)}
-							>
-								Stop
-							</Button>
-							<Button
-								variant="destructive-ghost"
-								size="sm"
-								onClickPromise={() => run(killInstance, inst.id)}
-							>
-								Kill
-							</Button>
-						{:else}
-							<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>Start</Button>
-							{#if canDelete}
-								<Button variant="destructive-ghost" size="sm" onclick={() => askDelete(inst)}
-									>Delete</Button
-								>
+						{@const control = inst.permissions.includes('control')}
+						{@const canKill = control && active}
+						{@const canRemove = canDelete && (failed || !active)}
+						{#if failed}
+							{#if canRetryInstall(inst) && inst.permissions.includes('settings')}
+								<Button size="sm" onClickPromise={() => run(retryInstall, inst.id)}>
+									<RefreshIcon />Retry
+								</Button>
 							{/if}
+						{:else}
+							{#if control && active}
+								<Button
+									variant="outline"
+									size="sm"
+									disabled={inst.state === 'stopping'}
+									onClickPromise={() => run(stopInstance, inst.id)}
+								>
+									<PlayerStopFilledIcon />Stop
+								</Button>
+							{:else if control}
+								<Button size="sm" onClickPromise={() => run(startInstance, inst.id)}>
+									<PlayerPlayFilledIcon />Start
+								</Button>
+							{/if}
+							<Button variant="ghost" size="sm" href="/instances/{inst.id}">Console</Button>
+						{/if}
+						{#if canKill || canRemove}
+							<DropdownMenu.Root>
+								<DropdownMenu.Trigger>
+									{#snippet child({ props })}
+										<Button
+											{...props}
+											variant="ghost"
+											size="icon-sm"
+											class="ms-auto"
+											aria-label="More for {inst.name}"
+										>
+											<DotsIcon />
+										</Button>
+									{/snippet}
+								</DropdownMenu.Trigger>
+								<DropdownMenu.Content align="end">
+									{#if canKill}
+										<DropdownMenu.Item variant="destructive" onSelect={() => askKill(inst)}>
+											Kill…
+										</DropdownMenu.Item>
+									{/if}
+									{#if canRemove}
+										<DropdownMenu.Item variant="destructive" onSelect={() => askDelete(inst)}>
+											Delete…
+										</DropdownMenu.Item>
+									{/if}
+								</DropdownMenu.Content>
+							</DropdownMenu.Root>
 						{/if}
 					{/if}
 				</Card.Footer>
@@ -224,6 +253,30 @@
 </div>
 
 <NewInstanceSheet bind:open={createOpen} canUsePacks={data.panel.includes('modpacks.read')} />
+
+<AlertDialog.Root bind:open={killOpen}>
+	<AlertDialog.Content>
+		<AlertDialog.Header>
+			<AlertDialog.Title>Kill {killing.name}?</AlertDialog.Title>
+			<AlertDialog.Description>
+				The process ends immediately and progress since the last save is lost. Use Stop to shut down
+				safely.
+			</AlertDialog.Description>
+		</AlertDialog.Header>
+		<AlertDialog.Footer>
+			<AlertDialog.Cancel>Cancel</AlertDialog.Cancel>
+			<AlertDialog.Action
+				variant="destructive"
+				onclick={() => {
+					killOpen = false;
+					run(killInstance, killing.id);
+				}}
+			>
+				Kill
+			</AlertDialog.Action>
+		</AlertDialog.Footer>
+	</AlertDialog.Content>
+</AlertDialog.Root>
 
 <AlertDialog.Root bind:open={deleteOpen}>
 	<AlertDialog.Content>
