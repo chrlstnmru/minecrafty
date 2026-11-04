@@ -78,6 +78,7 @@
 		);
 		if (first && first !== slug) void goto(`/instances/${id}/${first}`, { replaceState: true });
 	});
+	const tab = $derived(modules.find((m) => m.slug === slug));
 	const labelOf = (m: InstanceModule) =>
 		m.slug === 'mods' && instance?.loader && ['paper', 'purpur'].includes(instance.loader)
 			? 'Plugins'
@@ -99,7 +100,13 @@
 	}
 </script>
 
-<svelte:head><title>{instance?.name ?? 'Instance'} · Minecrafty</title></svelte:head>
+<svelte:head>
+	<title
+		>{[tab && labelOf(tab), instance?.name ?? 'Instance', 'Minecrafty']
+			.filter(Boolean)
+			.join(' · ')}</title
+	>
+</svelte:head>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4 p-4 lg:p-6">
 	<div class="flex items-start gap-2">

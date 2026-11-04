@@ -71,8 +71,6 @@
 			: [{ value: draft[field.key], label: draft[field.key] }, ...field.options];
 </script>
 
-<svelte:head><title>Properties · Minecrafty</title></svelte:head>
-
 <div class="pb-4 @3xl/main:columns-2 @3xl/main:gap-4">
 	{#if properties.current && !properties.current.exists}
 		<p
