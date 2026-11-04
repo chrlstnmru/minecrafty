@@ -66,7 +66,7 @@ export const createInstance = form(createInstanceSchema, async (data, issue) => 
 		invalid(issue.mcVersion(`${data.loader} has no build for ${data.mcVersion}`));
 	try {
 		// returns at once; the install carries on in the background and shows in the list
-		const made = instances.createInstance({
+		const made = await instances.createInstance({
 			...data,
 			loaderVersion: loaderVersion ?? null,
 			ramMinMb: Math.min(1024, data.ramMaxMb)
@@ -178,6 +178,6 @@ export const refreshPackIcons = command(async () => {
 /** Runs a failed install again; it carries on in the background. */
 export const retryInstall = command(id, async (instanceId) => {
 	requirePermission(instanceId, 'settings');
-	await userFacing(async () => void instances.retryInstall(instanceId));
+	await userFacing(async () => void (await instances.retryInstall(instanceId)));
 	record({ action: 'instance.retry', summary: 'Retried the install', instanceId });
 });

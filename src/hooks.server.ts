@@ -6,7 +6,8 @@ import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
 import { serveSocketsForDev, serveSocketsWithBun } from '#lib/realtime/server/serve.js';
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
-import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
+import { recoverInterruptedJobs } from '#lib/server/instance-jobs.js';
+import { autoStartInstances } from '#lib/server/instances.js';
 import { startScheduler } from '#lib/server/schedules.js';
 import { addSecurityHeaders } from '#lib/server/security-headers.js';
 import { startUpdateChecks } from '#lib/server/self-update.js';
@@ -77,7 +78,7 @@ export const init: ServerInit = () => {
 	if (!hasUsers()) announceSetupToken();
 	pruneAudit();
 	setInterval(pruneAudit, 24 * 60 * 60 * 1000).unref();
-	failInterruptedInstalls();
+	recoverInterruptedJobs();
 	sweepUploads();
 	// scheduled tasks run from here on, once a minute
 	startScheduler();

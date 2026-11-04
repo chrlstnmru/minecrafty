@@ -7,11 +7,11 @@ import { modSupport } from '#lib/mod-support.js';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { downloadFile } from './download';
+import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir, type Instance } from './instances';
 import { pickFile, resolveMods } from './mod-resolver';
 import { projectSides } from './mod-sides';
 import * as modrinth from './modrinth';
-import { assertWritable } from './operations';
 
 export type InstalledMod = typeof installedMods.$inferSelect;
 

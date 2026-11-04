@@ -3,9 +3,9 @@ import { join } from 'node:path';
 
 import { db } from './db';
 import { installedMods } from './db/schema';
+import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir } from './instances';
 import * as modrinth from './modrinth';
-import { assertWritable } from './operations';
 import { readProperties, setProperties } from './server-properties';
 
 // A server has a single resource pack, delivered to players by URL: the pack's Modrinth download

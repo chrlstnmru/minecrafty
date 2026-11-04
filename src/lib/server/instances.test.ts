@@ -3,12 +3,12 @@ import { existsSync, mkdirSync, writeFileSync } from 'node:fs';
 import { describe, expect, it } from 'vitest';
 
 import { makeInstance } from '#test/instance.js';
+import { holdJob } from '#test/jobs.js';
 
 import { db } from './db';
 import { instances } from './db/schema';
-import { setProgress, clearProgress } from './install-progress';
+import { start } from './instance-jobs';
 import * as I from './instances';
-import { claim } from './operations';
 
 describe('ports', () => {
 	it('suggests the first free port from 25565 upward', () => {
@@ -90,7 +90,7 @@ describe('settings', () => {
 describe('unfinished installs', () => {
 	it('cannot start while installing, or after a failed install', async () => {
 		const installing = makeInstance({ installState: 'installing' });
-		await expect(I.startInstance(installing.id)).rejects.toThrow(/Still installing/);
+		await expect(I.startInstance(installing.id)).rejects.toThrow(/Wait for the install to finish/);
 		const failed = makeInstance({
 			installState: 'failed',
 			installMessage: 'a mod could not be downloaded'
@@ -111,17 +111,6 @@ describe('unfinished installs', () => {
 		await I.deleteInstance(row.id);
 		expect(I.getInstance(row.id)).toBeUndefined();
 	});
-
-	it('marks an install interrupted by a restart as failed', () => {
-		const stuck = makeInstance({ installState: 'installing' });
-		const fine = makeInstance();
-		I.failInterruptedInstalls();
-		expect(I.getInstance(stuck.id)).toMatchObject({
-			installState: 'failed',
-			installMessage: 'Interrupted by a panel restart'
-		});
-		expect(I.getInstance(fine.id)?.installState).toBe('ready');
-	});
 });
 
 describe('start refusals', () => {
@@ -138,11 +127,11 @@ describe('start refusals', () => {
 	it('waits for a restore, which swaps the server folder', async () => {
 		const row = makeInstance();
 		writeFileSync(`${I.serverDir(row.id)}/server.jar`, '');
-		const release = claim(row.id, 'restore');
+		const release = await holdJob(row.id, 'restore');
 		try {
 			await expect(I.startInstance(row.id)).rejects.toThrow(/restore/);
 		} finally {
-			release();
+			await release();
 		}
 	});
 
@@ -190,8 +179,12 @@ describe('the Java arguments', () => {
 
 describe('the instance list', () => {
 	it('reports state, and install progress while one is running', async () => {
-		const row = makeInstance({ installState: 'installing' });
-		setProgress(row.id, { label: 'Downloading mods', done: 3, total: 10 });
+		const row = makeInstance();
+		let release!: () => void;
+		const { finished } = await start(row.id, 'install', async ({ progress }) => {
+			progress('Downloading mods', { done: 3, total: 10 });
+			await new Promise<void>((resolve) => (release = resolve));
+		});
 		let listed = (await I.listInstances()).find((i) => i.id === row.id);
 		expect(listed).toMatchObject({
 			state: 'stopped',
@@ -199,7 +192,8 @@ describe('the instance list', () => {
 			progress: { label: 'Downloading mods', done: 3, total: 10 }
 		});
 
-		clearProgress(row.id);
+		release();
+		await finished;
 		listed = (await I.listInstances()).find((i) => i.id === row.id);
 		expect(listed?.progress).toBeNull();
 	});

@@ -42,7 +42,8 @@ vi.mock('./loaders', async (original) => ({
 }));
 
 const U = await import('./loader-update');
-const { lastOutcome } = await import('./update-outcome');
+const { jobState } = await import('./instance-jobs');
+const lastOutcome = (id: number) => jobState(id).outcome;
 const { listBackups } = await import('./backups');
 const { getInstance, instanceDir, serverDir } = await import('./instances');
 
@@ -174,7 +175,7 @@ describe('startLoaderUpdate', () => {
 	it('refuses a second update while one runs', async () => {
 		const first = await U.startLoaderUpdate(id, { mcVersion: '1.21.5', backup: false });
 		await expect(U.startLoaderUpdate(id, { mcVersion: '1.20.1', backup: false })).rejects.toThrow(
-			/Wait for the install/
+			/An update is in progress/
 		);
 		await first.finished;
 	});

@@ -9,7 +9,7 @@ import { dataDir } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
 import { installedMods, instances } from '#lib/server/db/schema.js';
 import { downloadFile } from '#lib/server/download.js';
-import { runInstall, setProgress } from '#lib/server/install-progress.js';
+import * as jobs from '#lib/server/instance-jobs.js';
 import { installBase, insertInstance, serverDir, type NewInstance } from '#lib/server/instances.js';
 import * as modrinth from '#lib/server/modrinth.js';
 
@@ -178,38 +178,40 @@ export async function startImportLoaded(
 		jvmArgs: '',
 		autoStart: false,
 		eulaAccepted: true,
-		installState: 'installing',
 		...origin
 	});
-	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
-	void finishImport(row, pack);
-	return row;
+	const started = await jobs.start(row.id, 'install', (tools) => finishImport(row, pack, tools), {
+		what: 'modpack import'
+	});
+	return started.row;
 }
 
-function finishImport(row: typeof instances.$inferSelect, pack: LoadedPack) {
+async function finishImport(
+	row: typeof instances.$inferSelect,
+	pack: LoadedPack,
+	{ progress }: jobs.InstallTools
+) {
 	const server = serverDir(row.id);
-	return runInstall(row, 'modpack import', async () => {
-		setProgress(row.id, { label: 'Installing the server', done: 0, total: 1 });
-		await installBase(row);
+	progress('Installing the server');
+	await installBase(row, progress);
 
-		await downloadFiles(row.id, server, pack.mrpack.files);
+	await downloadFiles(server, pack.mrpack.files, progress);
 
-		setProgress(row.id, { label: 'Copying configuration', done: 0, total: 1 });
-		const overrides = await extractOverrides(pack.mrpack, server);
+	progress('Copying configuration');
+	const overrides = await extractOverrides(pack.mrpack, server);
 
-		setProgress(row.id, { label: 'Recording mods', done: 0, total: 1 });
-		await trackMods(row.id, pack.mrpack.files);
-		writeManifest(row.id, {
-			files: await packFileHashes(server, pack.mrpack.files),
-			overrides
-		});
+	progress('Recording mods');
+	await trackMods(row.id, pack.mrpack.files);
+	writeManifest(row.id, {
+		files: await packFileHashes(server, pack.mrpack.files),
+		overrides
 	});
 }
 
-export async function downloadFiles(instanceId: number, server: string, files: IndexFile[]) {
+export async function downloadFiles(server: string, files: IndexFile[], progress: jobs.Report) {
 	let done = 0;
 	const total = files.length;
-	setProgress(instanceId, { label: 'Downloading mods', done, total });
+	progress('Downloading mods', { done, total });
 
 	const queue = [...files];
 	const worker = async () => {
@@ -217,7 +219,7 @@ export async function downloadFiles(instanceId: number, server: string, files: I
 			const dest = safeJoin(server, file.path);
 			mkdirSync(dirname(dest), { recursive: true });
 			await downloadWithFallback(dest, file);
-			setProgress(instanceId, { label: 'Downloading mods', done: ++done, total });
+			progress('Downloading mods', { done: ++done, total });
 		}
 	};
 	await Promise.all(Array.from({ length: Math.min(DOWNLOAD_CONCURRENCY, total) }, worker));
