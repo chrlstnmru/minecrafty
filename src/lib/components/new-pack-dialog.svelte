@@ -37,7 +37,7 @@
 		try {
 			const { id } = await createLocalPack({ name, loader, mcVersion });
 			open = false;
-			await goto(`/modpacks/${id}`);
+			await goto(`/modpacks/${id}/mods`);
 		} catch (e) {
 			toast.error(
 				(e as { body?: { message?: string } }).body?.message ?? 'Could not create the pack'

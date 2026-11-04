@@ -1,18 +1,16 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { useSearchParams } from 'runed/kit';
 	import { toast } from 'svelte-sonner';
-	import * as v from 'valibot';
 
 	import type { ModListItem } from '#lib/mod-list.js';
 
-	import CountBadge from '#lib/components/count-badge.svelte';
+	import InstalledBrowseTabs from '#lib/components/installed-browse-tabs.svelte';
 	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
 	import { Badge } from '#lib/components/ui/badge/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { viewParam } from '#lib/installed-browse.svelte.js';
 	import { getInstance } from '#lib/instances.remote.js';
 	import { modSupport } from '#lib/mod-support.js';
 	import {
@@ -80,16 +78,7 @@
 		].sort((a, b) => a.title.localeCompare(b.title, undefined, { sensitivity: 'base' }))
 	);
 
-	// The open tab lives in the URL (?view=browse), so a reload keeps it. Read from the page URL,
-	// which the server has; runed only reads it in the browser, so it is used to write it.
-	const VIEWS = ['installed', 'browse'] as const;
-	const params = useSearchParams(
-		v.object({ view: v.optional(v.fallback(v.picklist(VIEWS), 'installed'), 'installed') }),
-		{ pushHistory: false, noScroll: true }
-	);
-	const view = $derived(
-		VIEWS.find((name) => name === page.url.searchParams.get('view')) ?? 'installed'
-	);
+	const view = viewParam();
 
 	let picker = $state<{
 		projectId: string;
@@ -201,15 +190,7 @@
 	</Card.Root>
 {:else if info}
 	<div class="flex min-h-0 flex-1 flex-col gap-4">
-		<Tabs.Root
-			value={view}
-			onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
-		>
-			<Tabs.List>
-				<Tabs.Trigger value="installed">Installed <CountBadge count={items.length} /></Tabs.Trigger>
-				<Tabs.Trigger value="browse">Browse</Tabs.Trigger>
-			</Tabs.List>
-		</Tabs.Root>
+		<InstalledBrowseTabs {view} count={items.length} />
 
 		<!-- the tabs stay put and the open tab scrolls; rows are max-content so cards are not squashed to fit, and the padding keeps their ring from being clipped -->
 		<div
@@ -219,7 +200,7 @@
 				'flex flex-col'
 			)}
 		>
-			{#if view === 'installed'}
+			{#if view.current === 'installed'}
 				<Card.Root class="min-h-0">
 					<Card.Header>
 						<Card.Title>Installed {info.noun}s</Card.Title>
@@ -249,7 +230,7 @@
 							onUpdateAll={updateAll}
 							onRemove={(mod) =>
 								mod.id === null ? removeLocal(mod.file, mod.title) : remove(mod.id, mod.title)}
-							onBrowse={() => (params.view = 'browse')}
+							onBrowse={() => (view.current = 'browse')}
 						/>
 					</Card.Content>
 				</Card.Root>

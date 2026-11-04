@@ -86,7 +86,7 @@
 		try {
 			const { id } = await duplicateLocalPack({ id: row.id });
 			toast.success(`Copied ${row.name}`);
-			await goto(`/modpacks/${id}`);
+			await goto(`/modpacks/${id}/mods`);
 		} catch (e) {
 			toast.error(message(e, 'Could not copy the pack'));
 		}
@@ -114,7 +114,7 @@
 			if (!res.ok) throw new Error(((await res.json()) as { message?: string }).message);
 			const { id } = (await res.json()) as { id: number };
 			toast.success('Pack imported');
-			await goto(`/modpacks/${id}`);
+			await goto(`/modpacks/${id}/mods`);
 		} catch (e) {
 			toast.error(e instanceof Error && e.message ? e.message : 'Could not import the pack');
 		} finally {
@@ -134,7 +134,7 @@
 	<div class="flex min-w-0 items-center gap-3">
 		<InstanceIcon loader={p.loader} packIconUrl={p.iconUrl} />
 		<div class="grid min-w-0">
-			<a href="/modpacks/{p.id}" class="truncate font-medium hover:underline">{p.name}</a>
+			<a href="/modpacks/{p.id}/mods" class="truncate font-medium hover:underline">{p.name}</a>
 			<span class="text-xs text-muted-foreground">revision {p.revision}</span>
 		</div>
 	</div>
