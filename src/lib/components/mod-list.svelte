@@ -167,6 +167,16 @@
 						>
 							<div class="flex items-center gap-2">
 								<span class="truncate text-sm font-medium">{item.title}</span>
+								{#if item.tag}
+									<Tooltip.Root>
+										<Tooltip.Trigger>
+											{#snippet child({ props })}
+												<Badge {...props} variant="warning">{item.tag?.label}</Badge>
+											{/snippet}
+										</Tooltip.Trigger>
+										<Tooltip.Content>{item.tag?.title}</Tooltip.Content>
+									</Tooltip.Root>
+								{/if}
 								{#if !item.fromModrinth}
 									<Tooltip.Root>
 										<Tooltip.Trigger>

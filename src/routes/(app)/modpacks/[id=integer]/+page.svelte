@@ -16,6 +16,7 @@
 	import type { ModListItem } from '#lib/mod-list.js';
 
 	import Combobox from '#lib/components/combobox.svelte';
+	import CountBadge from '#lib/components/count-badge.svelte';
 	import InstanceIcon from '#lib/components/instance-icon.svelte';
 	import LoaderBadge from '#lib/components/loader-badge.svelte';
 	import MakeServerDialog from '#lib/components/make-server-dialog.svelte';
@@ -48,7 +49,6 @@
 		setPackLoaderVersion,
 		updateLocalPack
 	} from '#lib/modpacks/builder.remote.js';
-	import { UrlParam } from '#lib/url-param.svelte.js';
 	import { cn } from '#lib/utils.js';
 
 	import type { PageProps } from './$types';
@@ -91,7 +91,7 @@
 			name: 'resource-packs',
 			label: 'Resource packs',
 			icon: PaletteIcon,
-			count: resourcePacks.length
+			count: resourcePacks.length + (pack.serverPackProjectId ? 1 : 0)
 		},
 		{ name: 'configs', label: 'Configs', icon: FileCodeIcon, count: pack.overrides.length },
 		...(canWrite ? [{ name: 'settings', label: 'Settings', icon: SettingsIcon }] : [])
@@ -111,15 +111,9 @@
 	});
 	const items = $derived(modFiles.map(asItem));
 	// every client pack runs only in the game, so a Client tag on each would say nothing
-	const resourcePackItems = $derived(
+	const playerPackItems = $derived(
 		resourcePacks.map((file) => ({ ...asItem(file), clientSide: null, serverSide: null }))
 	);
-	// which kind the Resource packs section shows, kept in the URL (?for=server)
-	const packKind = new UrlParam('for', 'players');
-	const kinds = $derived([
-		{ value: 'players', label: 'For players', count: resourcePacks.length },
-		{ value: 'server', label: 'Server pack', count: pack.serverPackProjectId ? 1 : 0 }
-	]);
 	const serverPackItems = $derived<ModListItem[]>(
 		pack.serverPackProjectId
 			? [
@@ -136,11 +130,17 @@
 						clientSide: null,
 						serverSide: null,
 						enabled: true,
-						fromModrinth: true
+						fromModrinth: true,
+						tag: {
+							label: 'Server pack',
+							title: 'Servers made from this pack start with it. It is not in the .mrpack.'
+						}
 					}
 				]
 			: []
 	);
+	// the server pack first, then the packs for players
+	const resourcePackItems = $derived([...serverPackItems, ...playerPackItems]);
 	const inPack = $derived(
 		new Set((pack.files ?? []).flatMap((f) => (f.projectId ? [f.projectId] : [])))
 	);
@@ -391,9 +391,7 @@
 					data-sveltekit-replacestate
 				>
 					<section.icon />{section.label}
-					{#if section.count !== undefined}
-						<Badge variant="muted" class="tabular-nums">{section.count}</Badge>
-					{/if}
+					{#if section.count !== undefined}<CountBadge count={section.count} />{/if}
 				</Button>
 			{/each}
 		</nav>
@@ -405,9 +403,9 @@
 			>
 				<Tabs.List>
 					<Tabs.Trigger value="installed"
-						>Installed <Badge variant="muted" class="tabular-nums"
-							>{tab === 'mods' ? modFiles.length : resourcePacks.length}</Badge
-						></Tabs.Trigger
+						>Installed <CountBadge
+							count={tab === 'mods' ? modFiles.length : resourcePackItems.length}
+						/></Tabs.Trigger
 					>
 					{#if canWrite}<Tabs.Trigger value="browse">Browse</Tabs.Trigger>{/if}
 				</Tabs.List>
@@ -459,76 +457,26 @@
 				{/if}
 			{:else if tab === 'resource-packs'}
 				{#if view === 'installed'}
-					<div class="flex min-h-0 flex-1 flex-col gap-4 md:flex-row">
-						<nav
-							class="flex shrink-0 gap-1 overflow-x-auto md:w-48 md:flex-col"
-							aria-label="Kinds of resource pack"
-						>
-							{#each kinds as kind (kind.value)}
-								<Button
-									variant={packKind.value === kind.value ? 'secondary' : 'ghost'}
-									size="sm"
-									class="justify-start"
-									aria-current={packKind.value === kind.value ? 'page' : undefined}
-									onclick={() => (packKind.value = kind.value)}
-								>
-									{kind.label}
-									<Badge variant="muted" class="ms-auto tabular-nums">{kind.count}</Badge>
-								</Button>
-							{/each}
-						</nav>
-						{#if packKind.value === 'server'}
-							<Card.Root class="min-h-0 flex-1 self-start">
-								<Card.Header>
-									<Card.Title>Server resource pack</Card.Title>
-									<Card.Description>
-										Servers made from this pack start with it, and prompt players to download it
-										when they join. It is not part of the .mrpack.
-									</Card.Description>
-								</Card.Header>
-								<Card.Content>
-									<ModList
-										items={serverPackItems}
-										noun="resource pack"
-										filterable={false}
-										empty={{
-											title: 'No server resource pack',
-											description: canWrite
-												? 'Choose one under Browse, and servers made from this pack start with it.'
-												: 'Servers made from this pack start without one.',
-											action: 'Choose a server pack'
-										}}
-										onVersions={canWrite
-											? (item) => pickVersion(item, 'pack-resourcepack')
-											: undefined}
-										onRemove={canWrite ? clearServerPack : undefined}
-										onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
-									/>
-								</Card.Content>
-							</Card.Root>
-						{:else}
-							<Card.Root class="max-h-full min-h-0 flex-1 self-start">
-								<Card.Header>
-									<Card.Title>For players</Card.Title>
-									<Card.Description>
-										In the .mrpack's resourcepacks/ folder, so players' launchers install them.
-										Servers made from the pack ignore them.
-									</Card.Description>
-								</Card.Header>
-								<Card.Content class="flex min-h-0 flex-1 flex-col">
-									<ModList
-										items={resourcePackItems}
-										noun="resource pack"
-										onVersions={canWrite
-											? (item) => pickVersion(item, 'pack-resourcepack')
-											: undefined}
-										onRemove={canWrite ? (item) => remove(item.id!, item.title) : undefined}
-										onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
-									/>
-								</Card.Content>
-							</Card.Root>
-						{/if}
-					</div>
+					<Card.Root class="min-h-0">
+						<Card.Header>
+							<Card.Title>Resource packs in this pack</Card.Title>
+							<Card.Description>
+								Packs for players go in the .mrpack for their launchers. The server pack does not:
+								servers made from this pack prompt players to download it.
+							</Card.Description>
+						</Card.Header>
+						<Card.Content class="flex min-h-0 flex-1 flex-col">
+							<ModList
+								items={resourcePackItems}
+								noun="resource pack"
+								onVersions={canWrite ? (item) => pickVersion(item, 'pack-resourcepack') : undefined}
+								onRemove={canWrite
+									? (item) => (item.id === null ? clearServerPack() : remove(item.id, item.title))
+									: undefined}
+								onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
+							/>
+						</Card.Content>
+					</Card.Root>
 				{:else}
 					<PackBrowser
 						kind="pack-resourcepack"
