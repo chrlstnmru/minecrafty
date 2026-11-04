@@ -20,7 +20,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
 	import { TAIL_LINES } from '#lib/log-files.js';
-	import { followLog, listLogs, readLog, searchLog } from '#lib/logs.remote.js';
+	import { listLogs, readLog, searchLog } from '#lib/logs.remote.js';
+	import { liveFeed } from '#lib/realtime/feed.svelte.js';
 
 	const id = $derived(Number(page.params.id));
 	const number = new Intl.NumberFormat('en');
@@ -58,7 +59,7 @@
 	let follow = $state(true);
 	let wrap = $state(false);
 	const canFollow = $derived(name === 'latest.log' && !searching);
-	const live = $derived(follow && canFollow ? followLog(id) : null);
+	const live = $derived(follow && canFollow ? liveFeed('log', id) : null);
 
 	let appended = $state<LogLine[]>([]);
 	const matches = $derived(found?.current?.matches ?? 0);
@@ -285,6 +286,12 @@
 			{:else}
 				{number.format(total)} {total === 1 ? 'line' : 'lines'}.
 			{/if}
+		</p>
+	{/if}
+
+	{#if live?.error}
+		<p class="text-sm text-destructive" role="alert">
+			Live updates stopped: {live.error.message}
 		</p>
 	{/if}
 

@@ -12,6 +12,7 @@
 
 ## Where things live
 
+- Live feeds a page follows (the console, `latest.log`): `src/lib/realtime/`, one WebSocket per tab at `/_ws`, not `query.live`, whose streams stay open until garbage collection (sveltejs/kit#16422) and use up the browser's 6 connections. The page reads `liveFeed(feed, id)` (`feed.svelte.ts`), which stops on the server once nothing reads it; the server end is `server/hub.ts` (sign-in from the session cookie, the same instance permissions as the remote functions). Production wraps `Bun.serve` from `init` in hooks.server.ts; dev runs its own socket server that Vite proxies to (`server/serve.ts`). Add a feed in `protocol.ts` and `hub.ts`. `query.live` stays for what every page shows (`listInstances`, `liveStats`).
 - Anything touching a running server (state, console, RCON, stop and wait, pausing saves): `server/live-server.ts`.
 - Updates of server files: `runUpdate` in `server/instance-job.ts`. Background installs: `runInstall` in `server/install-progress.ts`.
 - "May this instance's files change now?": `assertWritable` in `server/operations.ts`.

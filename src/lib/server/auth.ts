@@ -2,19 +2,19 @@ import type { Cookies } from '@sveltejs/kit';
 
 import { getRequestEvent } from '$app/server';
 import { error } from '@sveltejs/kit';
-import { and, eq, gt, lt } from 'drizzle-orm';
+import { eq, lt } from 'drizzle-orm';
 
 import type { InstancePermission, PanelPermission } from '#lib/permissions.js';
 
 import { can, canSee, check } from './access';
 import { db } from './db';
 import { sessions, users } from './db/schema';
+import { COOKIE, hashToken, userFromToken, type SessionUser } from './sessions';
 import { createAccount } from './user-admin';
 
-const COOKIE = 'session';
-const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
+export { sessionToken, userFromToken, type SessionUser } from './sessions';
 
-export type SessionUser = Pick<typeof users.$inferSelect, 'id' | 'username' | 'role'>;
+const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 
 /**
  * Kit marks cookies Secure everywhere but http://localhost, and a browser drops a Secure cookie sent
@@ -26,8 +26,6 @@ const cookieOptions = () => ({
 	sameSite: 'lax' as const,
 	secure: getRequestEvent().url.protocol === 'https:'
 });
-
-const hashToken = (token: string) => new Bun.CryptoHasher('sha256').update(token).digest('hex');
 
 export function hasUsers() {
 	return db.select({ id: users.id }).from(users).limit(1).get() !== undefined;
@@ -64,16 +62,7 @@ export function endSession(cookies: Cookies) {
 }
 
 export function userFromCookies(cookies: Cookies): SessionUser | null {
-	const token = cookies.get(COOKIE);
-	if (!token) return null;
-	return (
-		db
-			.select({ id: users.id, username: users.username, role: users.role })
-			.from(sessions)
-			.innerJoin(users, eq(users.id, sessions.userId))
-			.where(and(eq(sessions.id, hashToken(token)), gt(sessions.expiresAt, new Date())))
-			.get() ?? null
-	);
+	return userFromToken(cookies.get(COOKIE));
 }
 
 /** Any signed-in user; for what is not tied to one instance. */
