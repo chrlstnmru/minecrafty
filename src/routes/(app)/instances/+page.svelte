@@ -5,6 +5,9 @@
 	import PlusIcon from '@tabler/icons-svelte/icons/plus';
 	import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 	import ServerIcon from '@tabler/icons-svelte/icons/server';
+	import SkullIcon from '@tabler/icons-svelte/icons/skull';
+	import TerminalIcon from '@tabler/icons-svelte/icons/terminal-2';
+	import TrashIcon from '@tabler/icons-svelte/icons/trash';
 	import { toast } from 'svelte-sonner';
 	import { prefersReducedMotion } from 'svelte/motion';
 	import { SvelteSet } from 'svelte/reactivity';
@@ -214,7 +217,9 @@
 									<PlayerPlayFilledIcon />Start
 								</Button>
 							{/if}
-							<Button variant="ghost" size="sm" href="/instances/{inst.id}">Console</Button>
+							<Button variant="ghost" size="sm" href="/instances/{inst.id}">
+								<TerminalIcon />Console
+							</Button>
 						{/if}
 						{#if control || canDelete}
 							<DropdownMenu.Root>
@@ -234,13 +239,19 @@
 								<DropdownMenu.Content align="end" class="min-w-32">
 									<!-- what the state rules out stays visible, greyed, with what to do; what a role rules out is hidden -->
 									{#if control}
-										{@render menuItem('Kill', killable ? '' : 'The server is not running', () =>
-											askKill(inst)
+										{@render menuItem(
+											'Kill',
+											SkullIcon,
+											killable ? '' : 'The server is not running',
+											() => askKill(inst)
 										)}
 									{/if}
 									{#if canDelete}
-										{@render menuItem('Delete', removable ? '' : 'Stop the server first', () =>
-											askDelete(inst)
+										{@render menuItem(
+											'Delete',
+											TrashIcon,
+											removable ? '' : 'Stop the server first',
+											() => askDelete(inst)
 										)}
 									{/if}
 								</DropdownMenu.Content>
@@ -254,14 +265,14 @@
 </div>
 
 <!-- a dangerous menu item; with a `blocked` reason it is disabled and says why on hover -->
-{#snippet menuItem(label: string, blocked: string, onSelect: () => void)}
+{#snippet menuItem(label: string, Icon: typeof TrashIcon, blocked: string, onSelect: () => void)}
 	{#if blocked}
 		<!-- the wrapper carries the title, since a disabled item ignores the pointer -->
 		<div title={blocked}>
-			<DropdownMenu.Item variant="destructive" disabled>{label}</DropdownMenu.Item>
+			<DropdownMenu.Item variant="destructive" disabled><Icon />{label}</DropdownMenu.Item>
 		</div>
 	{:else}
-		<DropdownMenu.Item variant="destructive" {onSelect}>{label}</DropdownMenu.Item>
+		<DropdownMenu.Item variant="destructive" {onSelect}><Icon />{label}</DropdownMenu.Item>
 	{/if}
 {/snippet}
 
