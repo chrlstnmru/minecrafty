@@ -22,6 +22,12 @@ export const installedMods = query(id, async (instanceId) => {
 	return mods.listInstalled(instanceId);
 });
 
+/** Jars in the mods folder that the panel did not install, such as ones uploaded in Files. */
+export const localMods = query(id, async (instanceId) => {
+	requirePermission(instanceId, 'mods');
+	return userFacing(async () => mods.listLocal(instanceId));
+});
+
 /** Newer releases of the installed mods; one Modrinth request regardless of how many are installed. */
 export const modUpdates = query(id, async (instanceId) => {
 	requirePermission(instanceId, 'mods');
@@ -101,3 +107,30 @@ export const refreshModSides = command(id, async (instanceId) => {
 	if (filled) await installedMods(instanceId).refresh();
 	return filled;
 });
+
+// a path relative to the server folder; the server only acts on one of the listed untracked jars
+const localFile = v.pipe(v.string(), v.minLength(1), v.maxLength(512));
+
+export const setLocalModEnabled = command(
+	v.object({ id, file: localFile, enabled: v.boolean() }),
+	async ({ id: instanceId, file, enabled }) => {
+		requirePermission(instanceId, 'mods');
+		await userFacing(async () => mods.setLocalEnabled(instanceId, file, enabled));
+		record({
+			action: 'mod.toggle',
+			summary: `${enabled ? 'Enabled' : 'Disabled'} ${file}`,
+			instanceId
+		});
+		await localMods(instanceId).refresh();
+	}
+);
+
+export const removeLocalMod = command(
+	v.object({ id, file: localFile }),
+	async ({ id: instanceId, file }) => {
+		requirePermission(instanceId, 'mods');
+		await userFacing(async () => mods.removeLocal(instanceId, file));
+		record({ action: 'mod.remove', summary: `Removed ${file}`, instanceId });
+		await localMods(instanceId).refresh();
+	}
+);

@@ -3,7 +3,10 @@
 export type Side = string | null;
 
 export type ModListItem = {
-	id: number;
+	/** unique in the list */
+	key: string;
+	/** the installed mod's or pack file's id; null for a jar the panel did not install */
+	id: number | null;
 	projectId: string | null;
 	title: string;
 	iconUrl: string | null;
@@ -17,7 +20,7 @@ export type ModListItem = {
 	serverSide: Side;
 	/** false only for an instance's disabled jars; packs have no switch */
 	enabled: boolean;
-	/** whether Modrinth knows it, so it has versions and a project page */
+	/** whether Modrinth knows it, so it has versions, updates and a project page; otherwise it is Local */
 	fromModrinth: boolean;
 	update?: { versionNumber: string };
 };
@@ -33,14 +36,15 @@ export function sideTags(clientSide: Side, serverSide: Side): SideTag[] {
 	return tags;
 }
 
-export const MOD_FILTERS = ['all', 'updates', 'disabled', 'client-only'] as const;
+export const MOD_FILTERS = ['all', 'updates', 'disabled', 'client-only', 'local'] as const;
 export type ModFilter = (typeof MOD_FILTERS)[number];
 
 const inFilter: Record<ModFilter, (item: ModListItem) => boolean> = {
 	all: () => true,
 	updates: (item) => !!item.update,
 	disabled: (item) => !item.enabled,
-	'client-only': (item) => item.serverSide === 'unsupported'
+	'client-only': (item) => item.serverSide === 'unsupported',
+	local: (item) => !item.fromModrinth
 };
 
 export function countByFilter(items: ModListItem[]): Record<ModFilter, number> {
@@ -61,10 +65,7 @@ export function filterMods(items: ModListItem[], filter: ModFilter, query: strin
 
 /** Why a mod is in the list, when it is not simply one somebody chose. */
 export function reason(item: ModListItem, titles: Map<string, string>): string | null {
-	if (item.dependencyOf) {
-		const parent = titles.get(item.dependencyOf);
-		return parent ? `Required by ${parent}` : 'Added as a dependency';
-	}
-	if (!item.fromModrinth) return 'Not from Modrinth';
-	return null;
+	if (!item.dependencyOf) return null;
+	const parent = titles.get(item.dependencyOf);
+	return parent ? `Required by ${parent}` : 'Added as a dependency';
 }

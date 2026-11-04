@@ -91,6 +91,7 @@
 	const items = $derived<ModListItem[]>(
 		(pack.files ?? []).map((file) => ({
 			...file,
+			key: String(file.id),
 			file: file.path,
 			enabled: true,
 			fromModrinth: !!file.projectId
@@ -355,13 +356,13 @@
 											picker = {
 												projectId: mod.projectId!,
 												title: mod.title,
-												fileId: mod.id,
+												fileId: mod.id!,
 												versionId: mod.versionId ?? ''
 											};
 											pickerOpen = true;
 										}
 									: undefined}
-								onRemove={canWrite ? (mod) => remove(mod.id, mod.title) : undefined}
+								onRemove={canWrite ? (mod) => remove(mod.id!, mod.title) : undefined}
 								onBrowse={canWrite ? () => (params.view = 'browse') : undefined}
 							/>
 						</Card.Content>
