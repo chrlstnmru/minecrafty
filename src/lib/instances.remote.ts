@@ -18,6 +18,9 @@ const id = idSchema;
 /** The instances the user may see as they are now; the `instances` feed keeps them current. */
 export const listInstances = query(async () => instances.visibleInstances(requireUser()));
 
+/** The small list the sidebar and breadcrumbs render; the `nav` feed says when to refetch it. */
+export const listNavInstances = query(async () => instances.navInstances(requireUser()));
+
 export const getInstance = query(id, async (instanceId) => {
 	const user = requireInstance(instanceId);
 	const row = instances.getInstance(instanceId);

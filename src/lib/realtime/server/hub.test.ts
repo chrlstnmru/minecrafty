@@ -9,7 +9,8 @@ import { CLOSE_BAD_MESSAGE, CLOSE_SIGNED_OUT, type ServerMessage } from '#lib/re
 import * as A from '#lib/server/access.js';
 import { db } from '#lib/server/db/index.js';
 import { instances, roles, sessions, users } from '#lib/server/db/schema.js';
-import { serverDir } from '#lib/server/instances.js';
+import { navInstances, serverDir } from '#lib/server/instances.js';
+import { userFromToken } from '#lib/server/sessions.js';
 import * as U from '#lib/server/user-admin.js';
 import { makeInstance } from '#test/instance.js';
 import { makeRole } from '#test/roles.js';
@@ -174,6 +175,23 @@ describe('the panel feeds', () => {
 		db.update(instances).set({ name: 'renamed' }).where(eq(instances.id, id)).run();
 		await until(() => sent.length === 2, 3000);
 		expect((sent[1] as { frame: { name: string }[] }).frame[0].name).toBe('renamed');
+		session.close();
+	});
+
+	it('sends a new nav revision only when a name or state changed', async () => {
+		const { fake, sent } = socket();
+		const token = await signIn('root', 'owner');
+		const session = new SocketSession(fake, token);
+		session.message(JSON.stringify({ type: 'subscribe', sub: 1, feed: 'nav' }));
+		await until(() => sent.length === 1);
+		const first = (sent[0] as { frame: string }).frame;
+		expect(first).toBe((await navInstances(userFromToken(token)!)).rev);
+		db.update(instances).set({ ramMaxMb: 4096 }).where(eq(instances.id, id)).run();
+		await Bun.sleep(1200);
+		expect(sent).toHaveLength(1);
+		db.update(instances).set({ name: 'renamed' }).where(eq(instances.id, id)).run();
+		await until(() => sent.length === 2, 3000);
+		expect((sent[1] as { frame: string }).frame).not.toBe(first);
 		session.close();
 	});
 

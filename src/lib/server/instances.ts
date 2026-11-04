@@ -1,4 +1,5 @@
 import { and, eq } from 'drizzle-orm';
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
@@ -190,6 +191,16 @@ export async function visibleInstances(user: Actor) {
 }
 
 export type VisibleInstance = Awaited<ReturnType<typeof visibleInstances>>[number];
+
+/**
+ * What the sidebar and breadcrumbs show of each instance `user` may see. `rev` changes whenever
+ * the list does; the `nav` feed sends only `rev`, and the page refetches when it differs.
+ */
+export async function navInstances(user: Actor) {
+	const list = (await visibleInstances(user)).map(({ id, name, state }) => ({ id, name, state }));
+	const rev = createHash('sha1').update(JSON.stringify(list)).digest('base64url').slice(0, 12);
+	return { rev, instances: list };
+}
 
 /** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */
 export async function javaFor(inst: Instance): Promise<JavaMajor> {
