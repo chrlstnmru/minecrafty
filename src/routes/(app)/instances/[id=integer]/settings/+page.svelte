@@ -43,6 +43,7 @@
 	let confirmDelete = $state(false);
 
 	async function remove() {
+		confirmDelete = false;
 		try {
 			await deleteInstance(id);
 			await goto('/instances');
