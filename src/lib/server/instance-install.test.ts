@@ -35,7 +35,8 @@ vi.mock('./loaders', async (original) => ({
 }));
 
 const I = await import('./instances');
-const { getProgress } = await import('./install-progress');
+const { jobState } = await import('./instance-jobs');
+const getProgress = (id: number) => jobState(id).progress;
 
 type NewInstance = import('./instances').NewInstance;
 // each instance gets the next port; a random one now and then repeats and fails the UNIQUE check
@@ -62,7 +63,7 @@ beforeEach(() => {
 
 describe('createInstance', () => {
 	it('returns at once with the instance marked as installing, before the server is downloaded', async () => {
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		expect(row.installState).toBe('installing');
 		expect(state(row.id).installState).toBe('installing');
 		expect(getProgress(row.id)).toMatchObject({ label: 'Starting' });
@@ -73,7 +74,7 @@ describe('createInstance', () => {
 	});
 
 	it('becomes ready, with its files and instance.json, once the install is done', async () => {
-		const { row, finished } = I.createInstance(input({ mcVersion: '1.21.5' }));
+		const { row, finished } = await I.createInstance(input({ mcVersion: '1.21.5' }));
 		await tick();
 		install.release!();
 		await finished;
@@ -89,7 +90,7 @@ describe('createInstance', () => {
 
 	it('shows download progress in bytes while it runs, and the installer step after', async () => {
 		install.steps = [['downloading', 1000, 5000]];
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		await tick();
 		expect(getProgress(row.id)).toEqual({
 			label: 'Downloading the server',
@@ -102,16 +103,16 @@ describe('createInstance', () => {
 	});
 
 	it('cannot be started while it installs', async () => {
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		await tick();
-		await expect(I.startInstance(row.id)).rejects.toThrow(/Still installing/);
+		await expect(I.startInstance(row.id)).rejects.toThrow(/Wait for the install to finish/);
 		install.release!();
 		await finished;
 	});
 
 	it('fails with the reason, keeps the instance, and clears the progress', async () => {
 		install.fail = 'Download failed (503)';
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		await tick();
 		install.release!();
 		await finished;
@@ -125,7 +126,7 @@ describe('createInstance', () => {
 	it('does not leave other instances alone installing when one fails', async () => {
 		const other = makeInstance().id;
 		install.fail = 'boom';
-		const { finished } = I.createInstance(input());
+		const { finished } = await I.createInstance(input());
 		await tick();
 		install.release!();
 		await finished;
@@ -136,7 +137,7 @@ describe('createInstance', () => {
 describe('retryInstall', () => {
 	async function failed() {
 		install.fail = 'Download failed (503)';
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		await tick();
 		install.release!();
 		await finished;
@@ -147,7 +148,7 @@ describe('retryInstall', () => {
 	it('installs again from a clean folder, and the instance becomes ready', async () => {
 		const row = await failed();
 		writeFileSync(join(I.serverDir(row.id), 'half-downloaded.part'), 'junk');
-		const retry = I.retryInstall(row.id);
+		const retry = await I.retryInstall(row.id);
 		expect(retry.row.installState).toBe('installing');
 		await tick();
 		install.release!();
@@ -158,44 +159,44 @@ describe('retryInstall', () => {
 	});
 
 	it('refuses an instance that did not fail', async () => {
-		expect(() => I.retryInstall(makeInstance().id)).toThrow(/Nothing failed/);
-		expect(() => I.retryInstall(999_999)).toThrow(/not found/);
+		await expect(I.retryInstall(makeInstance().id)).rejects.toThrow(/Nothing failed/);
+		await expect(I.retryInstall(999_999)).rejects.toThrow(/not found/);
 	});
 
 	it('refuses a modpack server, which needs its pack and not just the loader', async () => {
 		const row = await failed();
 		db.update(instances).set({ packProjectId: 'PACK' }).where(eq(instances.id, row.id)).run();
-		expect(() => I.retryInstall(row.id)).toThrow(/modpack/i);
+		await expect(I.retryInstall(row.id)).rejects.toThrow(/modpack/i);
 	});
 
 	it('refuses a server made from a pack in the builder too', async () => {
 		const row = await failed();
 		db.update(instances).set({ fromPackId: 7 }).where(eq(instances.id, row.id)).run();
-		expect(() => I.retryInstall(row.id)).toThrow(/modpack/i);
+		await expect(I.retryInstall(row.id)).rejects.toThrow(/modpack/i);
 		expect(I.getInstance(row.id)?.installState).toBe('failed');
 	});
 
 	it('refuses a server that was set up before, so a failed update never erases its world', async () => {
-		const { row, finished } = I.createInstance(input());
+		const { row, finished } = await I.createInstance(input());
 		await tick();
 		install.release!();
 		await finished;
 		writeFileSync(join(I.serverDir(row.id), 'level.dat'), 'world');
 		db.update(instances).set({ installState: 'failed' }).where(eq(instances.id, row.id)).run();
-		expect(() => I.retryInstall(row.id)).toThrow(/erase its world/);
+		await expect(I.retryInstall(row.id)).rejects.toThrow(/erase its world/);
 		expect(existsSync(join(I.serverDir(row.id), 'level.dat'))).toBe(true);
 	});
 
 	it('can fail again and be retried again', async () => {
 		const row = await failed();
 		install.fail = 'still down';
-		const second = I.retryInstall(row.id);
+		const second = await I.retryInstall(row.id);
 		await tick();
 		install.release!();
 		await second.finished;
 		expect(state(row.id).installMessage).toBe('still down');
 		install.fail = null;
-		const third = I.retryInstall(row.id);
+		const third = await I.retryInstall(row.id);
 		await tick();
 		install.release!();
 		await third.finished;

@@ -3,10 +3,9 @@ import { join } from 'node:path';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { makeInstance } from '#test/instance.js';
+import { holdJob } from '#test/jobs.js';
 
 import type { Actor } from './access';
-
-import { claim } from './operations';
 
 // Whether the server runs is decided per test; the runner itself is replaced.
 const state = vi.hoisted(() => ({ running: false }));
@@ -101,7 +100,7 @@ describe('nothing changes while the folder is being restored, installed or updat
 	};
 
 	it('during a restore', async () => {
-		const release = claim(id, 'restore');
+		const release = await holdJob(id, 'restore');
 		try {
 			const m = /restore is in progress/;
 			await refuse(() => saveFile(owner, id, 'a.txt', 'x'), m);
@@ -116,7 +115,7 @@ describe('nothing changes while the folder is being restored, installed or updat
 			);
 			expect(readFileSync(join(root, 'a.txt'), 'utf8')).toBe('a');
 		} finally {
-			release();
+			await release();
 		}
 		await saveFile(owner, id, 'a.txt', 'x');
 	});
@@ -208,13 +207,13 @@ describe('saveFiles', () => {
 	});
 
 	it('is refused while the folder is being restored', async () => {
-		const release = claim(id, 'restore');
+		const release = await holdJob(id, 'restore');
 		try {
 			await expect(
 				saveFiles(owner, id, [{ rel: 'a.txt', content: 'x', baseHash: hashOf('a.txt') }])
 			).rejects.toThrow(/restore is in progress/);
 		} finally {
-			release();
+			await release();
 		}
 	});
 });

@@ -111,7 +111,8 @@ const U = await import('./modpack-update');
 const { summarize } = await import('./modpacks');
 const { readMrpack, writeIndex } = await import('./mrpack');
 const { writeManifest, readManifest } = await import('./modpack-manifest');
-const { lastOutcome } = await import('#lib/server/update-outcome.js');
+const { jobState } = await import('#lib/server/instance-jobs.js');
+const lastOutcome = (id: number) => jobState(id).outcome;
 const { listBackups } = await import('#lib/server/backups.js');
 const { getInstance, serverDir } = await import('#lib/server/instances.js');
 
@@ -633,7 +634,7 @@ describe('refusals', () => {
 		});
 		await expect(
 			U.startModpackUpdate(id, { versionId: 'V2', backup: false, replaceConfigs: false })
-		).rejects.toThrow(/Wait for the install/);
+		).rejects.toThrow(/An update is in progress/);
 		await first.finished;
 	});
 });

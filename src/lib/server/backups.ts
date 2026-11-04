@@ -17,9 +17,9 @@ import { safeEntryName } from '#lib/safe-entry-name.js';
 import { backupsDir } from './config';
 import { db } from './db';
 import { backups, instances } from './db/schema';
-import { getInstance, serverDir, wasInstalled } from './instances';
-import { isRunning, withWorldSaved } from './live-server';
-import { busyWith, claim } from './operations';
+import * as jobs from './instance-jobs';
+import { getInstance, serverDir } from './instances';
+import { withWorldSaved } from './live-server';
 import { listZipEntries } from './zip-entries';
 import { extractZip } from './zip-extract';
 import { zipStream } from './zip-writer';
@@ -71,7 +71,7 @@ function stamp(date = new Date()) {
 	return date.toISOString().replace(/[:.]/g, '-');
 }
 
-/** Writes the zip and records it. The caller holds the instance's claim. */
+/** Writes the zip and records it. The caller's job holds the instance. */
 export async function writeBackup(instanceId: number, kind: BackupKind, note: string | null) {
 	const inst = getInstance(instanceId);
 	if (!inst) throw new Error('Instance not found');
@@ -137,23 +137,17 @@ export async function createBackup(
 	instanceId: number,
 	options: { kind?: Exclude<BackupKind, 'before-restore' | 'before-update'>; note?: string } = {}
 ) {
-	const inst = getInstance(instanceId);
-	if (!inst) throw new Error('Instance not found');
-	if (inst.installState !== 'ready') throw new Error('Wait for the install to finish');
-	const release = claim(instanceId, 'backup');
-	try {
+	return jobs.run(instanceId, 'backup', async () => {
 		const row = await writeBackup(instanceId, options.kind ?? 'manual', options.note ?? null);
 		pruneBackups(instanceId);
 		return row;
-	} finally {
-		release();
-	}
+	});
 }
 
 export function deleteBackup(instanceId: number, backupId: number) {
 	const row = getBackup(instanceId, backupId);
 	if (!row) throw new Error('Backup not found');
-	if (busyWith(instanceId) === 'restore') throw new Error('A restore is in progress');
+	if (jobs.jobState(instanceId).job === 'restore') throw new Error('A restore is in progress');
 	removeBackup(row);
 }
 
@@ -163,55 +157,43 @@ export function deleteBackup(instanceId: number, backupId: number) {
  * extracted cleanly, and excluded paths (logs, by default) are carried over from the old folder.
  */
 export async function restoreBackup(instanceId: number, backupId: number) {
-	const inst = getInstance(instanceId);
 	const row = getBackup(instanceId, backupId);
-	if (!inst || !row) throw new Error('Backup not found');
+	if (!row) throw new Error('Backup not found');
 	const archive = backupPath(instanceId, row.file);
 	if (!existsSync(archive)) throw new Error('The backup file is missing');
-	if (await isRunning(instanceId)) throw new Error('Stop the server before restoring a backup');
-	if (inst.installState === 'installing') throw new Error('Wait for the install to finish');
-	// a failed update leaves a server that may not start; restoring a backup is how it recovers
-	if (inst.installState === 'failed' && !wasInstalled(instanceId))
-		throw new Error('The install failed, so there is nothing to restore into');
 
-	const release = claim(instanceId, 'restore');
-	const live = serverDir(instanceId);
-	const incoming = `${live}.restoring`;
-	const replaced = `${live}.replaced`;
-	try {
-		rmSync(incoming, { recursive: true, force: true });
-		rmSync(replaced, { recursive: true, force: true });
-		if (existsSync(live))
-			await writeBackup(instanceId, 'before-restore', `Before restoring ${row.file}`);
-
-		await extractZip(archive, incoming);
-
-		if (existsSync(live)) {
-			for (const path of parseExcludes(inst.backupExcludes)) {
-				if (!existsSync(join(live, path)) || existsSync(join(incoming, path))) continue;
-				mkdirSync(dirname(join(incoming, path)), { recursive: true });
-				renameSync(join(live, path), join(incoming, path));
-			}
-			renameSync(live, replaced);
-		}
+	await jobs.run(instanceId, 'restore', async (inst) => {
+		const live = serverDir(instanceId);
+		const incoming = `${live}.restoring`;
+		const replaced = `${live}.replaced`;
 		try {
-			renameSync(incoming, live);
+			rmSync(incoming, { recursive: true, force: true });
+			rmSync(replaced, { recursive: true, force: true });
+			if (existsSync(live))
+				await writeBackup(instanceId, 'before-restore', `Before restoring ${row.file}`);
+
+			await extractZip(archive, incoming);
+
+			if (existsSync(live)) {
+				for (const path of parseExcludes(inst.backupExcludes)) {
+					if (!existsSync(join(live, path)) || existsSync(join(incoming, path))) continue;
+					mkdirSync(dirname(join(incoming, path)), { recursive: true });
+					renameSync(join(live, path), join(incoming, path));
+				}
+				renameSync(live, replaced);
+			}
+			try {
+				renameSync(incoming, live);
+			} catch (e) {
+				if (existsSync(replaced) && !existsSync(live)) renameSync(replaced, live);
+				throw e;
+			}
+			rmSync(replaced, { recursive: true, force: true });
 		} catch (e) {
-			if (existsSync(replaced) && !existsSync(live)) renameSync(replaced, live);
+			rmSync(incoming, { recursive: true, force: true });
 			throw e;
 		}
-		rmSync(replaced, { recursive: true, force: true });
-		if (inst.installState === 'failed')
-			db.update(instances)
-				.set({ installState: 'ready', installMessage: null })
-				.where(eq(instances.id, instanceId))
-				.run();
-	} catch (e) {
-		rmSync(incoming, { recursive: true, force: true });
-		throw e;
-	} finally {
-		release();
-	}
+	});
 }
 
 export function setBackupSettings(
@@ -223,6 +205,3 @@ export function setBackupSettings(
 	db.update(instances).set(settings).where(eq(instances.id, instanceId)).run();
 	pruneBackups(instanceId);
 }
-
-/** Whether a backup, restore or update is running for the instance right now. */
-export const backupBusy = busyWith;

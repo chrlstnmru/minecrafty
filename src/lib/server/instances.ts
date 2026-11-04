@@ -9,11 +9,10 @@ import { canRetryInstall } from '#lib/instance-origin.js';
 import { backupsDir, instanceDir, javaOverride, runnerCommand, serverDir } from './config';
 import { db } from './db';
 import { instances } from './db/schema';
-import { getProgress, runInstall, setProgress } from './install-progress';
+import * as jobs from './instance-jobs';
 import { ensureJava, JAVA_MAJORS, requiredJavaMajor, type JavaMajor } from './java';
 import * as live from './live-server';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from './loaders';
-import { busyWith } from './operations';
 import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;
@@ -104,40 +103,13 @@ export function insertInstance(input: NewInstance) {
 	return row;
 }
 
-/** Records what the instance runs in instance.json, for anything that reads the folder without the database. */
-export function writeInstanceMeta(row: Instance) {
-	writeFileSync(
-		join(instanceDir(row.id), 'instance.json'),
-		JSON.stringify(
-			{
-				loader: row.loader,
-				mcVersion: row.mcVersion,
-				ramMaxMb: row.ramMaxMb,
-				jvmArgs: row.jvmArgs
-			},
-			null,
-			2
-		)
-	);
-}
-
-/**
- * Whether the server was installed successfully at least once: instance.json is only written when
- * an install or update finishes. A failure after that is a failed update, and the folder holds a
- * world that must not be thrown away.
- */
-export const wasInstalled = (id: number) => existsSync(join(instanceDir(id), 'instance.json'));
-
-/**
- * Installs the loader's server files and writes instance.json, reporting what it is doing through
- * the install progress, which the caller clears when it is done.
- */
-export async function installBase(row: Instance) {
+/** Installs the loader's server files, telling `progress` what it is doing. */
+export async function installBase(row: Instance, progress: jobs.Report) {
 	const mc = row.mcVersion;
 	const loader = row.loader as Loader;
 	let java: string | undefined;
 	if (needsJavaToInstall(loader)) {
-		setProgress(row.id, { label: 'Getting Java ready', done: 0, total: 1 });
+		progress('Getting Java ready');
 		java = javaOverride ?? (await ensureJava(await requiredJavaMajor(mc)));
 	}
 	await installServer({
@@ -147,14 +119,10 @@ export async function installBase(row: Instance) {
 		build: row.loaderVersion ?? undefined,
 		java,
 		report: (step, done, total) =>
-			setProgress(
-				row.id,
-				step === 'installing'
-					? { label: `Installing ${loader}`, done: 0, total: 1 }
-					: { label: 'Downloading the server', done: done ?? 0, total: total ?? 0, bytes: true }
-			)
+			step === 'installing'
+				? progress(`Installing ${loader}`)
+				: progress('Downloading the server', { done: done ?? 0, total: total ?? 0, bytes: true })
 	});
-	writeInstanceMeta(row);
 }
 
 function removeInstanceFiles(id: number) {
@@ -173,37 +141,28 @@ export function discardInstance(id: number) {
  * (a download of 50 MB, or Java and an installer, is no reason to keep a form waiting). `finished`
  * settles when the install is over, whichever way it went.
  */
-export function createInstance(input: NewInstance) {
-	const row = insertInstance({ ...input, installState: 'installing', installMessage: null });
-	setProgress(row.id, { label: 'Starting', done: 0, total: 1 });
-	return { row, finished: runInstall(row, 'install', () => installBase(row)) };
+export async function createInstance(input: NewInstance) {
+	const row = insertInstance(input);
+	return jobs.start(row.id, 'install', ({ progress }) => installBase(row, progress));
 }
 
 /** Runs a failed install again from scratch. Only for servers made from a loader: a modpack's own files need the pack. */
-export function retryInstall(id: number) {
+export async function retryInstall(id: number) {
 	const row = getInstance(id);
 	if (!row) throw new Error('Instance not found');
 	if (row.installState !== 'failed') throw new Error('Nothing failed here');
 	if (!canRetryInstall(row))
 		throw new Error('A modpack server cannot be retried; create it again from the pack');
-	if (wasInstalled(id))
+	if (jobs.wasInstalled(id))
 		throw new Error(
 			'This server was set up before, so a retry would erase its world. Restore a backup instead'
 		);
-	// whatever a half-finished install left would only get in the way
-	rmSync(serverDir(id), { recursive: true, force: true });
-	mkdirSync(serverDir(id), { recursive: true });
-	const installing = db
-		.update(instances)
-		.set({ installState: 'installing', installMessage: null })
-		.where(eq(instances.id, id))
-		.returning()
-		.get();
-	setProgress(id, { label: 'Starting', done: 0, total: 1 });
-	return {
-		row: installing,
-		finished: runInstall(installing, 'install', () => installBase(installing))
-	};
+	return jobs.start(id, 'install', async ({ progress }) => {
+		// whatever a half-finished install left would only get in the way
+		rmSync(serverDir(id), { recursive: true, force: true });
+		mkdirSync(serverDir(id), { recursive: true });
+		await installBase(row, progress);
+	});
 }
 
 export function getInstance(id: number) {
@@ -220,7 +179,7 @@ export async function listInstances() {
 				state: (s?.state ?? 'stopped') as InstanceState,
 				pid: s?.pid ?? null,
 				startedAt: s?.startedAt ?? null,
-				progress: getProgress(row.id)
+				progress: jobs.jobState(row.id).progress
 			};
 		})
 	);
@@ -257,13 +216,7 @@ export function javaArgs(
 }
 
 export async function startInstance(id: number) {
-	const inst = getInstance(id);
-	if (!inst) throw new Error('Instance not found');
-	if (inst.installState === 'installing') throw new Error('Still installing');
-	if (inst.installState === 'failed')
-		throw new Error(`The install failed: ${inst.installMessage ?? 'unknown error'}`);
-	// the restore swaps the server folder out from under it
-	if (busyWith(id) === 'restore') throw new Error('Wait for the restore to finish');
+	const inst = await jobs.check(id, 'start');
 
 	const dir = instanceDir(id);
 	let current = await live.status(id);
@@ -336,9 +289,7 @@ export async function killInstance(id: number) {
 }
 
 export async function deleteInstance(id: number) {
-	if (getInstance(id)?.installState === 'installing')
-		throw new Error('Wait for the install to finish before deleting it');
-	if (await live.isRunning(id)) throw new Error('Stop the instance before deleting it');
+	await jobs.check(id, 'delete');
 	db.delete(instances).where(eq(instances.id, id)).run();
 	removeInstanceFiles(id);
 }
@@ -372,12 +323,4 @@ export async function autoStartInstances() {
 				console.error(`[autostart] "${row.name}" (#${row.id}): ${message}`);
 		}
 	}
-}
-
-/** An install that was running when the panel stopped cannot continue; mark it failed. */
-export function failInterruptedInstalls() {
-	db.update(instances)
-		.set({ installState: 'failed', installMessage: 'Interrupted by a panel restart' })
-		.where(eq(instances.installState, 'installing'))
-		.run();
 }

@@ -19,9 +19,9 @@ import { cleanPath, joinPath } from '../paths';
 import { SMALL_FILE_BYTES } from '../upload-limits';
 import { applyChanges, safePath, sha1, type Changes, type ChangeRules } from './change-set';
 import { assertMayWriteCode } from './host-code';
+import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
-import { assertWritable } from './operations';
 import {
 	assertMutable,
 	assertWorldIdle,

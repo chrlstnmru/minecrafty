@@ -1,13 +1,13 @@
 import { and, eq } from 'drizzle-orm';
 
 import { updateKind } from '../versions';
+import { writeBackup } from './backups';
 import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
-import { runUpdate } from './instance-job';
+import * as jobs from './instance-jobs';
 import { getInstance, serverDir } from './instances';
 import { ensureJava, requiredJavaMajor } from './java';
-import { isRunning } from './live-server';
 import {
 	getMinecraftVersions,
 	installServer,
@@ -82,11 +82,8 @@ export async function startLoaderUpdate(
 	instanceId: number,
 	opts: { mcVersion: string; build?: string; backup: boolean }
 ) {
-	const inst = getInstance(instanceId);
-	if (!inst) throw new Error('Instance not found');
+	const inst = await jobs.check(instanceId, 'update');
 	const loader = inst.loader as Loader;
-	if (inst.installState !== 'ready') throw new Error('Wait for the install to finish');
-	if (await isRunning(instanceId)) throw new Error('Stop the server before updating it');
 	if (!(await isKnownVersion(loader, opts.mcVersion)))
 		throw new Error(`${loader} does not support Minecraft ${opts.mcVersion}`);
 
@@ -106,16 +103,20 @@ export async function startLoaderUpdate(
 	const describe = (v: { mcVersion: string; loaderVersion: string | null }) =>
 		`${loader} ${v.mcVersion}${v.loaderVersion ? ` (${v.loaderVersion})` : ''}`;
 
-	const finished = runUpdate(
+	const { finished } = await jobs.start(
 		instanceId,
-		{ kind: 'loader', backup: opts.backup ? `Before updating to ${describe(to)}` : null },
+		'update',
 		async ({ staging, progress, commit }) => {
+			if (opts.backup) {
+				progress('Backing up the server');
+				await writeBackup(instanceId, 'before-update', `Before updating to ${describe(to)}`);
+			}
 			progress('Installing the new server');
 			const java = needsJavaToInstall(loader)
 				? (javaOverride ?? (await ensureJava(await requiredJavaMajor(to.mcVersion))))
 				: undefined;
 			await installServer({
-				serverDir: staging,
+				serverDir: staging(),
 				loader,
 				mc: to.mcVersion,
 				build: build ?? undefined,
@@ -125,7 +126,7 @@ export async function startLoaderUpdate(
 			progress('Replacing the old server');
 			commit();
 			removeStale(serverDir(instanceId), loader);
-			mergeStaged(serverDir(instanceId), staging);
+			mergeStaged(serverDir(instanceId), staging());
 			launchArgs(serverDir(instanceId), loader);
 
 			// a Java version chosen by hand may be too old for the new Minecraft version
@@ -141,7 +142,8 @@ export async function startLoaderUpdate(
 					`Updated from ${describe(from)} to ${describe(to)}.` +
 					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : '')
 			};
-		}
+		},
+		{ audit: 'loader' }
 	);
 
 	return { from, to, kind: updateKind(from.mcVersion, to.mcVersion), finished };

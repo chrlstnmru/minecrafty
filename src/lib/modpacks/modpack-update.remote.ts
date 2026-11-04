@@ -2,7 +2,6 @@ import { command, query } from '$app/server';
 import * as v from 'valibot';
 
 import {
-	lastOutcome,
 	modpackInfo,
 	previewModpackUpdate,
 	startModpackUpdate
@@ -11,13 +10,17 @@ import { idSchema } from '#lib/schemas/common.js';
 import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
+import { jobState } from '#lib/server/instance-jobs.js';
 
 const versionId = v.pipe(v.string(), v.minLength(1), v.maxLength(64));
 
 /** The pack the instance came from, every version of it, and how the last update ended. */
 export const modpackStatus = query(idSchema, async (instanceId) => {
 	requirePermission(instanceId, 'modpack');
-	return { ...(await userFacing(() => modpackInfo(instanceId))), outcome: lastOutcome(instanceId) };
+	return {
+		...(await userFacing(() => modpackInfo(instanceId))),
+		outcome: jobState(instanceId).outcome
+	};
 });
 
 /** What updating to a version would change, without changing anything. */

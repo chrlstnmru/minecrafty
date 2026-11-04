@@ -7,6 +7,7 @@ import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import * as backups from '#lib/server/backups.js';
 import { userFacing } from '#lib/server/http.js';
+import { jobState } from '#lib/server/instance-jobs.js';
 import { getInstance } from '#lib/server/instances.js';
 import { isRunning } from '#lib/server/live-server.js';
 
@@ -19,7 +20,7 @@ export const instanceBackups = query(idSchema, async (instanceId) => {
 		backups: backups.listBackups(instanceId),
 		settings: { keep: inst.backupKeep, excludes: inst.backupExcludes },
 		running: await isRunning(instanceId),
-		busy: backups.backupBusy(instanceId)
+		busy: jobState(instanceId).job
 	};
 });
 

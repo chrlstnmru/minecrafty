@@ -2,26 +2,23 @@ import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
+import { writeBackup } from '#lib/server/backups.js';
 import { sha1 } from '#lib/server/change-set.js';
 import { javaOverride } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
 import { installedMods } from '#lib/server/db/schema.js';
-import { runUpdate } from '#lib/server/instance-job.js';
+import * as jobs from '#lib/server/instance-jobs.js';
 import { getInstance, serverDir } from '#lib/server/instances.js';
 import { ensureJava, requiredJavaMajor } from '#lib/server/java.js';
-import { isRunning } from '#lib/server/live-server.js';
 import { installServer, launchArgs, needsJavaToInstall, type Loader } from '#lib/server/loaders.js';
 import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from '#lib/server/mods.js';
 import { mergeStaged, removeStale } from '#lib/server/staged-install.js';
-import { lastOutcome } from '#lib/server/update-outcome.js';
 
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
 import { downloadFiles, packFileHashes, trackMods, type LoadedPack } from './modpacks';
 import { safeJoin, type IndexFile } from './mrpack';
 import { decide } from './pack-diff';
 import { packSourceOf, type ModpackInfo } from './pack-source';
-
-export { lastOutcome };
 
 async function hashFile(path: string) {
 	const hash = new Bun.CryptoHasher('sha1');
@@ -189,25 +186,31 @@ export async function startModpackUpdate(
 	instanceId: number,
 	opts: { versionId: string; backup: boolean; replaceConfigs: boolean }
 ) {
-	const inst = getInstance(instanceId);
-	const source = inst && packSourceOf(inst);
-	if (!inst || !source) throw new Error('This instance was not created from a modpack');
-	if (inst.installState !== 'ready') throw new Error('Wait for the install to finish');
+	const found = getInstance(instanceId);
+	if (!found || !packSourceOf(found))
+		throw new Error('This instance was not created from a modpack');
+	const inst = await jobs.check(instanceId, 'update');
+	const source = packSourceOf(inst)!;
 	if (opts.versionId === source.installedVersionId) throw new Error('Already on that version');
-	if (await isRunning(instanceId)) throw new Error('Stop the server before updating it');
 
 	const pack = await source.load(opts.versionId);
 	const plan = await planModpackUpdate(instanceId, pack, opts);
 	const server = serverDir(instanceId);
 	const from = source.installedLabel;
 
-	const finished = runUpdate(
+	const { finished } = await jobs.start(
 		instanceId,
-		{
-			kind: 'modpack',
-			backup: opts.backup ? `Before updating to ${plan.name} ${plan.versionNumber}` : null
-		},
-		async ({ staging, progress, commit }) => {
+		'update',
+		async ({ staging: makeStaging, progress, commit }) => {
+			if (opts.backup) {
+				progress('Backing up the server');
+				await writeBackup(
+					instanceId,
+					'before-update',
+					`Before updating to ${plan.name} ${plan.versionNumber}`
+				);
+			}
+			const staging = makeStaging();
 			if (plan.loaderChange) {
 				progress('Installing the new server');
 				const java = needsJavaToInstall(plan.loader)
@@ -222,9 +225,9 @@ export async function startModpackUpdate(
 				});
 			}
 			await downloadFiles(
-				instanceId,
 				staging,
-				plan.download.map((d) => d.file)
+				plan.download.map((d) => d.file),
+				progress
 			);
 			const configs = pack.mrpack.overrides;
 			for (const path of plan.writeConfigs) {
@@ -300,7 +303,8 @@ export async function startModpackUpdate(
 					? [`Left as they were, because you changed them (${plan.kept.length}):`, ...plan.kept]
 					: undefined
 			};
-		}
+		},
+		{ audit: 'modpack' }
 	);
 
 	return { plan, finished };
