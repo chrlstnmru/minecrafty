@@ -10,3 +10,11 @@ export const savePropertiesSchema = v.object({
 		v.pipe(v.string(), v.maxLength(MAX_VALUE_CHARS))
 	)
 });
+
+/** Far more than any real server.properties, which is a few kilobytes. */
+export const MAX_PROPERTIES_TEXT = 64 * 1024;
+
+export const savePropertiesTextSchema = v.object({
+	id: idSchema,
+	text: v.pipe(v.string(), v.maxLength(MAX_PROPERTIES_TEXT))
+});

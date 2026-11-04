@@ -15,6 +15,7 @@
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
+	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { saveServerProperties, serverProperties } from '#lib/properties.remote.js';
 	import {
 		MANAGED_KEYS,
@@ -23,9 +24,13 @@
 		validateProperty,
 		type PropertyField
 	} from '#lib/server-properties-catalog.js';
+	import { UrlParam } from '#lib/url-param.svelte.js';
+
+	import PropertiesFile from './properties-file.svelte';
 
 	const id = $derived(Number(page.params.id));
 	const properties = $derived(serverProperties(id));
+	const view = new UrlParam('view', 'form');
 
 	const defaults = Object.fromEntries([...propertyFields.values()].map((f) => [f.key, f.default]));
 	const saved = $derived({ ...defaults, ...properties.current?.values });
@@ -49,6 +54,10 @@
 	);
 	const invalid = $derived(Object.keys(errors).length > 0);
 
+	let fileDirty = $state(false);
+	// each view keeps its own unsaved edits, so switching waits until they are saved or discarded
+	const dirty = $derived(changed.length > 0 || fileDirty);
+
 	let saving = $state(false);
 	async function save() {
 		saving = true;
@@ -71,27 +80,37 @@
 			: [{ value: draft[field.key], label: draft[field.key] }, ...field.options];
 </script>
 
-<div class="pb-4 @3xl/main:columns-2 @3xl/main:gap-4">
+<div
+	class={view.value === 'file' ? 'flex min-h-0 flex-1 flex-col gap-4' : 'grid max-w-2xl gap-4 pb-4'}
+>
+	<div class="sticky -top-1 z-10 -mx-1 -my-1 flex flex-wrap items-center gap-3 bg-background p-1">
+		<Tabs.Root value={view.value} onValueChange={(next) => !dirty && (view.value = next)}>
+			<Tabs.List aria-label="Edit as">
+				<Tabs.Trigger value="form" disabled={dirty && view.value !== 'form'}>Form</Tabs.Trigger>
+				<Tabs.Trigger value="file" disabled={dirty && view.value !== 'file'}>File</Tabs.Trigger>
+			</Tabs.List>
+		</Tabs.Root>
+		{#if dirty}
+			<span class="text-sm text-muted-foreground">Save or discard your changes to switch.</span>
+		{/if}
+	</div>
+
 	{#if properties.current && !properties.current.exists}
-		<p
-			class="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground [column-span:all]"
-			role="status"
-		>
+		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
 			This server has not created its server.properties yet. Values you save are written now, and
 			the server fills in the rest the first time it starts.
 		</p>
 	{:else if properties.current?.running}
-		<p
-			class="mb-4 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground [column-span:all]"
-			role="status"
-		>
+		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
 			The server is running. Changes apply the next time it starts.
 		</p>
 	{/if}
 
-	{#if !properties.current}
+	{#if view.value === 'file'}
+		<PropertiesFile {id} bind:dirty={fileDirty} />
+	{:else if !properties.current}
 		{#each [0, 1, 2, 3] as i (i)}
-			<Card.Root class="mb-4 break-inside-avoid">
+			<Card.Root>
 				<Card.Header><Skeleton class="h-5 w-32" /></Card.Header>
 				<Card.Content class="grid gap-4">
 					{#each [0, 1, 2, 3] as j (j)}<Skeleton class="h-9" />{/each}
@@ -100,7 +119,7 @@
 		{/each}
 	{:else}
 		{#each propertyGroups as group (group.title)}
-			<Card.Root class="mb-4 break-inside-avoid">
+			<Card.Root>
 				<Card.Header>
 					<Card.Title>{group.title}</Card.Title>
 					<Card.Description>
@@ -118,16 +137,16 @@
 		{/each}
 
 		{#if others.length}
-			<Card.Root class="mt-4 mb-4 [column-span:all]">
+			<Card.Root>
 				<Card.Header>
 					<Card.Title>Other properties</Card.Title>
 					<Card.Description>
-						Keys in the file that have no field here. The port, resource pack and RCON are managed
-						in Settings and Resource packs.
+						Keys in the file that have no field here. To add one, switch to File. The port, resource
+						pack and RCON are managed in Settings and Resource packs.
 					</Card.Description>
 				</Card.Header>
 				<Card.Content>
-					<Field.Group class="grid gap-4 sm:grid-cols-2 @5xl/main:grid-cols-3">
+					<Field.Group class="grid gap-4 sm:grid-cols-2">
 						{#each others as key (key)}
 							<Field.Field data-invalid={!!errors[key]}>
 								<Field.Label for="prop-{key}" class="font-mono text-xs">{key}</Field.Label>

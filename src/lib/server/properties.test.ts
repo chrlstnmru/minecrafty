@@ -6,7 +6,12 @@ import { makeInstance } from '#test/instance.js';
 
 import { propertyFields, propertyGroups, validateProperty } from '../server-properties-catalog';
 import { serverDir } from './instances';
-import { getServerProperties, saveServerProperties } from './properties';
+import {
+	getServerProperties,
+	getServerPropertiesText,
+	saveServerProperties,
+	saveServerPropertiesText
+} from './properties';
 
 describe('validateProperty', () => {
 	it('checks booleans, numbers against their range, and select options', () => {
@@ -108,5 +113,40 @@ describe('saveServerProperties', () => {
 	it('round-trips a value with a backslash or colon', () => {
 		saveServerProperties(id, { motd: 'C:\\temp: a=b' });
 		expect(getServerProperties(id).values.motd).toBe('C:\\temp: a=b');
+	});
+});
+
+describe('the file as text', () => {
+	it('leaves out the managed lines, so the RCON password never leaves the host', () => {
+		writeFileSync(file, '#Comment\nmotd=Hi\nrcon.password=secret\nserver-port=25565\npvp=true\n');
+		expect(getServerPropertiesText(id)).toEqual({
+			exists: true,
+			text: '#Comment\nmotd=Hi\npvp=true\n'
+		});
+	});
+
+	it('saves the text as typed and keeps the managed lines from the file', () => {
+		writeFileSync(file, 'motd=Hi\nrcon.password=secret\n');
+		expect(saveServerPropertiesText(id, '# mine\nmotd=Bye\nmy.custom=1\n\n')).toBe(true);
+		expect(readFileSync(file, 'utf8')).toBe(
+			'# mine\nmotd=Bye\nmy.custom=1\nrcon.password=secret\n'
+		);
+		expect(saveServerPropertiesText(id, '# mine\nmotd=Bye\nmy.custom=1')).toBe(false);
+		// Minecraft escapes colons when it writes the file
+		expect(saveServerPropertiesText(id, 'level-type=minecraft\\:normal')).toBe(true);
+		expect(getServerProperties(id).values['level-type']).toBe('minecraft:normal');
+	});
+
+	it('names the line that is wrong and writes nothing', () => {
+		writeFileSync(file, 'motd=Keep\n');
+		expect(() => saveServerPropertiesText(id, 'motd=a\nnot a pair')).toThrow(/^Line 2: write it/);
+		expect(() => saveServerPropertiesText(id, 'rcon.password=x')).toThrow(/Line 1: .*managed/);
+		expect(() => saveServerPropertiesText(id, 'pvp=true\npvp=false')).toThrow(
+			/already set on line 1/
+		);
+		expect(() => saveServerPropertiesText(id, 'view-distance=99')).toThrow(
+			/Line 1 \(view-distance\)/
+		);
+		expect(readFileSync(file, 'utf8')).toBe('motd=Keep\n');
 	});
 });
