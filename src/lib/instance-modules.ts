@@ -7,9 +7,7 @@ import FileTextIcon from '@tabler/icons-svelte/icons/file-text';
 import FolderIcon from '@tabler/icons-svelte/icons/folder';
 import HistoryIcon from '@tabler/icons-svelte/icons/history';
 import PackageIcon from '@tabler/icons-svelte/icons/package';
-import PackageImportIcon from '@tabler/icons-svelte/icons/package-import';
 import PaletteIcon from '@tabler/icons-svelte/icons/palette';
-import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import TerminalIcon from '@tabler/icons-svelte/icons/terminal-2';
 import UsersGroupIcon from '@tabler/icons-svelte/icons/users-group';
@@ -55,12 +53,6 @@ export const instanceModules: InstanceModule[] = [
 		description: 'Search and install mods from Modrinth and CurseForge, and keep them updated.'
 	},
 	{
-		slug: 'modpack',
-		title: 'Modpack',
-		icon: PackageImportIcon,
-		description: 'Update this server to another version of the modpack it was created from.'
-	},
-	{
 		slug: 'resource-packs',
 		title: 'Resource packs',
 		icon: PaletteIcon,
@@ -87,12 +79,6 @@ export const instanceModules: InstanceModule[] = [
 		description: 'Edit server.properties with form fields for the common keys.'
 	},
 	{
-		slug: 'loader',
-		title: 'Loader',
-		icon: RefreshIcon,
-		description: 'Update the loader build or Minecraft version, with a backup first.'
-	},
-	{
 		slug: 'audit',
 		title: 'Audit log',
 		icon: HistoryIcon,
@@ -102,6 +88,6 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'settings',
 		title: 'Settings',
 		icon: SettingsIcon,
-		description: 'Name, memory, JVM arguments, port and auto-start.'
+		description: 'Name, memory, Java, loader and modpack.'
 	}
 ];

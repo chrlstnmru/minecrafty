@@ -10,7 +10,6 @@ import {
 	grantedBy,
 	permissionGroup,
 	parseRules,
-	firstAllowedModule,
 	hasPermission,
 	PANEL_PERMISSIONS,
 	closure,
@@ -78,19 +77,10 @@ describe('what is defined', () => {
 	});
 });
 
-describe('hasPermission and firstAllowedModule', () => {
+describe('hasPermission', () => {
 	it('checks a list', () => {
 		expect(hasPermission(['logs', 'files'], 'files')).toBe(true);
 		expect(hasPermission(['logs'], 'files')).toBe(false);
-	});
-
-	it('picks the first tab a user may open', () => {
-		const order = slugs;
-		expect(firstAllowedModule([], order)).toBeUndefined();
-		expect(firstAllowedModule(['logs'], order)).toBe('logs');
-		expect(firstAllowedModule(['console'], order)).toBe('console');
-		expect(firstAllowedModule(['logs', 'backups'], order)).toBe('logs');
-		expect(firstAllowedModule([], order)).toBeUndefined();
 	});
 });
 

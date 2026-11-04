@@ -8,14 +8,19 @@
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
+	import { isFromPack } from '#lib/instance-origin.js';
 	import { deleteInstance, getInstance, updateInstance } from '#lib/instances.remote.js';
 	import { updateInstanceSchema } from '#lib/schemas/instance.js';
 
 	import type { PageProps } from './$types';
 
+	import LoaderCard from './loader-card.svelte';
+	import ModpackCard from './modpack-card.svelte';
+
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	const instance = $derived(getInstance(id));
+	const granted = $derived(instance.current?.permissions ?? []);
 	const { name, port, ramMinMb, ramMaxMb, javaMajor, jvmArgs, autoStart } = updateInstance.fields;
 
 	// load the stored values into the form when the instance changes or after a save
@@ -54,54 +59,61 @@
 </script>
 
 <div class="grid max-w-2xl gap-4">
-	<Card.Root>
-		<Card.Header>
-			<Card.Title>General</Card.Title>
-			<Card.Description>Changes apply the next time the server starts.</Card.Description>
-		</Card.Header>
-		<Card.Content>
-			<Form.Root
-				schema={updateInstanceSchema}
-				remoteFunction={updateInstance}
-				onSubmitted={(succeeded) => {
-					if (succeeded) toast.success('Settings saved');
-				}}
-			>
-				{#snippet children({ pending })}
-					<input {...updateInstance.fields.id.as('number')} type="hidden" />
-					<Field.Group>
-						<Form.Input label="Name" field={name} />
-						<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
-							<Form.Input label="Port" type="number" field={port} />
-							<Form.Input label="Min RAM (MB)" type="number" field={ramMinMb} />
-							<Form.Input label="Max RAM (MB)" type="number" field={ramMaxMb} />
-						</div>
-						<Form.Select
-							label="Java"
-							field={javaMajor}
-							description="Temurin is downloaded the first time a server needs it."
-							options={javaOptions}
-						/>
-						<Form.Input
-							label="JVM arguments"
-							field={jvmArgs}
-							class="font-mono"
-							placeholder="-XX:+UseG1GC"
-							description={data.user.role === 'owner'
-								? 'Added after the memory flags, separated by spaces.'
-								: 'Only the owner may change these: a JVM flag can run commands on the host.'}
-							readonly={data.user.role !== 'owner'}
-						/>
-						<Form.Checkbox field={autoStart} label="Start automatically when the panel starts" />
-						<Form.Errors form={updateInstance} />
-						<div>
-							<Button type="submit" loading={pending > 0}>Save changes</Button>
-						</div>
-					</Field.Group>
-				{/snippet}
-			</Form.Root>
-		</Card.Content>
-	</Card.Root>
+	{#if granted.includes('settings')}
+		<Card.Root>
+			<Card.Header>
+				<Card.Title>General</Card.Title>
+				<Card.Description>Changes apply the next time the server starts.</Card.Description>
+			</Card.Header>
+			<Card.Content>
+				<Form.Root
+					schema={updateInstanceSchema}
+					remoteFunction={updateInstance}
+					onSubmitted={(succeeded) => {
+						if (succeeded) toast.success('Settings saved');
+					}}
+				>
+					{#snippet children({ pending })}
+						<input {...updateInstance.fields.id.as('number')} type="hidden" />
+						<Field.Group>
+							<Form.Input label="Name" field={name} />
+							<div class="grid grid-cols-1 gap-4 sm:grid-cols-3">
+								<Form.Input label="Port" type="number" field={port} />
+								<Form.Input label="Min RAM (MB)" type="number" field={ramMinMb} />
+								<Form.Input label="Max RAM (MB)" type="number" field={ramMaxMb} />
+							</div>
+							<Form.Select
+								label="Java"
+								field={javaMajor}
+								description="Temurin is downloaded the first time a server needs it."
+								options={javaOptions}
+							/>
+							<Form.Input
+								label="JVM arguments"
+								field={jvmArgs}
+								class="font-mono"
+								placeholder="-XX:+UseG1GC"
+								description={data.user.role === 'owner'
+									? 'Added after the memory flags, separated by spaces.'
+									: 'Only the owner may change these: a JVM flag can run commands on the host.'}
+								readonly={data.user.role !== 'owner'}
+							/>
+							<Form.Checkbox field={autoStart} label="Start automatically when the panel starts" />
+							<Form.Errors form={updateInstance} />
+							<div>
+								<Button type="submit" loading={pending > 0}>Save changes</Button>
+							</div>
+						</Field.Group>
+					{/snippet}
+				</Form.Root>
+			</Card.Content>
+		</Card.Root>
+	{/if}
+
+	{#if granted.includes('loader')}<LoaderCard />{/if}
+	{#if granted.includes('modpack') && instance.current && isFromPack(instance.current)}
+		<ModpackCard />
+	{/if}
 
 	{#if data.panel.includes('instances.delete')}
 		<Card.Root>
