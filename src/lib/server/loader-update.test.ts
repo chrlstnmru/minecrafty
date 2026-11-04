@@ -21,10 +21,10 @@ const fake = vi.hoisted(() => ({
 
 vi.mock('./runner-client', async () => (await import('#test/fake-runner.js')).fakeRunnerClient);
 
-vi.mock('./java', () => ({
+vi.mock('./java', async (original) => ({
+	...(await original<typeof import('./java')>()),
 	ensureJava: async () => '/fake/java',
-	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17),
-	JAVA_MAJORS: [8, 17, 21, 25]
+	requiredJavaMajor: async (mc: string) => (mc.startsWith('1.21') ? 21 : 17)
 }));
 
 vi.mock('./loaders', async (original) => ({

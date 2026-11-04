@@ -2,23 +2,20 @@ import { and, eq } from 'drizzle-orm';
 
 import { updateKind } from '../versions';
 import { writeBackup } from './backups';
-import { javaOverride } from './config';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import * as jobs from './instance-jobs';
 import { getInstance, serverDir } from './instances';
-import { ensureJava, requiredJavaMajor } from './java';
+import { javaChoiceAfter, requiredJavaMajor } from './java';
 import {
 	getMinecraftVersions,
 	installServer,
 	isKnownVersion,
 	latestBuild,
-	launchArgs,
 	loaderBuilds,
-	needsJavaToInstall,
 	type Loader
 } from './loaders';
-import { mergeStaged, removeStale } from './staged-install';
+import { mergeStaged } from './staged-install';
 
 export type LoaderInfo = {
 	loader: Loader;
@@ -112,35 +109,25 @@ export async function startLoaderUpdate(
 				await writeBackup(instanceId, 'before-update', `Before updating to ${describe(to)}`);
 			}
 			progress('Installing the new server');
-			const java = needsJavaToInstall(loader)
-				? (javaOverride ?? (await ensureJava(await requiredJavaMajor(to.mcVersion))))
-				: undefined;
 			await installServer({
 				serverDir: staging(),
 				loader,
 				mc: to.mcVersion,
-				build: build ?? undefined,
-				java
+				build: build ?? undefined
 			});
 
 			progress('Replacing the old server');
 			commit();
-			removeStale(serverDir(instanceId), loader);
-			mergeStaged(serverDir(instanceId), staging());
-			launchArgs(serverDir(instanceId), loader);
+			mergeStaged(serverDir(instanceId), staging(), { freshInstall: loader });
 
-			// a Java version chosen by hand may be too old for the new Minecraft version
-			const needed = await requiredJavaMajor(to.mcVersion);
-			const resetJava = inst.javaMajor !== null && inst.javaMajor < needed;
+			const java = javaChoiceAfter(inst.javaMajor, await requiredJavaMajor(to.mcVersion));
 			return {
 				set: {
 					mcVersion: to.mcVersion,
 					loaderVersion: to.loaderVersion,
-					javaMajor: resetJava ? null : inst.javaMajor
+					javaMajor: java.javaMajor
 				},
-				message:
-					`Updated from ${describe(from)} to ${describe(to)}.` +
-					(resetJava ? ` Java is now chosen automatically, as ${needed} is needed.` : '')
+				message: `Updated from ${describe(from)} to ${describe(to)}.${java.note}`
 			};
 		},
 		{ audit: 'loader' }

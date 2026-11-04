@@ -22,11 +22,11 @@ vi.mock('./loaders', async (original) => ({
 		serverDir: string;
 		mc: string;
 		loader: string;
-		report?: (step: 'downloading' | 'installing', done?: number, total?: number) => void;
+		report?: (step: 'java' | 'downloading' | 'installing', done?: number, total?: number) => void;
 	}) => {
 		install.calls.push({ dir: o.serverDir, mc: o.mc, loader: o.loader });
 		for (const [step, done, total] of install.steps)
-			o.report?.(step as 'downloading' | 'installing', done, total);
+			o.report?.(step as 'java' | 'downloading' | 'installing', done, total);
 		// wait until the test lets it go, so "while it installs" can be looked at
 		await new Promise<void>((resolve) => (install.release = resolve));
 		if (install.fail) throw new Error(install.fail);
