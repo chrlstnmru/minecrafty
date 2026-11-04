@@ -12,6 +12,7 @@ import { basename, dirname, join } from 'node:path';
 
 import { CONFIG_SIDES, inSide, isSide } from '#lib/config-sides.js';
 import { assertEditableSize, decodeText } from '#lib/editable.js';
+import { isResourcePack, RESOURCE_PACKS } from '#lib/modpacks/pack-files.js';
 import { PACK_LOADERS, type PackLoader } from '#lib/pack-loaders.js';
 import { cleanPath, under } from '#lib/paths.js';
 import { applyChanges, sha1, type Changes } from '#lib/server/change-set.js';
@@ -32,7 +33,7 @@ import { readMrpack, safeJoin, writeIndex, type IndexFile } from './mrpack';
 // downloads, each pinned to one version and its hashes) plus a folder of config files on disk.
 // It leaves the panel as a Modrinth .mrpack, and installs on a server through that same format.
 
-export { PACK_LOADERS, type PackLoader };
+export { isResourcePack, PACK_LOADERS, RESOURCE_PACKS, type PackLoader };
 
 export type LocalPack = typeof localPacks.$inferSelect;
 export type LocalPackFile = typeof localPackFiles.$inferSelect;
@@ -272,11 +273,6 @@ export async function searchMods(packId: number, query: string, limit: number) {
 
 const sideOf = (value: string | null | undefined) =>
 	value === 'required' || value === 'optional' || value === 'unsupported' ? value : null;
-
-/** Where a pack keeps client resource packs; everything else it downloads is a mod. */
-export const RESOURCE_PACKS = 'resourcepacks';
-
-export const isResourcePack = (file: { path: string }) => under(file.path, RESOURCE_PACKS);
 
 /** The Modrinth loaders to match for a file: resource packs have none of their own. */
 const loadersFor = (pack: LocalPack, file: { path: string }) =>

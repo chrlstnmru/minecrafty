@@ -1,13 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/state';
-	import { useSearchParams } from 'runed/kit';
 	import { toast } from 'svelte-sonner';
-	import * as v from 'valibot';
 
 	import type { ModListItem } from '#lib/mod-list.js';
 
-	import CountBadge from '#lib/components/count-badge.svelte';
 	import * as Form from '#lib/components/form/index.js';
+	import InstalledBrowseTabs from '#lib/components/installed-browse-tabs.svelte';
 	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
@@ -16,7 +14,7 @@
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Separator } from '#lib/components/ui/separator/index.js';
-	import * as Tabs from '#lib/components/ui/tabs/index.js';
+	import { viewParam } from '#lib/installed-browse.svelte.js';
 	import { removePack, serverPack, setPackOptions, useResourcePack } from '#lib/packs.remote.js';
 	import { packOptionsSchema } from '#lib/schemas/packs.js';
 
@@ -56,16 +54,7 @@
 		setPackOptions.fields.set({ id, required: c.required, prompt: c.prompt });
 	});
 
-	// The open tab lives in the URL (?view=browse), so a reload keeps it. Read from the page URL,
-	// which the server has; runed only reads it in the browser, so it is used to write it.
-	const VIEWS = ['installed', 'browse'] as const;
-	const params = useSearchParams(
-		v.object({ view: v.optional(v.fallback(v.picklist(VIEWS), 'installed'), 'installed') }),
-		{ pushHistory: false, noScroll: true }
-	);
-	const view = $derived(
-		VIEWS.find((name) => name === page.url.searchParams.get('view')) ?? 'installed'
-	);
+	const view = viewParam();
 
 	let pickerOpen = $state(false);
 
@@ -94,21 +83,11 @@
 </script>
 
 <div class="flex min-h-0 flex-1 flex-col gap-4">
-	<Tabs.Root
-		value={view}
-		onValueChange={(value) => (params.view = value as (typeof VIEWS)[number])}
-	>
-		<Tabs.List>
-			<Tabs.Trigger value="installed">
-				Installed <CountBadge count={items.length} />
-			</Tabs.Trigger>
-			<Tabs.Trigger value="browse">Browse</Tabs.Trigger>
-		</Tabs.List>
-	</Tabs.Root>
+	<InstalledBrowseTabs {view} count={items.length} />
 
 	<!-- the tabs stay put and the open tab scrolls; the padding keeps a card's ring from being clipped -->
 	<div class="-m-1 flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto p-1">
-		{#if view === 'installed'}
+		{#if view.current === 'installed'}
 			<Card.Root>
 				<Card.Header>
 					<Card.Title>Server resource pack</Card.Title>
@@ -134,7 +113,7 @@
 								filterable={false}
 								onVersions={() => (pickerOpen = true)}
 								onRemove={(item) => clear(item.id!)}
-								onBrowse={() => (params.view = 'browse')}
+								onBrowse={() => (view.current = 'browse')}
 							/>
 						{/if}
 					{/if}

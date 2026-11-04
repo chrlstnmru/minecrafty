@@ -134,7 +134,7 @@
 				<Card.Description>
 					{#if data.source === 'builder'}
 						Made from {data.pack.versionNumber} ·
-						<a class="underline" href="/modpacks/{data.pack.projectId.slice('local:'.length)}"
+						<a class="underline" href="/modpacks/{data.pack.projectId.slice('local:'.length)}/mods"
 							>in the modpack builder</a
 						>
 					{:else}
