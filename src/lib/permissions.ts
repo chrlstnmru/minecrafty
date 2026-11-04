@@ -179,11 +179,9 @@ export const MODULE_PERMISSION: Record<string, InstancePermission> = {
 	files: 'files',
 	properties: 'properties',
 	mods: 'mods',
-	modpack: 'modpack',
 	'resource-packs': 'resource-packs',
 	backups: 'backups',
 	schedules: 'schedules',
-	loader: 'loader',
 	audit: 'audit',
 	settings: 'settings'
 };
@@ -221,10 +219,3 @@ export function permissionGroup(key: Permission): string {
 
 export const hasPermission = (granted: readonly Permission[], needed: Permission) =>
 	granted.includes(needed);
-
-/** The first tab a user with these permissions can open, for where to send them. */
-export function firstAllowedModule(granted: readonly Permission[], order: readonly string[]) {
-	return order.find(
-		(slug) => MODULE_PERMISSION[slug] && hasPermission(granted, MODULE_PERMISSION[slug])
-	);
-}

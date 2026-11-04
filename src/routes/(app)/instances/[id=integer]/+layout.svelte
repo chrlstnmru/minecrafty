@@ -25,7 +25,7 @@
 		stopInstance
 	} from '#lib/instances.remote.js';
 	import { liveInstances, liveStats } from '#lib/live.svelte.js';
-	import { MODULE_PERMISSION, firstAllowedModule } from '#lib/permissions.js';
+	import { MODULE_PERMISSION } from '#lib/permissions.js';
 
 	import type { LayoutProps } from './$types';
 
@@ -57,24 +57,23 @@
 	);
 	const installState = $derived(row?.installState ?? 'ready');
 	const active = $derived(status === 'running' || status === 'stopping');
-	// the Modpack tab only makes sense for a server created from a modpack
 	const granted = $derived(instance?.permissions ?? []);
 	const canControl = $derived(granted.includes('control'));
+	// Settings holds the Loader and Modpack cards too, so any one of them shows the tab
 	const modules = $derived(
-		instanceModules.filter(
-			(m) =>
-				(m.slug !== 'modpack' || (!!instance && isFromPack(instance))) &&
-				granted.includes(MODULE_PERMISSION[m.slug])
+		instanceModules.filter((m) =>
+			m.slug === 'settings'
+				? granted.includes('settings') ||
+					granted.includes('loader') ||
+					(granted.includes('modpack') && !!instance && isFromPack(instance))
+				: granted.includes(MODULE_PERMISSION[m.slug])
 		)
 	);
 	const slug = $derived(page.url.pathname.split('/')[3]);
 	// a link to a tab the user may not open goes to the first one they may
 	$effect(() => {
 		if (!instance || !slug || modules.some((m) => m.slug === slug)) return;
-		const first = firstAllowedModule(
-			granted,
-			modules.map((m) => m.slug)
-		);
+		const first = modules[0]?.slug;
 		if (first && first !== slug) void goto(`/instances/${id}/${first}`, { replaceState: true });
 	});
 	const tab = $derived(modules.find((m) => m.slug === slug));
