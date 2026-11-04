@@ -9,7 +9,7 @@ Self-hosted panel for running Minecraft servers. What it does, feature by featur
 
 ## Conventions
 
-- Remote functions (`query`, `query.live`, `form`, `command`), not form actions or endpoints. Every remote export starts with a guard from `server/auth.ts`.
+- Remote functions (`query`, `query.live`, `form`, `command`), not form actions or endpoints. A live feed that only some pages show goes through `src/lib/realtime/`, not `query.live`. Every remote export starts with a guard from `server/auth.ts`.
 - Reach a running server only through `server/live-server.ts`, never `runner-client.ts`.
 - Anything that writes to a server folder calls `assertWritable` first.
 - Decide an instance's origin with `instance-origin.ts`, never by reading `packProjectId` / `fromPackId`.

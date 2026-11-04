@@ -20,9 +20,3 @@ export const searchLog = query(searchLogSchema, async ({ id, name, query: text, 
 	requirePermission(id, 'logs');
 	return userFacing(() => logs.searchLog(id, name, text, { matchCase }));
 });
-
-/** New lines of `latest.log` as the server writes them. */
-export const followLog = query.live(idSchema, async function* (id) {
-	requirePermission(id, 'logs');
-	yield* logs.followLog(id);
-});

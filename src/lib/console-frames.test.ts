@@ -114,4 +114,20 @@ describe('the console stream', () => {
 		});
 		expect(rows[0].text).toBe('Done (3.2s)!');
 	});
+
+	it('ends at once when stopped while a quiet server sends nothing', async () => {
+		const stop = new AbortController();
+		let wake: (() => void) | null = null;
+		const sub = {
+			nextBatch: () => new Promise<null>((resolve) => (wake = () => resolve(null))),
+			close: vi.fn(() => wake?.())
+		};
+		const frames = framesFrom(async () => sub, sleep, stop.signal);
+		await frames.next();
+		const pending = frames.next();
+		await Bun.sleep(10);
+		stop.abort();
+		expect(await pending).toEqual({ done: true, value: undefined });
+		expect(sub.close).toHaveBeenCalled();
+	});
 });

@@ -1,8 +1,9 @@
-import { building } from '$app/env';
+import { building, dev } from '$app/env';
 import { getRequestEvent } from '$app/server';
 import { redirect } from '@sveltejs/kit';
 import { sequence, type Handle, type ServerInit } from '@sveltejs/kit/hooks';
 
+import { serveSocketsForDev, serveSocketsWithBun } from '#lib/realtime/server/serve.js';
 import { pruneAudit, setActorProvider } from '#lib/server/audit.js';
 import { hasUsers, userFromCookies } from '#lib/server/auth.js';
 import { autoStartInstances, failInterruptedInstalls } from '#lib/server/instances.js';
@@ -66,6 +67,8 @@ export const handle = sequence(securityHeaders, handleAccess);
 export const init: ServerInit = () => {
 	// the build analyses the app by running it; never start servers (or touch the data dir) then
 	if (building) return;
+	if (dev) serveSocketsForDev();
+	else serveSocketsWithBun();
 	// who an audit entry is by: the signed-in user of the request being handled
 	setActorProvider(() => {
 		const user = getRequestEvent().locals.user;

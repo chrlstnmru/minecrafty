@@ -19,8 +19,9 @@
 	import * as InputGroup from '#lib/components/ui/input-group/index.js';
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Toggle } from '#lib/components/ui/toggle/index.js';
-	import { TAIL_LINES } from '#lib/log-files.js';
-	import { followLog, listLogs, readLog, searchLog } from '#lib/logs.remote.js';
+	import { newLines, TAIL_LINES } from '#lib/log-files.js';
+	import { listLogs, readLog, searchLog } from '#lib/logs.remote.js';
+	import { liveFeed } from '#lib/realtime/feed.svelte.js';
 
 	const id = $derived(Number(page.params.id));
 	const number = new Intl.NumberFormat('en');
@@ -58,7 +59,7 @@
 	let follow = $state(true);
 	let wrap = $state(false);
 	const canFollow = $derived(name === 'latest.log' && !searching);
-	const live = $derived(follow && canFollow ? followLog(id) : null);
+	const live = $derived(follow && canFollow ? liveFeed('log', id) : null);
 
 	let appended = $state<LogLine[]>([]);
 	const matches = $derived(found?.current?.matches ?? 0);
@@ -70,11 +71,29 @@
 	const widest = $derived(rows.reduce((max, row) => Math.max(max, row.text.length), 0));
 
 	let epoch: number | null = null;
+	let reloading: Promise<void> | null = null;
+	let reloadAgain = false;
 
 	$effect(() => {
 		void tail?.current;
 		appended = [];
 	});
+
+	// frames are ignored while the log is read again, so reads never pile up
+	function reload() {
+		appended = [];
+		if (reloading) {
+			reloadAgain = true;
+			return;
+		}
+		reloading = (tail?.refresh() ?? Promise.resolve()).finally(() => {
+			reloading = null;
+			if (reloadAgain) {
+				reloadAgain = false;
+				reload();
+			}
+		});
+	}
 
 	$effect(() => {
 		if (!live) {
@@ -86,18 +105,14 @@
 		untrack(() => {
 			if (epoch !== null && frame.epoch !== epoch) {
 				epoch = frame.epoch;
-				appended = [];
-				void tail?.refresh();
+				reload();
 				return;
 			}
 			epoch = frame.epoch;
-			const known = (tail?.current?.total ?? 0) + appended.length;
-			const fresh = frame.lines.filter((line) => line.n > known);
-			if (fresh.length) appended = [...appended, ...fresh].slice(-MAX_LIVE_LINES);
-			if (frame.total !== known + fresh.length) {
-				appended = [];
-				void tail?.refresh();
-			}
+			if (!tail?.current || reloading) return;
+			const fresh = newLines(tail.current.total + appended.length, frame);
+			if (fresh === 'reload') reload();
+			else if (fresh.length) appended = [...appended, ...fresh].slice(-MAX_LIVE_LINES);
 		});
 	});
 
@@ -283,6 +298,12 @@
 			{:else}
 				{number.format(total)} {total === 1 ? 'line' : 'lines'}.
 			{/if}
+		</p>
+	{/if}
+
+	{#if live?.error}
+		<p class="text-sm text-destructive" role="alert">
+			Live updates stopped: {live.error.message}
 		</p>
 	{/if}
 
