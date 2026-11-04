@@ -2,7 +2,12 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 
 // Java .properties escaping: a backslash starts an escape, so a literal one is doubled
 const escapeValue = (v: string) => v.replaceAll('\\', '\\\\');
-const unescapeValue = (v: string) => v.replaceAll('\\\\', '\\');
+const ESCAPES: Record<string, string> = { t: '\t', n: '\n', r: '\r', f: '\f' };
+/** Java's reading of an escape: `\uXXXX`, a control letter, or the character itself (Minecraft writes `\:`). */
+export const unescapeValue = (v: string) =>
+	v.replace(/\\(u[0-9a-fA-F]{4}|.)/g, (_, c: string) =>
+		c.length === 5 ? String.fromCharCode(parseInt(c.slice(1), 16)) : (ESCAPES[c] ?? c)
+	);
 
 /** Reads `key=value` pairs, skipping comments and blank lines. */
 export function readProperties(file: string): Record<string, string> {
