@@ -1,5 +1,6 @@
 import type { Icon } from '@tabler/icons-svelte';
 
+import AdjustmentsHorizontalIcon from '@tabler/icons-svelte/icons/adjustments-horizontal';
 import ArchiveIcon from '@tabler/icons-svelte/icons/archive';
 import CalendarTimeIcon from '@tabler/icons-svelte/icons/calendar-time';
 import FileCodeIcon from '@tabler/icons-svelte/icons/file-code';
@@ -13,6 +14,8 @@ import RefreshIcon from '@tabler/icons-svelte/icons/refresh';
 import SettingsIcon from '@tabler/icons-svelte/icons/settings';
 import TerminalIcon from '@tabler/icons-svelte/icons/terminal-2';
 import UsersGroupIcon from '@tabler/icons-svelte/icons/users-group';
+
+import type { InstancePermission } from './permissions.js';
 
 export type InstanceModule = {
 	slug: string;
@@ -55,12 +58,6 @@ export const instanceModules: InstanceModule[] = [
 		description: 'Search and install mods from Modrinth and CurseForge, and keep them updated.'
 	},
 	{
-		slug: 'modpack',
-		title: 'Modpack',
-		icon: PackageImportIcon,
-		description: 'Update this server to another version of the modpack it was created from.'
-	},
-	{
 		slug: 'resource-packs',
 		title: 'Resource packs',
 		icon: PaletteIcon,
@@ -87,12 +84,6 @@ export const instanceModules: InstanceModule[] = [
 		description: 'Edit server.properties with form fields for the common keys.'
 	},
 	{
-		slug: 'loader',
-		title: 'Loader',
-		icon: RefreshIcon,
-		description: 'Update the loader build or Minecraft version, with a backup first.'
-	},
-	{
 		slug: 'audit',
 		title: 'Audit log',
 		icon: HistoryIcon,
@@ -102,6 +93,28 @@ export const instanceModules: InstanceModule[] = [
 		slug: 'settings',
 		title: 'Settings',
 		icon: SettingsIcon,
-		description: 'Name, memory, JVM arguments, port and auto-start.'
+		description: 'Name, memory, Java, loader and modpack.'
+	}
+];
+
+export type SettingsSection = {
+	/** Under `settings/`; empty for the first section, which is the Settings tab itself. */
+	path: string;
+	title: string;
+	icon: Icon;
+	permission: InstancePermission;
+	/** Only for a server created from a modpack. */
+	fromPackOnly?: boolean;
+};
+
+export const settingsSections: SettingsSection[] = [
+	{ path: '', title: 'General', icon: AdjustmentsHorizontalIcon, permission: 'settings' },
+	{ path: 'loader', title: 'Loader', icon: RefreshIcon, permission: 'loader' },
+	{
+		path: 'modpack',
+		title: 'Modpack',
+		icon: PackageImportIcon,
+		permission: 'modpack',
+		fromPackOnly: true
 	}
 ];
