@@ -154,4 +154,29 @@ describe('LiveFeed', () => {
 		flushSync();
 		expect(opened[0].sent.at(-1)).toEqual({ type: 'unsubscribe', sub: 0 });
 	});
+
+	it('with pauseHidden, stops while the tab is hidden and starts again when it is shown', () => {
+		const page = Object.assign(new EventTarget(), { hidden: false });
+		vi.stubGlobal('document', page);
+		const feed = new LiveFeed('stats', undefined, () => sockets, { pauseHidden: true });
+		const destroy = $effect.root(() => {
+			$effect(() => void feed.current);
+		});
+		flushSync();
+		opened[0].accept();
+		expect(opened[0].sent).toEqual([{ type: 'subscribe', sub: 0, feed: 'stats' }]);
+
+		page.hidden = true;
+		page.dispatchEvent(new Event('visibilitychange'));
+		expect(opened[0].sent.at(-1)).toEqual({ type: 'unsubscribe', sub: 0 });
+
+		page.hidden = false;
+		page.dispatchEvent(new Event('visibilitychange'));
+		expect(opened[0].sent.at(-1)).toEqual({ type: 'subscribe', sub: 1, feed: 'stats' });
+
+		destroy();
+		flushSync();
+		expect(opened[0].sent.at(-1)).toEqual({ type: 'unsubscribe', sub: 1 });
+		vi.unstubAllGlobals();
+	});
 });

@@ -10,12 +10,13 @@ import {
 	type FeedError,
 	type FeedFrames,
 	type FeedName,
+	type PanelFeed,
 	type ServerMessage
 } from './protocol';
 
 type Listener = {
 	feed: FeedName;
-	instance: number;
+	instance?: number;
 	frame(frame: unknown): void;
 	error(error: FeedError): void;
 	connected(on: boolean): void;
@@ -123,8 +124,9 @@ function socket() {
 }
 
 /**
- * A live feed for one instance. It runs while something reactive (a template, `$effect`,
- * `$derived`) reads it, and stops on the server as soon as nothing does.
+ * A live feed. It runs while something reactive (a template, `$effect`, `$derived`) reads it,
+ * and stops on the server as soon as nothing does. With `pauseHidden` it also stops while the tab
+ * is in the background, and starts again when the tab is shown.
  */
 export class LiveFeed<F extends FeedName> {
 	#current = $state<FeedFrames[F] | undefined>();
@@ -132,8 +134,13 @@ export class LiveFeed<F extends FeedName> {
 	#connected = $state(false);
 	#subscribe: () => void;
 
-	constructor(feed: F, instance: number, sockets: () => FeedSocket = socket) {
-		this.#subscribe = createSubscriber(() =>
+	constructor(
+		feed: F,
+		instance: number | undefined,
+		sockets: () => FeedSocket = socket,
+		{ pauseHidden = false } = {}
+	) {
+		const start = () =>
 			sockets().subscribe({
 				feed,
 				instance,
@@ -143,8 +150,23 @@ export class LiveFeed<F extends FeedName> {
 				},
 				error: (error) => (this.#error = error),
 				connected: (on) => (this.#connected = on)
-			})
-		);
+			});
+		this.#subscribe = createSubscriber(() => {
+			if (!pauseHidden) return start();
+			let stop: (() => void) | null = null;
+			const follow = () => {
+				if (document.hidden) {
+					stop?.();
+					stop = null;
+				} else stop ??= start();
+			};
+			follow();
+			document.addEventListener('visibilitychange', follow);
+			return () => {
+				document.removeEventListener('visibilitychange', follow);
+				stop?.();
+			};
+		});
 	}
 
 	/** The latest frame; undefined until the first arrives. */
@@ -165,5 +187,21 @@ export class LiveFeed<F extends FeedName> {
 	}
 }
 
-export const liveFeed = <F extends FeedName>(feed: F, instance: number) =>
+/** A feed about one instance, such as its console or its log. */
+export const liveFeed = <F extends Exclude<FeedName, PanelFeed>>(feed: F, instance: number) =>
 	new LiveFeed(feed, instance);
+
+const panel = new Map<PanelFeed, LiveFeed<PanelFeed>>();
+
+/**
+ * A feed about the whole panel. Every reader in the tab shares one subscription, and it pauses
+ * while the tab is hidden.
+ */
+export function panelFeed<F extends PanelFeed>(feed: F): LiveFeed<F> {
+	let shared = panel.get(feed);
+	if (!shared) {
+		shared = new LiveFeed(feed, undefined, socket, { pauseHidden: true });
+		panel.set(feed, shared);
+	}
+	return shared as LiveFeed<F>;
+}

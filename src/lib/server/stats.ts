@@ -2,6 +2,7 @@ import { sum } from 'drizzle-orm';
 import { statfsSync } from 'node:fs';
 import os from 'node:os';
 
+import { can, visibleInstanceIds, type Actor } from './access';
 import { dataDir } from './config';
 import { db } from './db';
 import { backups } from './db/schema';
@@ -210,4 +211,21 @@ export function startStats() {
 	// the first measure waits a moment so the panel's start is not slowed down by it
 	setTimeout(() => void refreshSizes(), 5000);
 	timers = [setInterval(take, 3000), setInterval(() => void refreshSizes(), 5 * 60_000)];
+}
+
+/** The snapshot as `user` may see it: the host and the disk need `host.view`, and only the servers they may view are listed. */
+export async function statsFor(user: Actor): Promise<Snapshot> {
+	const snapshot = await getSnapshot();
+	const visible = visibleInstanceIds(user);
+	const host = can(user, 'host.view');
+	if (!visible && host) return snapshot;
+	return {
+		at: snapshot.at,
+		host: host ? snapshot.host : { cpu: null, cores: 0, memTotal: 0, memUsed: 0, uptime: 0 },
+		history: host ? snapshot.history : { cpu: [], mem: [] },
+		storage: host ? snapshot.storage : { total: 0, free: 0, instances: 0, backups: 0 },
+		instances: Object.fromEntries(
+			Object.entries(snapshot.instances).filter(([id]) => !visible || visible.includes(Number(id)))
+		)
+	};
 }

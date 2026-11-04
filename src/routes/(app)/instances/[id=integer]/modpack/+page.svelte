@@ -15,7 +15,8 @@
 	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import { Spinner } from '#lib/components/ui/spinner/index.js';
 	import { formatBytes } from '#lib/format.js';
-	import { getInstance, listInstances } from '#lib/instances.remote.js';
+	import { getInstance } from '#lib/instances.remote.js';
+	import { liveInstances } from '#lib/live.svelte.js';
 	import {
 		modpackStatus,
 		modpackUpdatePreview,
@@ -27,7 +28,7 @@
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the page and the browser hydrates the same markup
 	const data = $derived(await modpackStatus(id));
-	const all = listInstances();
+	const all = liveInstances();
 	const row = $derived(all.current?.find((i) => i.id === id));
 	const installing = $derived(row?.installState === 'installing');
 	const running = $derived(row?.state === 'running' || row?.state === 'stopping');

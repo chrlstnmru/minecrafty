@@ -73,7 +73,7 @@ Servers must keep running when the panel restarts or updates.
 - Server jar is downloaded and checksum-verified when the instance is created.
 - Settings: name, RAM min/max, JVM args, Java version (auto-picked from Mojang's `javaVersion` metadata for the Minecraft version, overridable), port, auto-start on boot. Ports are auto-assigned from 25565 upward and editable. A `user_jvm_args.txt` in the server folder (where Forge and NeoForge, and the packs made for them, keep JVM flags) is passed to Java too, before the RAM and JVM args, so these settings win where both set a flag; Java 8 cannot read it, so it is ignored there.
 - Actions: start, stop, restart, kill, delete.
-- Live console via `query.live` (streamed over HTTP, no WebSocket) with command input and history. Each frame repeats the most recent lines and clients merge by sequence number, because live queries only keep the latest pending value.
+- Live console over the tab's WebSocket, with command input and history. Each frame repeats the most recent lines and clients merge by sequence number, so a frame skipped while the socket is behind loses nothing.
 - `server.properties` editor with form fields for common keys.
 - EULA must be accepted when the instance is created.
 
