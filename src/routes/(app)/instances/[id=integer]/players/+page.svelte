@@ -174,11 +174,18 @@
 									{/snippet}
 								</DropdownMenu.Trigger>
 								<DropdownMenu.Content align="end">
-									<DropdownMenu.Item onSelect={() => ask('kick', name)}>Kick…</DropdownMenu.Item>
-									<DropdownMenu.Item onSelect={() => ask('ban', name)}>Ban…</DropdownMenu.Item>
+									<DropdownMenu.Item variant="destructive" onSelect={() => ask('kick', name)}
+										>Kick…</DropdownMenu.Item
+									>
+									<DropdownMenu.Item variant="destructive" onSelect={() => ask('ban', name)}
+										>Ban…</DropdownMenu.Item
+									>
 									<DropdownMenu.Separator />
 									{#if isOp(name)}
-										<DropdownMenu.Item onSelect={() => run({ type: 'deop', name })}>
+										<DropdownMenu.Item
+											variant="destructive"
+											onSelect={() => run({ type: 'deop', name })}
+										>
 											Remove operator
 										</DropdownMenu.Item>
 									{:else}
@@ -187,7 +194,10 @@
 										</DropdownMenu.Item>
 									{/if}
 									{#if isWhitelisted(name)}
-										<DropdownMenu.Item onSelect={() => run({ type: 'whitelist-remove', name })}>
+										<DropdownMenu.Item
+											variant="destructive"
+											onSelect={() => run({ type: 'whitelist-remove', name })}
+										>
 											Remove from whitelist
 										</DropdownMenu.Item>
 									{:else}
@@ -237,7 +247,7 @@
 							<div class="truncate font-mono text-xs text-muted-foreground">{player.uuid}</div>
 						</div>
 						<Button
-							variant="ghost"
+							variant="destructive-ghost"
 							size="sm"
 							onClickPromise={() => run({ type: 'whitelist-remove', name: player.name })}
 						>
@@ -275,7 +285,7 @@
 						</div>
 						<Badge variant="muted">Level {player.level}</Badge>
 						<Button
-							variant="ghost"
+							variant="destructive-ghost"
 							size="sm"
 							onClickPromise={() => run({ type: 'deop', name: player.name })}
 						>
@@ -325,7 +335,9 @@
 						class="max-w-xs"
 						autocomplete="off"
 					/>
-					<Button type="submit" size="sm" variant="outline" disabled={!banName.trim()}>Ban</Button>
+					<Button type="submit" size="sm" variant="destructive-ghost" disabled={!banName.trim()}
+						>Ban</Button
+					>
 				</form>
 				{#each lists.bans as ban (ban.uuid || ban.name)}
 					<div class="flex items-center gap-3 border-b py-2 last:border-b-0 last:pb-0">
@@ -387,7 +399,9 @@
 						class="max-w-xs"
 						autocomplete="off"
 					/>
-					<Button type="submit" size="sm" variant="outline" disabled={!banIp.trim()}>Ban</Button>
+					<Button type="submit" size="sm" variant="destructive-ghost" disabled={!banIp.trim()}
+						>Ban</Button
+					>
 				</form>
 				{#each lists.ipBans as ban (ban.ip)}
 					<div class="flex items-center gap-3 border-b py-2 last:border-b-0 last:pb-0">
@@ -442,7 +456,7 @@
 				<Button type="button" variant="outline" onclick={() => (reasoningOpen = false)}
 					>Cancel</Button
 				>
-				<Button type="submit" variant={reasoning?.kind === 'ban' ? 'destructive' : 'default'}>
+				<Button type="submit" variant="destructive">
 					{reasoning?.kind === 'ban' ? 'Ban' : 'Kick'}
 				</Button>
 			</Dialog.Footer>

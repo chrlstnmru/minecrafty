@@ -243,9 +243,8 @@
 						Edit
 					</Button>
 					<Button
-						variant="ghost"
+						variant="destructive-ghost"
 						size="sm"
-						class="text-danger"
 						disabled={!task.canChange}
 						onclick={() => {
 							deleting = { id: task.id, name: task.name };

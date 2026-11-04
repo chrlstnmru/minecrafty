@@ -280,7 +280,7 @@
 					<Button size="sm" variant="outline" onclick={() => openGrant(picked)}>Give role</Button>
 				{/if}
 				{#if picked.every((u) => u.canManage)}
-					<Button size="sm" variant="destructive" onclick={() => (removing = picked)}>
+					<Button size="sm" variant="destructive-ghost" onclick={() => (removing = picked)}>
 						Delete
 					</Button>
 				{/if}

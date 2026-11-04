@@ -142,9 +142,8 @@
 						</Tooltip.Content>
 					</Tooltip.Root>
 					<Button
-						variant="ghost"
+						variant="destructive-ghost"
 						size="icon"
-						class="text-danger"
 						aria-label="Delete {backup.file}"
 						disabled={data.busy === 'restore'}
 						onclick={() => ask({ kind: 'delete', backup })}

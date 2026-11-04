@@ -42,7 +42,9 @@
 		</AlertDialog.Header>
 		<AlertDialog.Footer>
 			<AlertDialog.Cancel>Keep editing</AlertDialog.Cancel>
-			<AlertDialog.Action onclick={() => drafts.discard()}>Discard</AlertDialog.Action>
+			<AlertDialog.Action variant="destructive" onclick={() => drafts.discard()}
+				>Discard</AlertDialog.Action
+			>
 		</AlertDialog.Footer>
 	</AlertDialog.Content>
 </AlertDialog.Root>

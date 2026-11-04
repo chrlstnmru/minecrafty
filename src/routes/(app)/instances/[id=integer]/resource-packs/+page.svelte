@@ -80,7 +80,9 @@
 						<span class="truncate text-sm font-medium">{pack.title}</span>
 						<p class="truncate text-xs text-muted-foreground">{pack.versionNumber}</p>
 					</div>
-					<Button variant="outline" size="sm" onClickPromise={() => clear(pack.id)}>Remove</Button>
+					<Button variant="destructive-ghost" size="sm" onClickPromise={() => clear(pack.id)}
+						>Remove</Button
+					>
 				</div>
 			{:else if current.current?.externalUrl}
 				<p class="text-sm text-muted-foreground">

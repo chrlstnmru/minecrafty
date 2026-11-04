@@ -425,7 +425,9 @@
 								<UploadIcon />{pack.iconUrl ? 'Change image' : 'Upload image'}
 							</Button>
 							{#if pack.iconUrl}
-								<Button variant="ghost" disabled={iconBusy} onclick={dropIcon}>Remove</Button>
+								<Button variant="destructive-ghost" disabled={iconBusy} onclick={dropIcon}
+									>Remove</Button
+								>
 							{/if}
 						</div>
 					</Card.Content>
@@ -527,7 +529,9 @@
 						>
 					</Card.Header>
 					<Card.Footer>
-						<Button variant="destructive" onclick={() => (deleting = true)}>Delete pack</Button>
+						<Button variant="destructive-ghost" onclick={() => (deleting = true)}
+							>Delete pack</Button
+						>
 					</Card.Footer>
 				</Card.Root>
 			{/if}
