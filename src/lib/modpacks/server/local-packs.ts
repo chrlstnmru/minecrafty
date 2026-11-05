@@ -23,7 +23,7 @@ import { isHostCode } from '#lib/server/host-code.js';
 import { isKnownVersion, latestBuild, loaderBuilds } from '#lib/server/loaders.js';
 import { pickFile, pickVersion, resolveMods } from '#lib/server/mod-resolver.js';
 import * as modrinth from '#lib/server/modrinth.js';
-import { useAsServerPackHeld } from '#lib/server/packs.js';
+import { useAsServerPack } from '#lib/server/packs.js';
 import { zipChunks, type ZipEntry } from '#lib/server/zip-writer.js';
 
 import { startImportLoaded, summarize, type LoadedPack } from './modpacks';
@@ -919,7 +919,7 @@ export async function startInstall(
 			? async (instanceId, progress) => {
 					progress('Setting the server resource pack');
 					// the server works without it, so a pack Modrinth no longer serves does not fail the install
-					await useAsServerPackHeld(instanceId, serverPack.projectId, serverPack.versionId).catch(
+					await useAsServerPack(instanceId, serverPack.projectId, serverPack.versionId).catch(
 						() => undefined
 					);
 				}

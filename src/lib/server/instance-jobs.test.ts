@@ -292,6 +292,54 @@ describe('check', () => {
 	});
 });
 
+describe('a write', () => {
+	const refused = 'Files are being added to this server';
+
+	it('refuses other jobs and a second write until it finishes', async () => {
+		const row = makeInstance();
+		const letGo = await holdJob(row.id, 'write');
+		await expect(run(row.id, 'write', async () => {})).rejects.toThrow(
+			`${refused}. Try again when that finishes.`
+		);
+		await expect(run(row.id, 'backup', async () => {})).rejects.toThrow(refused);
+		await expect(run(row.id, 'restore', async () => {})).rejects.toThrow(refused);
+		await expect(start(row.id, 'install', async () => {})).rejects.toThrow(refused);
+		await expect(check(row.id, 'update')).rejects.toThrow(refused);
+		await expect(check(row.id, 'delete')).rejects.toThrow(refused);
+		await letGo();
+		await expect(run(row.id, 'write', async () => 'done')).resolves.toBe('done');
+	});
+
+	it('says to try again when a backup is running', async () => {
+		const row = makeInstance();
+		const letGo = await holdJob(row.id, 'backup');
+		await expect(run(row.id, 'write', async () => {})).rejects.toThrow(
+			'A backup is already running. Try again when that finishes.'
+		);
+		await letGo();
+	});
+
+	it('does not stop a start or a quick change to the server folder', async () => {
+		const row = makeInstance();
+		const letGo = await holdJob(row.id, 'write');
+		await expect(check(row.id, 'start')).resolves.toMatchObject({ id: row.id });
+		expect(() => assertWritable(row.id)).not.toThrow();
+		await letGo();
+	});
+
+	it('reports progress while it runs, and drops it after', async () => {
+		const row = makeInstance();
+		await run(row.id, 'write', async (_, { progress }) => {
+			progress('Downloading Sodium', { done: 2, total: 8, bytes: true });
+			expect(jobState(row.id)).toMatchObject({
+				job: 'write',
+				progress: { label: 'Downloading Sodium', done: 2, total: 8, bytes: true }
+			});
+		});
+		expect(jobState(row.id)).toMatchObject({ job: null, progress: null });
+	});
+});
+
 describe('a start', () => {
 	function holdStarting(id: number) {
 		const { promise, resolve } = Promise.withResolvers<void>();

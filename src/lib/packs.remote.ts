@@ -11,6 +11,7 @@ import { packOptionsSchema } from '#lib/schemas/packs.js';
 import { record } from '#lib/server/audit.js';
 import { requirePermission } from '#lib/server/auth.js';
 import { userFacing } from '#lib/server/http.js';
+import { run } from '#lib/server/instance-jobs.js';
 import * as packs from '#lib/server/packs.js';
 
 const id = idSchema;
@@ -39,7 +40,12 @@ export const useResourcePack = command(
 	v.object({ id, projectId, versionId }),
 	async ({ id: instanceId, projectId, versionId }) => {
 		requirePermission(instanceId, 'resource-packs');
-		const result = await userFacing(() => packs.useAsServerPack(instanceId, projectId, versionId));
+		const result = await userFacing(() =>
+			run(instanceId, 'write', async (_, { progress }) => {
+				progress('Setting the server resource pack');
+				return packs.useAsServerPack(instanceId, projectId, versionId);
+			})
+		);
 		record({
 			action: 'resourcepack.use',
 			summary: 'Set the server resource pack',

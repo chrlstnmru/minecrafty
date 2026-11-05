@@ -9,13 +9,14 @@ import { instances } from './db/schema';
 import { isRunning } from './live-server';
 
 // What an instance is busy with besides running, and every change to its install state: one
-// install, update, backup or restore at a time, its progress, how the last update ended, and
+// install, update, backup, restore or write at a time, its progress, how the last update ended, and
 // whether an action may happen now.
 
 type Instance = typeof instances.$inferSelect;
 type NewInstance = typeof instances.$inferInsert;
 
-export type JobKind = 'install' | 'update' | 'backup' | 'restore';
+/** `write` adds files to a server over time: a mod install or update, a resource pack, an upload. */
+export type JobKind = 'install' | 'update' | 'backup' | 'restore' | 'write';
 export type Action = JobKind | 'start' | 'delete';
 
 /** `bytes` says done and total are byte counts, which the page shows as sizes, not as a count of items. */
@@ -70,7 +71,8 @@ const BUSY: Record<JobKind, string> = {
 	install: 'Wait for the install to finish',
 	update: 'An update is in progress',
 	backup: 'A backup is already running',
-	restore: 'A restore is in progress'
+	restore: 'A restore is in progress',
+	write: 'Files are being added to this server'
 };
 
 type Rule = {
@@ -84,7 +86,7 @@ type Rule = {
 	stopped?: string;
 };
 
-const ALL: readonly JobKind[] = ['install', 'update', 'backup', 'restore'];
+const ALL: readonly JobKind[] = ['install', 'update', 'backup', 'restore', 'write'];
 
 const RULES: Record<Action, Rule> = {
 	install: { blockedBy: ALL, notStarting: true },
@@ -94,7 +96,9 @@ const RULES: Record<Action, Rule> = {
 	restore: { blockedBy: ALL, notStarting: true, stopped: 'restoring a backup' },
 	// a backup saves the world through the running server, so it may start during one
 	start: { blockedBy: ['install', 'update', 'restore'], ready: true },
-	delete: { blockedBy: ALL, notStarting: true, stopped: 'deleting it' }
+	delete: { blockedBy: ALL, notStarting: true, stopped: 'deleting it' },
+	// a running server only reads new files at its next start, so neither a start nor a run stops this
+	write: { blockedBy: ALL }
 };
 
 /**
@@ -185,7 +189,11 @@ export async function check(id: number, action: Action): Promise<Instance> {
  */
 async function take(id: number, kind: JobKind) {
 	const current = held.get(id);
-	if (current) throw new Error(BUSY[current.job]);
+	if (current) {
+		// a write used to overlap a backup, and is often one click of many, so it says what to do next
+		const retry = kind === 'write' ? '. Try again when that finishes.' : '';
+		throw new Error(BUSY[current.job] + retry);
+	}
 	const mine: Held = { job: kind, progress: null };
 	held.set(id, mine);
 	const release = () => {
@@ -348,18 +356,18 @@ export async function start(
 }
 
 /**
- * Takes the instance for a backup or restore, checks it, runs `work` and gives the instance back,
- * resolving or rejecting as `work` does. A restore that succeeds on a failed instance makes it
- * ready again, since its server folder is now the backup's.
+ * Takes the instance for a backup, restore or write, checks it, runs `work` and gives the instance
+ * back, resolving or rejecting as `work` does. A restore that succeeds on a failed instance makes
+ * it ready again, since its server folder is now the backup's.
  */
 export async function run<T>(
 	id: number,
-	kind: 'backup' | 'restore',
-	work: (inst: Instance) => Promise<T>
+	kind: 'backup' | 'restore' | 'write',
+	work: (inst: Instance, tools: { progress: Report }) => Promise<T>
 ): Promise<T> {
-	const { inst, release } = await take(id, kind);
+	const { inst, mine, release } = await take(id, kind);
 	try {
-		const value = await work(inst);
+		const value = await work(inst, { progress: reporter(mine) });
 		if (kind === 'restore' && inst.installState === 'failed')
 			db.update(instances)
 				.set({ installState: 'ready', installMessage: null })

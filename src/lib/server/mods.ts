@@ -18,7 +18,7 @@ import {
 	setSides,
 	type InstalledMod
 } from './installed-mods';
-import { assertWritable } from './instance-jobs';
+import { assertWritable, run, type Report } from './instance-jobs';
 import { getInstance, serverDir, type Instance } from './instances';
 import { pickFile, resolveMods } from './mod-resolver';
 import { projectSides } from './mod-sides';
@@ -74,6 +74,7 @@ function plan(inst: Instance, projectId: string, rootVersion?: modrinth.Modrinth
 async function apply(
 	inst: Instance,
 	{ planned, skipped }: Awaited<ReturnType<typeof resolveMods>>,
+	progress: Report,
 	replacing?: InstalledMod
 ) {
 	const projects = new Map(
@@ -94,10 +95,13 @@ async function apply(
 				((await Bun.file(dest).exists()) || (await Bun.file(disabledPath(dest)).exists()))
 			)
 				throw new Error(`${rel} already exists`);
-			await downloadFile(dest, {
-				url: file.url,
-				hash: { algo: 'sha512', value: file.hashes.sha512 }
-			});
+			const label = `Downloading ${projects.get(id)?.title ?? file.filename}`;
+			progress(label);
+			await downloadFile(
+				dest,
+				{ url: file.url, hash: { algo: 'sha512', value: file.hashes.sha512 } },
+				(done, total) => progress(label, { done, total, bytes: true })
+			);
 			written.push(dest);
 			rows.push(
 				modRow({
@@ -168,12 +172,14 @@ async function resolveVersion(inst: Instance, projectId: string, versionId: stri
 }
 
 export async function install(instanceId: number, projectId: string, versionId?: string) {
-	const inst = instanceRow(instanceId);
-	assertWritable(instanceId);
-	if (listInstalled(instanceId).some((m) => m.projectId === projectId))
-		throw new Error('Already installed');
-	const chosen = versionId ? await resolveVersion(inst, projectId, versionId) : undefined;
-	return apply(inst, await plan(inst, projectId, chosen));
+	instanceRow(instanceId);
+	return run(instanceId, 'write', async (inst, { progress }) => {
+		if (listInstalled(instanceId).some((m) => m.projectId === projectId))
+			throw new Error('Already installed');
+		progress('Finding the mod and what it needs');
+		const chosen = versionId ? await resolveVersion(inst, projectId, versionId) : undefined;
+		return apply(inst, await plan(inst, projectId, chosen), progress);
+	});
 }
 
 export type ModUpdate = {
@@ -201,21 +207,23 @@ export async function checkUpdates(instanceId: number): Promise<ModUpdate[]> {
 
 /** Moves an installed mod to its newest release, or to a chosen version (including older ones). */
 export async function update(instanceId: number, modId: number, versionId?: string) {
-	const inst = instanceRow(instanceId);
-	assertWritable(instanceId);
-	const row = listInstalled(instanceId).find((m) => m.id === modId);
-	if (!row?.hash) throw new Error('Not installed');
-	const target = versionId
-		? await resolveVersion(inst, row.projectId, versionId)
-		: (await modrinth.latestVersions([row.hash], modSupport(inst.loader).loaders, inst.mcVersion))[
-				row.hash
-			];
-	if (!target || target.id === row.versionId)
-		throw new Error(versionId ? 'Already on that version' : 'Already up to date');
-	const result = await apply(inst, await plan(inst, row.projectId, target), row);
-	// an update must not quietly switch a disabled mod back on
-	if (!row.enabled) setEnabled(instanceId, row.id, false);
-	return result;
+	instanceRow(instanceId);
+	return run(instanceId, 'write', async (inst, { progress }) => {
+		const row = listInstalled(instanceId).find((m) => m.id === modId);
+		if (!row?.hash) throw new Error('Not installed');
+		progress(`Finding the new version of ${row.title}`);
+		const target = versionId
+			? await resolveVersion(inst, row.projectId, versionId)
+			: (
+					await modrinth.latestVersions([row.hash], modSupport(inst.loader).loaders, inst.mcVersion)
+				)[row.hash];
+		if (!target || target.id === row.versionId)
+			throw new Error(versionId ? 'Already on that version' : 'Already up to date');
+		const result = await apply(inst, await plan(inst, row.projectId, target), progress, row);
+		// an update must not quietly switch a disabled mod back on
+		if (!row.enabled) setEnabled(instanceId, row.id, false);
+		return result;
+	});
 }
 
 /** Turns a mod on or off by renaming its file; the server picks the change up on its next start. */

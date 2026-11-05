@@ -19,7 +19,7 @@ import { cleanPath, joinPath } from '../paths';
 import { SMALL_FILE_BYTES } from '../upload-limits';
 import { applyChanges, safePath, sha1, type Changes, type ChangeRules } from './change-set';
 import { assertMayWriteCode } from './host-code';
-import { assertWritable } from './instance-jobs';
+import { assertWritable, run } from './instance-jobs';
 import { getInstance, serverDir } from './instances';
 import { isRunning } from './live-server';
 import {
@@ -250,13 +250,15 @@ export async function uploadFiles(
 	items: { file: File; path: string }[],
 	onSaved: (relPath: string) => void
 ) {
-	assertWritable(instanceId);
 	for (const item of items) assertMayWriteCode(actor, item.path);
-	for (const { file, path } of items) {
-		await assertWorldStopped(instanceId, join(dirRel, path), 'uploading into');
-		await saveUpload(instanceId, dirRel, file, path);
-		onSaved(path);
-	}
+	await run(instanceId, 'write', async (_, { progress }) => {
+		for (const [done, { file, path }] of items.entries()) {
+			progress('Uploading files', { done, total: items.length });
+			await assertWorldStopped(instanceId, join(dirRel, path), 'uploading into');
+			await saveUpload(instanceId, dirRel, file, path);
+			onSaved(path);
+		}
+	});
 }
 
 /**
