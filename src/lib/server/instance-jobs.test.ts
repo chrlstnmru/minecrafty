@@ -128,7 +128,7 @@ describe('an update', () => {
 		expect(first.status).toBe('fulfilled');
 		expect(second).toMatchObject({
 			status: 'rejected',
-			reason: { message: 'An update is in progress' }
+			reason: { message: 'An update is in progress. Try again when it finishes.' }
 		});
 		if (first.status === 'fulfilled') await first.value.finished;
 	});
@@ -292,6 +292,20 @@ describe('check', () => {
 	});
 });
 
+describe('a refusal', () => {
+	it.each([
+		['backup', 'A backup is already running. Try again when it finishes.'],
+		['restore', 'A restore is in progress. Try again when it finishes.'],
+		['write', 'Files are being added to this server. Try again when that finishes.']
+	] as const)('during a %s says what to do', async (kind, message) => {
+		const row = makeInstance();
+		const letGo = await holdJob(row.id, kind);
+		await expect(run(row.id, 'backup', async () => {})).rejects.toThrow(message);
+		await expect(check(row.id, 'delete')).rejects.toThrow(message);
+		await letGo();
+	});
+});
+
 describe('a write', () => {
 	const refused = 'Files are being added to this server';
 
@@ -314,7 +328,7 @@ describe('a write', () => {
 		const row = makeInstance();
 		const letGo = await holdJob(row.id, 'backup');
 		await expect(run(row.id, 'write', async () => {})).rejects.toThrow(
-			'A backup is already running. Try again when that finishes.'
+			'A backup is already running. Try again when it finishes.'
 		);
 		await letGo();
 	});

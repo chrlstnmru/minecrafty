@@ -66,7 +66,7 @@ describe('a mod install', () => {
 		const before = fake.downloads;
 		const letGo = await holdJob(id, 'backup');
 		await expect(install(id, 'P')).rejects.toThrow(
-			'A backup is already running. Try again when that finishes.'
+			'A backup is already running. Try again when it finishes.'
 		);
 		await letGo();
 		expect(fake.downloads).toBe(before);

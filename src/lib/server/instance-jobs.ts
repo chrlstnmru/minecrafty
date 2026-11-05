@@ -63,16 +63,16 @@ const starting = new Set<number>();
 /** A start was refused because another start of the instance has not finished. */
 export class AlreadyStartingError extends Error {
 	constructor() {
-		super('The server is already starting');
+		super('The server is already starting. Wait for it to come up.');
 	}
 }
 
 const BUSY: Record<JobKind, string> = {
 	install: 'Wait for the install to finish',
-	update: 'An update is in progress',
-	backup: 'A backup is already running',
-	restore: 'A restore is in progress',
-	write: 'Files are being added to this server'
+	update: 'An update is in progress. Try again when it finishes.',
+	backup: 'A backup is already running. Try again when it finishes.',
+	restore: 'A restore is in progress. Try again when it finishes.',
+	write: 'Files are being added to this server. Try again when that finishes.'
 };
 
 type Rule = {
@@ -189,11 +189,7 @@ export async function check(id: number, action: Action): Promise<Instance> {
  */
 async function take(id: number, kind: JobKind) {
 	const current = held.get(id);
-	if (current) {
-		// a write used to overlap a backup, and is often one click of many, so it says what to do next
-		const retry = kind === 'write' ? '. Try again when that finishes.' : '';
-		throw new Error(BUSY[current.job] + retry);
-	}
+	if (current) throw new Error(BUSY[current.job]);
 	const mine: Held = { job: kind, progress: null };
 	held.set(id, mine);
 	const release = () => {
