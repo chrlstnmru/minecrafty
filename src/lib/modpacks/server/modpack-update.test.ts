@@ -420,6 +420,19 @@ describe('changes the player made', () => {
 		expect(tracked()).toEqual(['mods/a.jar.disabled']);
 	});
 
+	it('keeps a disabled mod disabled when Modrinth does not know it', async () => {
+		await installV1({ 'mods/a.jar': 'a1' });
+		expect(tracked()).toEqual([]);
+		writeFileSync(join(root, 'mods/a.jar.disabled'), 'a1');
+		rmSync(join(root, 'mods/a.jar'));
+		await makePack({ versionId: 'V2', versionNumber: '2.0', files: { 'mods/a.jar': 'a2' } });
+		fake.known.clear();
+		await run('V2');
+		expect(existsSync(join(root, 'mods/a.jar'))).toBe(false);
+		expect(read('mods/a.jar.disabled')).toBe('a2');
+		expect(tracked()).toEqual([]);
+	});
+
 	it('removes a dropped mod even when the player had disabled it', async () => {
 		await installV1({ 'mods/a.jar': 'a1' });
 		writeFileSync(join(root, 'mods/a.jar.disabled'), 'a1');

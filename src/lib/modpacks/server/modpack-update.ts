@@ -1,16 +1,18 @@
-import { and, eq, inArray } from 'drizzle-orm';
 import { createReadStream, existsSync, mkdirSync, rmSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 
 import { writeBackup } from '#lib/server/backups.js';
 import { sha1 } from '#lib/server/change-set.js';
-import { db } from '#lib/server/db/index.js';
-import { installedMods } from '#lib/server/db/schema.js';
+import {
+	disabledPath,
+	forgetFiles,
+	isDisabled,
+	setFileEnabled
+} from '#lib/server/installed-mods.js';
 import * as jobs from '#lib/server/instance-jobs.js';
 import { getInstance, serverDir } from '#lib/server/instances.js';
 import { javaChoiceAfter, requiredJavaMajor } from '#lib/server/java.js';
 import { installServer, type Loader } from '#lib/server/loaders.js';
-import { DISABLED_SUFFIX as DISABLED, setEnabledHeld } from '#lib/server/mods.js';
 import { mergeStaged } from '#lib/server/staged-install.js';
 
 import { readManifest, writeManifest, type PackManifest } from './modpack-manifest';
@@ -52,7 +54,7 @@ export type PackPlan = {
 /** The current copy of a pack file: where it is on disk (it may have been disabled), or null. */
 function onDisk(server: string, rel: string) {
 	if (existsSync(join(server, rel))) return rel;
-	if (existsSync(join(server, rel + DISABLED))) return rel + DISABLED;
+	if (existsSync(join(server, disabledPath(rel)))) return disabledPath(rel);
 	return null;
 }
 
@@ -105,8 +107,7 @@ async function planModpackUpdate(
 		const current = onDisk(server, path);
 		const decision = decide(installed, wanted, await hashOf(current));
 		if (decision === 'add') plan.download.push({ file, disabled: false });
-		else if (decision === 'update')
-			plan.download.push({ file, disabled: current!.endsWith(DISABLED) });
+		else if (decision === 'update') plan.download.push({ file, disabled: isDisabled(current!) });
 		else if (decision === 'kept' || decision === 'conflict') plan.kept.push(path);
 	}
 	for (const [path, installed] of Object.entries(manifest.files)) {
@@ -234,34 +235,21 @@ export async function startModpackUpdate(
 			progress('Replacing the old files');
 			commit();
 			// a disabled mod that gets a new version keeps its place at the old path until it is re-disabled
-			const replaced = plan.download.filter((d) => d.disabled).map((d) => d.file.path + DISABLED);
+			const replaced = plan.download
+				.filter((d) => d.disabled)
+				.map((d) => disabledPath(d.file.path));
 			for (const path of [...plan.remove, ...plan.removeConfigs, ...replaced])
 				rmSync(join(server, path), { force: true });
 			mergeStaged(server, staging, plan.loaderChange ? { freshInstall: plan.loader } : {});
 
 			// the Mods tab follows the files: drop what changed or went, record what is new
-			const gone = [...plan.remove, ...plan.download.map((d) => d.file.path)];
-			if (gone.length)
-				db.delete(installedMods)
-					.where(
-						and(
-							eq(installedMods.instanceId, instanceId),
-							inArray(installedMods.file, [...gone, ...gone.map((p) => p + DISABLED)])
-						)
-					)
-					.run();
+			forgetFiles(instanceId, [...plan.remove, ...plan.download.map((d) => d.file.path)]);
 			await trackMods(
 				instanceId,
 				plan.download.map((d) => d.file)
 			);
-			for (const { file } of plan.download.filter((d) => d.disabled)) {
-				const row = db
-					.select()
-					.from(installedMods)
-					.where(and(eq(installedMods.instanceId, instanceId), eq(installedMods.file, file.path)))
-					.get();
-				if (row) setEnabledHeld(instanceId, row.id, false);
-			}
+			for (const { file } of plan.download.filter((d) => d.disabled))
+				setFileEnabled(instanceId, file.path, false);
 
 			const manifest: PackManifest = {
 				files: await packFileHashes(server, pack.mrpack.files),

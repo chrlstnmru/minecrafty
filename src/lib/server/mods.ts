@@ -1,5 +1,5 @@
 import { and, eq } from 'drizzle-orm';
-import { existsSync, mkdirSync, readdirSync, renameSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 
 import { modSupport } from '#lib/mod-support.js';
@@ -7,16 +7,22 @@ import { modSupport } from '#lib/mod-support.js';
 import { db } from './db';
 import { installedMods } from './db/schema';
 import { downloadFile } from './download';
+import {
+	disabledPath,
+	enabledPath,
+	isDisabled,
+	modRow,
+	removeRow,
+	saveMods,
+	setFileEnabled,
+	setSides,
+	type InstalledMod
+} from './installed-mods';
 import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir, type Instance } from './instances';
 import { pickFile, resolveMods } from './mod-resolver';
 import { projectSides } from './mod-sides';
 import * as modrinth from './modrinth';
-
-export type InstalledMod = typeof installedMods.$inferSelect;
-
-/** A disabled mod keeps its file, renamed so the loader no longer sees a jar. */
-export const DISABLED_SUFFIX = '.disabled';
 
 export { modSupport };
 
@@ -35,7 +41,7 @@ export function listInstalled(instanceId: number) {
 		.where(and(eq(installedMods.instanceId, instanceId), eq(installedMods.kind, 'mod')))
 		.orderBy(installedMods.title)
 		.all()
-		.map((row) => ({ ...row, enabled: !row.file.endsWith(DISABLED_SUFFIX) }));
+		.map((row) => ({ ...row, enabled: !isDisabled(row.file) }));
 }
 
 export async function search(instanceId: number, query: string, limit: number) {
@@ -77,7 +83,7 @@ async function apply(
 	mkdirSync(join(serverDir(inst.id), folder), { recursive: true });
 
 	const written: string[] = [];
-	const rows: (typeof installedMods.$inferInsert)[] = [];
+	const rows: ReturnType<typeof modRow>[] = [];
 	try {
 		for (const [id, { version, dependencyOf }] of planned) {
 			const file = pickFile(version);
@@ -85,7 +91,7 @@ async function apply(
 			const dest = join(serverDir(inst.id), rel);
 			if (
 				rel !== replacing?.file &&
-				((await Bun.file(dest).exists()) || (await Bun.file(dest + DISABLED_SUFFIX).exists()))
+				((await Bun.file(dest).exists()) || (await Bun.file(disabledPath(dest)).exists()))
 			)
 				throw new Error(`${rel} already exists`);
 			await downloadFile(dest, {
@@ -93,21 +99,17 @@ async function apply(
 				hash: { algo: 'sha512', value: file.hashes.sha512 }
 			});
 			written.push(dest);
-			rows.push({
-				instanceId: inst.id,
-				kind: 'mod',
-				source: 'modrinth',
-				projectId: id,
-				versionId: version.id,
-				title: projects.get(id)?.title ?? id,
-				iconUrl: projects.get(id)?.icon_url ?? null,
-				versionNumber: version.version_number,
-				clientSide: projects.get(id)?.client_side ?? null,
-				serverSide: projects.get(id)?.server_side ?? null,
-				file: rel,
-				hash: file.hashes.sha512,
-				dependencyOf: replacing?.projectId === id ? replacing.dependencyOf : dependencyOf
-			});
+			rows.push(
+				modRow({
+					instanceId: inst.id,
+					projectId: id,
+					version,
+					project: projects.get(id),
+					file: rel,
+					hash: file.hashes.sha512,
+					dependencyOf: replacing?.projectId === id ? replacing.dependencyOf : dependencyOf
+				})
+			);
 		}
 	} catch (e) {
 		// never delete the file an update is replacing: it is still the installed one
@@ -116,14 +118,7 @@ async function apply(
 		throw e;
 	}
 
-	db.transaction((tx) => {
-		for (const row of rows) {
-			// an update rewrites the existing row so its id stays stable for the UI
-			if (replacing && row.projectId === replacing.projectId)
-				tx.update(installedMods).set(row).where(eq(installedMods.id, replacing.id)).run();
-			else tx.insert(installedMods).values(row).run();
-		}
-	});
+	saveMods(rows, replacing);
 	// the new file is in place and recorded; drop the old one unless it was overwritten
 	if (replacing && !rows.some((r) => r.file === replacing.file))
 		rmSync(join(serverDir(inst.id), replacing.file), { force: true });
@@ -226,24 +221,13 @@ export async function update(instanceId: number, modId: number, versionId?: stri
 /** Turns a mod on or off by renaming its file; the server picks the change up on its next start. */
 export function setEnabled(instanceId: number, modId: number, enabled: boolean) {
 	assertWritable(instanceId);
-	setEnabledHeld(instanceId, modId, enabled);
-}
-
-/** The same for a job that already holds the instance, which `setEnabled` would refuse as busy. */
-export function setEnabledHeld(instanceId: number, modId: number, enabled: boolean) {
 	const row = db
 		.select()
 		.from(installedMods)
 		.where(and(eq(installedMods.id, modId), eq(installedMods.instanceId, instanceId)))
 		.get();
 	if (!row) throw new Error('Not installed');
-	if (row.file.endsWith(DISABLED_SUFFIX) === !enabled) return;
-	const file = enabled ? row.file.slice(0, -DISABLED_SUFFIX.length) : row.file + DISABLED_SUFFIX;
-	const root = serverDir(instanceId);
-	if (!existsSync(join(root, row.file))) throw new Error(`${row.file} is missing`);
-	if (existsSync(join(root, file))) throw new Error(`${file} already exists`);
-	renameSync(join(root, row.file), join(root, file));
-	db.update(installedMods).set({ file }).where(eq(installedMods.id, row.id)).run();
+	setFileEnabled(instanceId, row.file, enabled);
 }
 
 export function remove(instanceId: number, modId: number) {
@@ -256,7 +240,7 @@ export function remove(instanceId: number, modId: number) {
 	if (!row) throw new Error('Not installed');
 	// `file` is stored relative to the server folder and was validated when written
 	rmSync(join(serverDir(instanceId), row.file), { force: true });
-	db.delete(installedMods).where(eq(installedMods.id, row.id)).run();
+	removeRow(row.id);
 }
 
 /** A jar in the mods (or plugins) folder that the panel did not install, such as one uploaded in Files. */
@@ -268,19 +252,19 @@ export type LocalMod = {
 	enabled: boolean;
 };
 
-const isJar = (name: string) => name.endsWith('.jar') || name.endsWith('.jar' + DISABLED_SUFFIX);
+const isJar = (name: string) => enabledPath(name).endsWith('.jar');
 
 /** The untracked jars in the instance's mods or plugins folder, by name; only that folder, not below it. */
 export function listLocal(instanceId: number): LocalMod[] {
 	const { folder } = modSupport(instanceRow(instanceId).loader);
 	const dir = join(serverDir(instanceId), folder);
 	if (!existsSync(dir)) return [];
-	const tracked = new Set(listInstalled(instanceId).map((m) => m.file.replace(/\.disabled$/, '')));
+	const tracked = new Set(listInstalled(instanceId).map((m) => enabledPath(m.file)));
 	return readdirSync(dir, { withFileTypes: true })
 		.filter((entry) => entry.isFile() && isJar(entry.name))
 		.map((entry) => {
-			const enabled = !entry.name.endsWith(DISABLED_SUFFIX);
-			const jar = enabled ? entry.name : entry.name.slice(0, -DISABLED_SUFFIX.length);
+			const enabled = !isDisabled(entry.name);
+			const jar = enabledPath(entry.name);
 			return { file: `${folder}/${entry.name}`, jar: `${folder}/${jar}`, enabled };
 		})
 		.filter((m) => !tracked.has(m.jar))
@@ -298,12 +282,8 @@ function localJar(instanceId: number, file: string) {
 /** Turns an untracked jar on or off by renaming it, as `setEnabled` does for installed mods. */
 export function setLocalEnabled(instanceId: number, file: string, enabled: boolean) {
 	assertWritable(instanceId);
-	const local = localJar(instanceId, file);
-	if (local.enabled === enabled) return;
-	const next = enabled ? file.slice(0, -DISABLED_SUFFIX.length) : file + DISABLED_SUFFIX;
-	const root = serverDir(instanceId);
-	if (existsSync(join(root, next))) throw new Error(`${next} already exists`);
-	renameSync(join(root, file), join(root, next));
+	localJar(instanceId, file);
+	setFileEnabled(instanceId, file, enabled);
 }
 
 /** Deletes an untracked jar. */
@@ -324,7 +304,7 @@ export async function backfillSides(instanceId: number) {
 	for (const mod of unknown) {
 		const found = sides.get(mod.projectId);
 		if (!found) continue;
-		db.update(installedMods).set(found).where(eq(installedMods.id, mod.id)).run();
+		setSides(mod.id, found);
 		filled++;
 	}
 	return filled;
