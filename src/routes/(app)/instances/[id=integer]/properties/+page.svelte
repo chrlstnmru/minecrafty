@@ -14,7 +14,6 @@
 	import { Checkbox } from '#lib/components/ui/checkbox/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
 	import { Input } from '#lib/components/ui/input/index.js';
-	import { Skeleton } from '#lib/components/ui/skeleton/index.js';
 	import * as Tabs from '#lib/components/ui/tabs/index.js';
 	import { saveServerProperties, serverProperties } from '#lib/properties.remote.js';
 	import {
@@ -29,13 +28,13 @@
 	import PropertiesFile from './properties-file.svelte';
 
 	const id = $derived(Number(page.params.id));
-	const properties = $derived(serverProperties(id));
+	const properties = $derived(await serverProperties(id));
 	const view = new UrlParam('view', 'form');
 
 	const defaults = Object.fromEntries([...propertyFields.values()].map((f) => [f.key, f.default]));
-	const saved = $derived({ ...defaults, ...properties.current?.values });
+	const saved = $derived({ ...defaults, ...properties.values });
 	const others = $derived(
-		Object.keys(properties.current?.values ?? {})
+		Object.keys(properties.values ?? {})
 			.filter((key) => !propertyFields.has(key) && !MANAGED_KEYS.has(key))
 			.sort()
 	);
@@ -95,12 +94,12 @@
 		{/if}
 	</div>
 
-	{#if properties.current && !properties.current.exists}
+	{#if !properties.exists}
 		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
 			This server has not created its server.properties yet. Values you save are written now, and
 			the server fills in the rest the first time it starts.
 		</p>
-	{:else if properties.current?.running}
+	{:else if properties.running}
 		<p class="rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground" role="status">
 			The server is running. Changes apply the next time it starts.
 		</p>
@@ -108,15 +107,6 @@
 
 	{#if view.value === 'file'}
 		<PropertiesFile {id} bind:dirty={fileDirty} />
-	{:else if !properties.current}
-		{#each [0, 1, 2, 3] as i (i)}
-			<Card.Root>
-				<Card.Header><Skeleton class="h-5 w-32" /></Card.Header>
-				<Card.Content class="grid gap-4">
-					{#each [0, 1, 2, 3] as j (j)}<Skeleton class="h-9" />{/each}
-				</Card.Content>
-			</Card.Root>
-		{/each}
 	{:else}
 		{#each propertyGroups as group (group.title)}
 			<Card.Root>

@@ -9,7 +9,6 @@
 	import ModList from '#lib/components/mod-list.svelte';
 	import ModVersionsSheet from '#lib/components/mod-versions-sheet.svelte';
 	import PackBrowser from '#lib/components/pack-browser.svelte';
-	import SkeletonRows from '#lib/components/skeleton-rows.svelte';
 	import { Button } from '#lib/components/ui/button/index.js';
 	import * as Card from '#lib/components/ui/card/index.js';
 	import * as Field from '#lib/components/ui/field/index.js';
@@ -20,8 +19,8 @@
 
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
-	const current = $derived(serverPack(id));
-	const pack = $derived(current.current?.pack ?? null);
+	const current = $derived(await serverPack(id));
+	const pack = $derived(current.pack);
 	const installedIds = $derived(new Set(pack ? [pack.projectId] : []));
 	const items = $derived<ModListItem[]>(
 		pack
@@ -46,13 +45,12 @@
 			: []
 	);
 	const { required, prompt } = setPackOptions.fields;
-
-	// load the stored options into the form when they change
-	$effect(() => {
-		const c = current.current;
-		if (!c) return;
-		setPackOptions.fields.set({ id, required: c.required, prompt: c.prompt });
+	const defaultFormValues = () => ({
+		id,
+		required: current.required,
+		prompt: current.prompt
 	});
+	setPackOptions.fields.set(defaultFormValues());
 
 	const view = viewParam();
 
@@ -97,25 +95,21 @@
 					</Card.Description>
 				</Card.Header>
 				<Card.Content class="grid gap-4">
-					{#if !current.current}
-						<SkeletonRows count={1} />
-					{:else}
-						{#if current.current.externalUrl}
-							<p class="text-sm text-muted-foreground">
-								A pack is set in server.properties outside this panel:
-								<span class="font-mono break-all">{current.current.externalUrl}</span>
-							</p>
-						{/if}
-						{#if pack || !current.current.externalUrl}
-							<ModList
-								{items}
-								noun="resource pack"
-								filterable={false}
-								onVersions={() => (pickerOpen = true)}
-								onRemove={(item) => clear(item.id!)}
-								onBrowse={() => (view.current = 'browse')}
-							/>
-						{/if}
+					{#if current.externalUrl}
+						<p class="text-sm text-muted-foreground">
+							A pack is set in server.properties outside this panel:
+							<span class="font-mono break-all">{current.externalUrl}</span>
+						</p>
+					{/if}
+					{#if pack || !current.externalUrl}
+						<ModList
+							{items}
+							noun="resource pack"
+							filterable={false}
+							onVersions={() => (pickerOpen = true)}
+							onRemove={(item) => clear(item.id!)}
+							onBrowse={() => (view.current = 'browse')}
+						/>
 					{/if}
 
 					<Separator />
