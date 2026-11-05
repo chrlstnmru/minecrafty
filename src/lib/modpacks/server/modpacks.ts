@@ -12,6 +12,7 @@ import { downloadFile } from '#lib/server/download.js';
 import { addNewMods, modRow } from '#lib/server/installed-mods.js';
 import * as jobs from '#lib/server/instance-jobs.js';
 import { installBase, insertInstance, serverDir, type NewInstance } from '#lib/server/instances.js';
+import { versionChoice } from '#lib/server/mod-target.js';
 import * as modrinth from '#lib/server/modrinth.js';
 
 import { writeManifest } from './modpack-manifest';
@@ -340,10 +341,7 @@ export type ModpackVersion = {
 /** All versions of a modpack, newest first. */
 export async function listModpackVersions(projectId: string): Promise<ModpackVersion[]> {
 	return (await modrinth.listVersions(projectId, [])).map((v) => ({
-		id: v.id,
-		versionNumber: v.version_number,
-		versionType: v.version_type,
-		publishedAt: v.date_published,
+		...versionChoice(v),
 		gameVersions: v.game_versions,
 		loaders: v.loaders
 	}));

@@ -6,18 +6,12 @@ import { installedMods } from './db/schema';
 import { removeRow, setServerPackRow } from './installed-mods';
 import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir } from './instances';
+import { versionChoice } from './mod-target';
 import * as modrinth from './modrinth';
 import { readProperties, setProperties } from './server-properties';
 
 // A server has a single resource pack, delivered to players by URL: the pack's Modrinth download
 // address and sha1 go into server.properties, and nothing is stored on this host.
-
-export type PackVersion = {
-	id: string;
-	versionNumber: string;
-	versionType: 'release' | 'beta' | 'alpha';
-	publishedAt: string;
-};
 
 function instanceRow(instanceId: number) {
 	const inst = getInstance(instanceId);
@@ -52,16 +46,8 @@ function compatibleVersions(instanceId: number, projectId: string) {
 	return modrinth.listVersions(projectId, [], inst.mcVersion);
 }
 
-export async function listPackVersions(
-	instanceId: number,
-	projectId: string
-): Promise<PackVersion[]> {
-	return (await compatibleVersions(instanceId, projectId)).map((v) => ({
-		id: v.id,
-		versionNumber: v.version_number,
-		versionType: v.version_type,
-		publishedAt: v.date_published
-	}));
+export async function listPackVersions(instanceId: number, projectId: string) {
+	return (await compatibleVersions(instanceId, projectId)).map(versionChoice);
 }
 
 /** The chosen version (among the compatible ones), else the newest release, else the newest. */

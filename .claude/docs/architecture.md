@@ -22,6 +22,7 @@
 - The `.mrpack` format, read and written: `modpacks/server/mrpack.ts` (`readMrpack`, `writeIndex`, `safeJoin`). Nothing else opens a pack's zip or index. A pack's summary for the pages: `summarize` in `modpacks/server/modpacks.ts`, for Modrinth modpacks and builder packs alike.
 - Where an instance came from: `src/lib/instance-origin.ts`.
 - Modrinth dependency resolution and file picking: `server/mod-resolver.ts`.
+- What can run on an instance or in a pack (search, version lists, one version, dependency plans): `server/mod-target.ts`. Build the target with `modTarget`; never pass a loader to Modrinth by hand.
 - Writing `installed_mods` and the `.disabled` rule: `server/installed-mods.ts`. Turning a mod on or off goes by path (`setFileEnabled`), since a jar Modrinth does not know has no row.
 - Showing Markdown (release notes): `components/markdown.svelte`. It draws tokens and never uses `{@html}`; keep it that way.
 - Choosing a folder to move into: `components/folder-picker.svelte` is a small file manager that lists only folders, used by the Move dialogs of the pack builder and the instance file manager. The holder passes `list` (the folders inside a folder; it may be async, as the instance one is) and `exclude`; `folder-picker.ts` has the pure parts (children, exclusion, new-folder names).
