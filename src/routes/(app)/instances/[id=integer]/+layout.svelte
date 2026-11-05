@@ -186,7 +186,9 @@
 	     container would otherwise clip along its edges. -->
 	<div class="-m-1 flex min-h-0 flex-1 flex-col overflow-y-auto p-1">
 		{#if modules.some((m) => m.slug === slug)}
-			{@render children()}
+			{#key id}
+				{@render children()}
+			{/key}
 		{/if}
 	</div>
 </div>

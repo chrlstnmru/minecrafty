@@ -20,11 +20,10 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the page and the browser hydrates the same markup
-	const info = $derived(await loaderStatus(id));
-	const row = $derived(getInstance(id).current);
+	const [info, row] = $derived(await Promise.all([loaderStatus(id), getInstance(id)]));
 	const progress = liveProgress();
-	const installing = $derived(row?.installState === 'installing');
-	const running = $derived(row?.state === 'running' || row?.state === 'stopping');
+	const installing = $derived(row.installState === 'installing');
+	const running = $derived(row.state === 'running' || row.state === 'stopping');
 
 	let picked = $state<string>();
 	let backup = $state(true);
@@ -143,7 +142,7 @@
 		{#if info.outcome}
 			<Notice tone={info.outcome.ok ? 'success' : 'danger'}>{info.outcome.message}</Notice>
 		{/if}
-		{#if row && isFromPack(row)}
+		{#if isFromPack(row)}
 			<Notice tone="warning">
 				This server follows the modpack {row.packName}, which decides its Minecraft version and
 				loader build. Update it from the Modpack card; changing the loader here can break the pack.

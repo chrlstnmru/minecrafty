@@ -25,11 +25,10 @@
 	// the route only matches when `[id=integer]` parses, so this is always a number
 	const id = $derived(page.params.id!);
 	// awaited, so the server renders the page and the browser hydrates the same markup
-	const data = $derived(await modpackStatus(id));
-	const row = $derived(getInstance(id).current);
+	const [data, row] = $derived(await Promise.all([modpackStatus(id), getInstance(id)]));
 	const progress = liveProgress();
-	const installing = $derived(row?.installState === 'installing');
-	const running = $derived(row?.state === 'running' || row?.state === 'stopping');
+	const installing = $derived(row.installState === 'installing');
+	const running = $derived(row.state === 'running' || row.state === 'stopping');
 
 	const date = new Intl.DateTimeFormat('en', { dateStyle: 'medium' });
 	// versions come newest first, so everything before the installed one is newer
