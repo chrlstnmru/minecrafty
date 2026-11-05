@@ -56,6 +56,15 @@ type Held = { job: JobKind; progress: Progress | null };
 
 const held = new Map<number, Held>();
 const outcomes = new Map<number, Outcome>();
+// apart from `held` because a backup and a start may overlap, and `held` has room for one
+const starting = new Set<number>();
+
+/** A start was refused because another start of the instance has not finished. */
+export class AlreadyStartingError extends Error {
+	constructor() {
+		super('The server is already starting');
+	}
+}
 
 const BUSY: Record<JobKind, string> = {
 	install: 'Wait for the install to finish',
@@ -67,6 +76,8 @@ const BUSY: Record<JobKind, string> = {
 type Rule = {
 	/** the jobs that refuse the action while they hold the instance */
 	blockedBy: readonly JobKind[];
+	/** a start in progress refuses the action too */
+	notStarting?: true;
 	/** the install must have finished: not installing, not failed */
 	ready?: true;
 	/** the server must be stopped; the words after "Stop the server before" */
@@ -76,14 +87,14 @@ type Rule = {
 const ALL: readonly JobKind[] = ['install', 'update', 'backup', 'restore'];
 
 const RULES: Record<Action, Rule> = {
-	install: { blockedBy: ALL },
-	update: { blockedBy: ALL, ready: true, stopped: 'updating it' },
+	install: { blockedBy: ALL, notStarting: true },
+	update: { blockedBy: ALL, notStarting: true, ready: true, stopped: 'updating it' },
 	backup: { blockedBy: ALL, ready: true },
 	// a failed update leaves a server that may not start; restoring a backup is how it recovers
-	restore: { blockedBy: ALL, stopped: 'restoring a backup' },
+	restore: { blockedBy: ALL, notStarting: true, stopped: 'restoring a backup' },
 	// a backup saves the world through the running server, so it may start during one
 	start: { blockedBy: ['install', 'update', 'restore'], ready: true },
-	delete: { blockedBy: ALL, stopped: 'deleting it' }
+	delete: { blockedBy: ALL, notStarting: true, stopped: 'deleting it' }
 };
 
 /**
@@ -143,6 +154,7 @@ function checkNow(id: number, action: Action, self?: Held): Instance {
 	if (!inst) throw new Error('Instance not found');
 	const job = held.get(id);
 	if (job && job !== self && rule.blockedBy.includes(job.job)) throw new Error(BUSY[job.job]);
+	if (rule.notStarting && starting.has(id)) throw new AlreadyStartingError();
 	if (action !== 'install' && inst.installState === 'installing') throw new Error(BUSY.install);
 	if (rule.ready && inst.installState === 'failed')
 		throw new Error(`The install failed: ${inst.installMessage ?? 'unknown error'}`);
@@ -186,6 +198,21 @@ async function take(id: number, kind: JobKind) {
 	} catch (e) {
 		release();
 		throw e;
+	}
+}
+
+/**
+ * Holds the instance for one start, from the checks until `work` settles, so a second start, an
+ * install, update, restore or delete is refused until then. The claim happens before anything is
+ * awaited. A start can take minutes when it has to download Java. A backup is not refused.
+ */
+export async function holdStart<T>(id: number, work: (inst: Instance) => Promise<T>): Promise<T> {
+	if (starting.has(id)) throw new AlreadyStartingError();
+	starting.add(id);
+	try {
+		return await work(await check(id, 'start'));
+	} finally {
+		starting.delete(id);
 	}
 }
 

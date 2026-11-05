@@ -7,6 +7,7 @@ import { makeInstance } from '#test/instance.js';
 
 import { db } from './db';
 import { schedules } from './db/schema';
+import { AlreadyStartingError } from './instance-jobs';
 import * as S from './schedules';
 
 // The server is a fake: tests decide whether it runs, and see what the scheduler did to it.
@@ -134,6 +135,18 @@ describe('the actions', () => {
 		expect(running.log).toEqual(['stop']);
 		expect(await S.runSchedule(id, task.id, fakeServer(false).deps)).toMatchObject({
 			status: 'skipped'
+		});
+	});
+
+	it('start: skips a server someone else is already starting', async () => {
+		const { deps } = fakeServer(false);
+		deps.start = async () => {
+			throw new AlreadyStartingError();
+		};
+		const task = add({ action: 'start' });
+		expect(await S.runSchedule(id, task.id, deps)).toMatchObject({
+			status: 'skipped',
+			message: 'Already starting'
 		});
 	});
 

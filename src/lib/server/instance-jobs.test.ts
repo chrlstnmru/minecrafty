@@ -9,6 +9,7 @@ import { listAudit, setActorProvider } from './audit';
 import {
 	assertWritable,
 	check,
+	holdStart,
 	jobState,
 	recoverInterruptedJobs,
 	run,
@@ -288,6 +289,57 @@ describe('check', () => {
 
 	it('says an instance is not found', async () => {
 		await expect(check(999_999, 'start')).rejects.toThrow('Instance not found');
+	});
+});
+
+describe('a start', () => {
+	function holdStarting(id: number) {
+		const { promise, resolve } = Promise.withResolvers<void>();
+		const started = holdStart(id, () => promise);
+		return async () => {
+			resolve();
+			await started;
+		};
+	}
+
+	it('refuses a second start, and what would change the server folder under it', async () => {
+		const row = makeInstance();
+		const letGo = holdStarting(row.id);
+		const refused = 'The server is already starting';
+
+		await expect(holdStart(row.id, async () => {})).rejects.toThrow(refused);
+		await expect(check(row.id, 'update')).rejects.toThrow(refused);
+		await expect(check(row.id, 'delete')).rejects.toThrow(refused);
+		await expect(run(row.id, 'restore', async () => {})).rejects.toThrow(refused);
+		await expect(start(row.id, 'install', async () => {})).rejects.toThrow(refused);
+		await letGo();
+	});
+
+	it('leaves a backup alone, and can begin during one', async () => {
+		const row = makeInstance();
+		const letGo = holdStarting(row.id);
+		await expect(run(row.id, 'backup', async () => 'saved')).resolves.toBe('saved');
+		await letGo();
+
+		const release = await holdJob(row.id, 'backup');
+		await expect(holdStart(row.id, async () => 'up')).resolves.toBe('up');
+		await release();
+	});
+
+	it('gives the instance back when it fails', async () => {
+		const row = makeInstance();
+		await expect(
+			holdStart(row.id, async () => {
+				throw new Error('no Java');
+			})
+		).rejects.toThrow('no Java');
+		await expect(holdStart(row.id, async () => 'up')).resolves.toBe('up');
+	});
+
+	it('gives the instance back when its checks refuse it', async () => {
+		const row = makeInstance({ installState: 'failed' });
+		await expect(holdStart(row.id, async () => {})).rejects.toThrow(/install failed/);
+		await expect(check(row.id, 'delete')).resolves.toMatchObject({ id: row.id });
 	});
 });
 

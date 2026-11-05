@@ -138,6 +138,15 @@ describe('start refusals', () => {
 	it('says an instance is not found', async () => {
 		await expect(I.startInstance(999_999)).rejects.toThrow(/not found/i);
 	});
+
+	it('refuses a second start until the first has finished', async () => {
+		const row = makeInstance();
+		const first = I.startInstance(row.id);
+		await expect(I.startInstance(row.id)).rejects.toThrow('The server is already starting');
+		await expect(first).rejects.toThrow(/server\.jar is missing/);
+
+		await expect(I.startInstance(row.id)).rejects.toThrow(/server\.jar is missing/);
+	});
 });
 
 describe('the Java arguments', () => {
