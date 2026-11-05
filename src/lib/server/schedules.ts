@@ -14,6 +14,7 @@ import { record } from './audit';
 import { createBackup } from './backups';
 import { db } from './db';
 import { schedules } from './db/schema';
+import { AlreadyStartingError } from './instance-jobs';
 import { getInstance, restartInstance, startInstance, stopInstance } from './instances';
 import { isRunning, sendLine } from './live-server';
 
@@ -185,6 +186,8 @@ async function performAction(task: Schedule, deps: Deps = realDeps): Promise<Out
 				return { status: 'ok', message: `Sent: ${task.command}` };
 		}
 	} catch (e) {
+		if (e instanceof AlreadyStartingError)
+			return { status: 'skipped', message: 'Already starting' };
 		return { status: 'failed', message: e instanceof Error ? e.message : String(e) };
 	}
 }

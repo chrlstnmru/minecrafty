@@ -276,8 +276,11 @@ export function javaArgs(
 }
 
 export async function startInstance(id: number) {
-	const inst = await jobs.check(id, 'start');
+	await jobs.holdStart(id, spawnRunner);
+}
 
+async function spawnRunner(inst: Instance) {
+	const { id } = inst;
 	const dir = instanceDir(id);
 	let current = await live.status(id);
 	if (current && current.state !== 'exited') throw new Error('Instance is already running');
