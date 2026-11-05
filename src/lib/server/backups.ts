@@ -147,7 +147,8 @@ export async function createBackup(
 export function deleteBackup(instanceId: number, backupId: number) {
 	const row = getBackup(instanceId, backupId);
 	if (!row) throw new Error('Backup not found');
-	if (jobs.jobState(instanceId).job === 'restore') throw new Error('A restore is in progress');
+	if (jobs.jobState(instanceId).job === 'restore')
+		throw new Error('A restore is in progress. Try again when it finishes.');
 	removeBackup(row);
 }
 
