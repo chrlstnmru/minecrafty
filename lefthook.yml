@@ -11,3 +11,8 @@ pre-commit:
     - name: eslint (svelte)
       glob: '*.svelte'
       run: bunx eslint {staged_files}
+
+pre-push:
+  jobs:
+    - name: knip
+      run: bun run knip
