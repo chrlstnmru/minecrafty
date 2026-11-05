@@ -2,7 +2,7 @@ import { page } from '$app/state';
 import { useSearchParams } from 'runed/kit';
 import * as v from 'valibot';
 
-export const VIEWS = ['installed', 'browse'] as const;
+const VIEWS = ['installed', 'browse'] as const;
 export type View = (typeof VIEWS)[number];
 
 /**

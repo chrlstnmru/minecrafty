@@ -20,7 +20,7 @@ export type FeedFrames = {
 export type FeedName = keyof FeedFrames;
 
 /** Feeds about the whole panel rather than one instance; they are subscribed without an instance. */
-export const PANEL_FEEDS = ['revs', 'progress', 'stats'] as const satisfies readonly FeedName[];
+const PANEL_FEEDS = ['revs', 'progress', 'stats'] as const satisfies readonly FeedName[];
 export type PanelFeed = (typeof PANEL_FEEDS)[number];
 export type InstanceFeed = Exclude<FeedName, PanelFeed>;
 

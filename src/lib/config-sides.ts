@@ -20,7 +20,7 @@ export const isSide = (path: string): path is ConfigSide =>
 	(CONFIG_SIDES as readonly string[]).includes(path);
 
 /** The folder `path` is in, or undefined when it is in none of them. */
-export const sideOf = (path: string): ConfigSide | undefined => {
+const sideOf = (path: string): ConfigSide | undefined => {
 	const top = path.split('/')[0];
 	return isSide(top) ? top : undefined;
 };

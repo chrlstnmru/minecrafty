@@ -93,7 +93,7 @@ export function javaChoiceAfter(chosen: number | null, needed: JavaMajor) {
 const installing = new Map<number, Promise<string>>();
 
 /** Path to a Temurin JRE of this major version, downloading it on first use. */
-export function ensureJava(major: JavaMajor): Promise<string> {
+function ensureJava(major: JavaMajor): Promise<string> {
 	const existing = findJava(join(javaDir, `temurin-${major}`));
 	if (existing) return Promise.resolve(existing);
 	// concurrent starts share one download

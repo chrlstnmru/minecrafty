@@ -217,6 +217,7 @@ const css = (name: string, fallback: string) =>
 	getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 
 /** A theme from the app's colours, so the editor follows light and dark with the rest of the page. */
+/** @public Called through the lazily imported module in code-editor.svelte. */
 export function applyTheme(dark: boolean) {
 	const [background, foreground, muted, mutedForeground, border, popover, ring] = [
 		css('--background', dark ? '#0f0f11' : '#ffffff'),

@@ -33,32 +33,6 @@ export type DataTableOptions<TData extends RowData> = Omit<
 	server?: boolean;
 };
 
-/** What a server-side table asks the server for. Pages and sort ids are the table's own. */
-export type TableParams = {
-	/** Search text. */
-	q: string;
-	/** Selected values per filtered column id. */
-	filters: Record<string, string[]>;
-	sort: { id: string; desc: boolean }[];
-	/** Zero-based. */
-	page: number;
-	size: number;
-};
-
-/** The table's current search, filters, sort and page, ready to send to a query. Reactive. */
-export function tableParams<TData extends RowData>(table: DataTable<TData>): TableParams {
-	const { pageIndex, pageSize } = table.atoms.pagination.get();
-	return {
-		q: ((table.atoms.globalFilter.get() as string | undefined) ?? '').trim(),
-		filters: Object.fromEntries(
-			table.atoms.columnFilters.get().map((f) => [f.id, f.value as string[]])
-		),
-		sort: table.atoms.sorting.get().map(({ id, desc }) => ({ id, desc })),
-		page: pageIndex,
-		size: pageSize
-	};
-}
-
 /**
  * `createAppTable` with this app's defaults: page size 10, rows keyed by `getRowId`, and
  * optional URL state. Pass changing values (like `data`) as getters so the table follows them.

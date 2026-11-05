@@ -1,7 +1,7 @@
 // How permissions are declared: each module lists its own, a registry merges them, and the
 // registry is checked once at startup. The same shape sv-erp uses for its authorization.
 
-export type PermissionScope = 'instance' | 'panel';
+type PermissionScope = 'instance' | 'panel';
 
 export interface Permission<Key extends string = string> {
 	key: Key;

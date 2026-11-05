@@ -2,7 +2,7 @@
 
 import { joinPath, nameOf, under } from './paths';
 
-export type FileNode<T> = { kind: 'file'; name: string; path: string; item: T };
+type FileNode<T> = { kind: 'file'; name: string; path: string; item: T };
 export type FolderNode<T> = { kind: 'folder'; name: string; path: string; children: TreeNode<T>[] };
 export type TreeNode<T> = FileNode<T> | FolderNode<T>;
 

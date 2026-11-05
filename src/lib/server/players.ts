@@ -8,15 +8,15 @@ import { getInstance, serverDir } from './instances';
 import { isRunning, LiveServerError, rcon } from './live-server';
 import { readProperties, setProperties } from './server-properties';
 
-export type ListedPlayer = { uuid: string; name: string };
-export type Operator = ListedPlayer & { level: number };
-export type Ban = ListedPlayer & {
+type ListedPlayer = { uuid: string; name: string };
+type Operator = ListedPlayer & { level: number };
+type Ban = ListedPlayer & {
 	created: string;
 	source: string;
 	expires: string;
 	reason: string;
 };
-export type IpBan = {
+type IpBan = {
 	ip: string;
 	created: string;
 	source: string;
@@ -165,7 +165,7 @@ async function mojangProfile(name: string): Promise<ListedPlayer> {
 }
 
 /** The player a name stands for, on a server that checks accounts (online mode) or not. */
-export async function resolvePlayer(instanceId: number, name: string): Promise<ListedPlayer> {
+async function resolvePlayer(instanceId: number, name: string): Promise<ListedPlayer> {
 	const online = readProperties(file(instanceId, 'server.properties'))['online-mode'] !== 'false';
 	return online ? mojangProfile(name) : { uuid: offlineUuid(name), name };
 }

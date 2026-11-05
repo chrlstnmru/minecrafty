@@ -21,7 +21,7 @@ export const SCHEDULE_ACTION_PERMISSION = {
 } as const satisfies Record<ScheduleAction, InstancePermission>;
 
 /** A cron expression, checked with the same parser the scheduler uses. */
-export const cronSchema = v.pipe(
+const cronSchema = v.pipe(
 	v.string(),
 	v.trim(),
 	v.maxLength(100, 'Too long'),

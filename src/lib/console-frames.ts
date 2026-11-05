@@ -4,7 +4,7 @@
 
 import type { RunnerState, ServerMessage } from '#runner/protocol.js';
 
-export type ConsoleLine = { seq: number; line: string };
+type ConsoleLine = { seq: number; line: string };
 
 export type ConsoleFrame = {
 	state: 'stopped' | RunnerState;

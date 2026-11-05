@@ -56,7 +56,7 @@ function onDisk(server: string, rel: string) {
 	return null;
 }
 
-export async function planModpackUpdate(
+async function planModpackUpdate(
 	instanceId: number,
 	pack: LoadedPack,
 	options: { replaceConfigs: boolean }

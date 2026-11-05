@@ -114,7 +114,7 @@ export async function writeBackup(instanceId: number, kind: BackupKind, note: st
 }
 
 /** Keeps the newest `backupKeep` manual and scheduled backups; the others are never pruned. */
-export function pruneBackups(instanceId: number) {
+function pruneBackups(instanceId: number) {
 	const keep = getInstance(instanceId)?.backupKeep;
 	if (keep == null) return 0;
 	const prunable = db

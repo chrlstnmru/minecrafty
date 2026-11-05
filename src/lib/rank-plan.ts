@@ -1,6 +1,6 @@
 /** Inclusive bounds of a stored role rank. */
 export const MAX_RANK = 99;
-export const MIN_RANK = 0;
+const MIN_RANK = 0;
 
 export interface RankEntry {
 	id: number;

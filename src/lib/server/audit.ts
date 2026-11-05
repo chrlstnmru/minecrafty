@@ -4,7 +4,7 @@ import { db } from './db';
 import { auditLog, instances } from './db/schema';
 
 /** How long entries are kept. */
-export const AUDIT_DAYS = 180;
+const AUDIT_DAYS = 180;
 /** The most rows one listing returns. */
 export const AUDIT_LIMIT = 1000;
 

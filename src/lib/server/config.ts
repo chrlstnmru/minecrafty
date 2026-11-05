@@ -2,7 +2,7 @@ import { basename, join, resolve } from 'node:path';
 
 export const dataDir = resolve(process.env.MINECRAFTY_DATA ?? './data');
 
-export const instancesDir = resolve(dataDir, 'instances');
+const instancesDir = resolve(dataDir, 'instances');
 
 export const instanceDir = (id: number) => join(instancesDir, String(id));
 export const serverDir = (id: number) => join(instanceDir(id), 'server');
@@ -11,7 +11,7 @@ export const serverDir = (id: number) => join(instanceDir(id), 'server');
 export const backupsDir = resolve(dataDir, 'backups');
 
 // the runner is a standalone Bun script started detached per instance
-export const runnerEntry = resolve(process.env.MINECRAFTY_RUNNER ?? './runner/main.ts');
+const runnerEntry = resolve(process.env.MINECRAFTY_RUNNER ?? './runner/main.ts');
 
 /** True when this is the compiled single binary, whose "runtime" is the app itself rather than `bun`. */
 export const compiled = !/^bun(-debug|-profile)?(\.exe)?$/i.test(basename(process.execPath));

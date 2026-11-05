@@ -19,7 +19,7 @@ import {
 	type ProcessUse
 } from './system-stats';
 
-export type InstanceStats = {
+type InstanceStats = {
 	id: number;
 	/** share of the whole host's CPU, 0 to 100 */
 	cpu: number | null;
@@ -181,12 +181,12 @@ const realDeps: SamplerDeps = {
 const sampler = createSampler(realDeps);
 
 /** The newest reading, or one taken now if the sampler has not run yet. */
-export async function getSnapshot() {
+async function getSnapshot() {
 	return (latest ??= await sampler.sample());
 }
 
 /** Measures every server folder, one after the other so a big world does not hog the disk. */
-export async function refreshSizes() {
+async function refreshSizes() {
 	for (const inst of await listInstances()) {
 		try {
 			sizes.set(inst.id, await folderSize(serverDir(inst.id)));
