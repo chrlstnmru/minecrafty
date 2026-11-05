@@ -20,8 +20,16 @@ import {
 } from './installed-mods';
 import { assertWritable, run, type Report } from './instance-jobs';
 import { getInstance, serverDir, type Instance } from './instances';
-import { pickFile, resolveMods } from './mod-resolver';
+import { pickFile } from './mod-resolver';
 import { projectSides } from './mod-sides';
+import {
+	compatibleVersions,
+	findVersion,
+	modTarget,
+	planMods,
+	searchMods,
+	versionChoice
+} from './mod-target';
 import * as modrinth from './modrinth';
 
 export { modSupport };
@@ -46,23 +54,16 @@ export function listInstalled(instanceId: number) {
 
 export async function search(instanceId: number, query: string, limit: number) {
 	const inst = instanceRow(instanceId);
-	const res = await modrinth.searchProjects({
-		query,
-		loaders: modSupport(inst.loader).loaders,
-		plugins: modSupport(inst.loader).noun === 'plugin',
-		mc: inst.mcVersion,
-		limit
-	});
-	return { hits: res.hits, total: res.total_hits };
+	return searchMods(modTarget(inst), query, limit);
 }
 
 /** Which versions to install: the requested project plus every required dependency not installed yet. */
 function plan(inst: Instance, projectId: string, rootVersion?: modrinth.ModrinthVersion) {
-	return resolveMods(
-		{ loader: inst.loader, loaders: modSupport(inst.loader).loaders, mcVersion: inst.mcVersion },
+	return planMods(
+		modTarget(inst),
 		new Set(listInstalled(inst.id).map((m) => m.projectId)),
 		projectId,
-		{ root: rootVersion }
+		rootVersion
 	);
 }
 
@@ -73,7 +74,7 @@ function plan(inst: Instance, projectId: string, rootVersion?: modrinth.Modrinth
  */
 async function apply(
 	inst: Instance,
-	{ planned, skipped }: Awaited<ReturnType<typeof resolveMods>>,
+	{ planned, skipped }: Awaited<ReturnType<typeof planMods>>,
 	progress: Report,
 	replacing?: InstalledMod
 ) {
@@ -133,42 +134,10 @@ async function apply(
 	};
 }
 
-export type ModVersion = {
-	id: string;
-	versionNumber: string;
-	versionType: 'release' | 'beta' | 'alpha';
-	publishedAt: string;
-};
-
 /** Every version of a project that runs on this instance, newest first. */
-export async function listModVersions(
-	instanceId: number,
-	projectId: string
-): Promise<ModVersion[]> {
+export async function listModVersions(instanceId: number, projectId: string) {
 	const inst = instanceRow(instanceId);
-	const versions = await modrinth.listVersions(
-		projectId,
-		modSupport(inst.loader).loaders,
-		inst.mcVersion
-	);
-	return versions.map((v) => ({
-		id: v.id,
-		versionNumber: v.version_number,
-		versionType: v.version_type,
-		publishedAt: v.date_published
-	}));
-}
-
-/** Looks the version up among the compatible ones, so only installable versions can be chosen. */
-async function resolveVersion(inst: Instance, projectId: string, versionId: string) {
-	const versions = await modrinth.listVersions(
-		projectId,
-		modSupport(inst.loader).loaders,
-		inst.mcVersion
-	);
-	const version = versions.find((v) => v.id === versionId);
-	if (!version) throw new Error(`That version does not run on ${inst.loader} ${inst.mcVersion}`);
-	return version;
+	return (await compatibleVersions(modTarget(inst), projectId)).map(versionChoice);
 }
 
 export async function install(instanceId: number, projectId: string, versionId?: string) {
@@ -177,7 +146,7 @@ export async function install(instanceId: number, projectId: string, versionId?:
 		if (listInstalled(instanceId).some((m) => m.projectId === projectId))
 			throw new Error('Already installed');
 		progress('Finding the mod and what it needs');
-		const chosen = versionId ? await resolveVersion(inst, projectId, versionId) : undefined;
+		const chosen = versionId ? await findVersion(modTarget(inst), projectId, versionId) : undefined;
 		return apply(inst, await plan(inst, projectId, chosen), progress);
 	});
 }
@@ -213,7 +182,7 @@ export async function update(instanceId: number, modId: number, versionId?: stri
 		if (!row?.hash) throw new Error('Not installed');
 		progress(`Finding the new version of ${row.title}`);
 		const target = versionId
-			? await resolveVersion(inst, row.projectId, versionId)
+			? await findVersion(modTarget(inst), row.projectId, versionId)
 			: (
 					await modrinth.latestVersions([row.hash], modSupport(inst.loader).loaders, inst.mcVersion)
 				)[row.hash];

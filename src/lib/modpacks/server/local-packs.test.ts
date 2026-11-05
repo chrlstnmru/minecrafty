@@ -235,6 +235,33 @@ describe('addMod', () => {
 	});
 });
 
+describe('a Quilt pack', () => {
+	const quilt = () => P.createPack({ name: 'Quilted', loader: 'quilt', mcVersion: '1.21.1' });
+	const both = ['quilt', 'fabric'];
+
+	it('searches for Quilt and Fabric mods', async () => {
+		const pack = await quilt();
+		await P.searchMods(pack.id, 'sodium', 10);
+		expect(searches.at(-1)).toMatchObject({ loaders: both, plugins: false, mc: '1.21.1' });
+	});
+
+	it('resolves, lists and pins versions against both', async () => {
+		const pack = await quilt();
+		lookups.loaders = {};
+		await P.addMod(pack.id, 'sodium', 'sodium-1.0');
+		expect(lookups.loaders.sodium).toEqual(both);
+
+		lookups.loaders = {};
+		await P.listModVersions(pack.id, 'sodium');
+		expect(lookups.loaders.sodium).toEqual(both);
+
+		lookups.loaders = {};
+		const sodium = P.listFiles(pack.id).find((f) => f.projectId === 'sodium')!;
+		await P.setModVersion(pack.id, sodium.id, 'sodium-1.0');
+		expect(lookups.loaders.sodium).toEqual(both);
+	});
+});
+
 describe('removing and re-pinning', () => {
 	it('removes a file and re-pins a mod to another compatible version', async () => {
 		const pack = await make();

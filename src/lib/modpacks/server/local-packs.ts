@@ -21,7 +21,16 @@ import { db } from '#lib/server/db/index.js';
 import { localPackFiles, localPacks } from '#lib/server/db/schema.js';
 import { isHostCode } from '#lib/server/host-code.js';
 import { isKnownVersion, latestBuild, loaderBuilds } from '#lib/server/loaders.js';
-import { pickFile, pickVersion, resolveMods } from '#lib/server/mod-resolver.js';
+import { pickFile, pickVersion } from '#lib/server/mod-resolver.js';
+import {
+	compatibleVersions,
+	findVersion,
+	modTarget,
+	planMods,
+	searchMods as searchTarget,
+	versionChoice,
+	type ModTarget
+} from '#lib/server/mod-target.js';
 import * as modrinth from '#lib/server/modrinth.js';
 import { useAsServerPack } from '#lib/server/packs.js';
 import { zipChunks, type ZipEntry } from '#lib/server/zip-writer.js';
@@ -259,23 +268,15 @@ export function duplicatePack(id: number) {
 
 /** Searches Modrinth for mods that run in this pack. */
 export async function searchMods(packId: number, query: string, limit: number) {
-	const pack = requirePack(packId);
-	const res = await modrinth.searchProjects({
-		query,
-		loaders: [pack.loader],
-		plugins: false,
-		mc: pack.mcVersion,
-		limit
-	});
-	return { hits: res.hits, total: res.total_hits };
+	return searchTarget(modTarget(requirePack(packId)), query, limit);
 }
 
 const sideOf = (value: string | null | undefined) =>
 	value === 'required' || value === 'optional' || value === 'unsupported' ? value : null;
 
-/** The Modrinth loaders to match for a file: resource packs have none of their own. */
-const loadersFor = (pack: LocalPack, file: { path: string }) =>
-	isResourcePack(file) ? [] : [pack.loader];
+/** What to match for a file: resource packs have no loader of their own. */
+const targetFor = (pack: LocalPack, file: { path: string }): ModTarget =>
+	isResourcePack(file) ? { ...modTarget(pack), loaders: [] } : modTarget(pack);
 
 const rowFor = (
 	packId: number,
@@ -307,11 +308,11 @@ const rowFor = (
 
 /** Which versions to add: the project plus every required dependency not in the pack yet. */
 function plan(pack: LocalPack, projectId: string, root?: modrinth.ModrinthVersion) {
-	return resolveMods(
-		{ loader: pack.loader, loaders: [pack.loader], mcVersion: pack.mcVersion },
+	return planMods(
+		modTarget(pack),
 		new Set(listFiles(pack.id).flatMap((f) => (f.projectId ? [f.projectId] : []))),
 		projectId,
-		{ root }
+		root
 	);
 }
 
@@ -320,13 +321,7 @@ export async function addMod(packId: number, projectId: string, versionId?: stri
 	const pack = requirePack(packId);
 	if (listFiles(packId).some((f) => f.projectId === projectId))
 		throw new Error('Already in the pack');
-	let chosen: modrinth.ModrinthVersion | undefined;
-	if (versionId) {
-		chosen = (await modrinth.listVersions(projectId, [pack.loader], pack.mcVersion)).find(
-			(v) => v.id === versionId
-		);
-		if (!chosen) throw new Error(`That version does not run on ${pack.loader} ${pack.mcVersion}`);
-	}
+	const chosen = versionId ? await findVersion(modTarget(pack), projectId, versionId) : undefined;
 	const { planned, skipped } = await plan(pack, projectId, chosen);
 	const projects = new Map(
 		(await modrinth.getProjects([...planned.keys(), ...skipped])).map((p) => [p.id, p])
@@ -402,12 +397,7 @@ export async function addResourcePack(packId: number, projectId: string, version
 
 /** A resource pack's versions that fit this pack, newest first; for the versions sheet. */
 export async function listResourcePackVersions(packId: number, projectId: string) {
-	return (await resourcePackVersions(requirePack(packId), projectId)).map((v) => ({
-		id: v.id,
-		versionNumber: v.version_number,
-		versionType: v.version_type,
-		publishedAt: v.date_published
-	}));
+	return (await resourcePackVersions(requirePack(packId), projectId)).map(versionChoice);
 }
 
 /** Sets the server resource pack that servers made from this pack start with. */
@@ -445,14 +435,7 @@ export function clearServerPack(packId: number) {
 
 /** Every version of a project that runs in this pack, newest first. */
 export async function listModVersions(packId: number, projectId: string) {
-	const pack = requirePack(packId);
-	const versions = await modrinth.listVersions(projectId, [pack.loader], pack.mcVersion);
-	return versions.map((v) => ({
-		id: v.id,
-		versionNumber: v.version_number,
-		versionType: v.version_type,
-		publishedAt: v.date_published
-	}));
+	return (await compatibleVersions(modTarget(requirePack(packId)), projectId)).map(versionChoice);
 }
 
 /** Pins a mod already in the pack to another version. */
@@ -461,10 +444,7 @@ export async function setModVersion(packId: number, fileId: number, versionId: s
 	const row = listFiles(packId).find((f) => f.id === fileId);
 	if (!row?.projectId)
 		throw new Error('That file is not from Modrinth, so it has no other versions');
-	const version = (
-		await modrinth.listVersions(row.projectId, loadersFor(pack, row), pack.mcVersion)
-	).find((v) => v.id === versionId);
-	if (!version) throw new Error(`That version does not run on ${pack.loader} ${pack.mcVersion}`);
+	const version = await findVersion(targetFor(pack, row), row.projectId, versionId);
 	const project = (await modrinth.getProjects([row.projectId]))[0];
 	const { packId: _p, ...next } = rowFor(
 		packId,
@@ -503,7 +483,7 @@ async function planVersionChange(pack: LocalPack, mcVersion: string) {
 			continue;
 		}
 		const found = pickVersion(
-			await modrinth.listVersions(file.projectId, loadersFor(pack, file), mcVersion)
+			await compatibleVersions({ ...targetFor(pack, file), mcVersion }, file.projectId)
 		);
 		if (found) {
 			chosen.set(file.id, found);
