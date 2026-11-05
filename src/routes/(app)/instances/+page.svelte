@@ -147,6 +147,7 @@
 			{@const failed = inst.installState === 'failed'}
 			{@const active = inst.state === 'running' || inst.state === 'stopping'}
 			{@const progress = installing ? (jobs.current?.[inst.id] ?? inst.progress) : null}
+			{@const writing = installing ? null : (jobs.current?.[inst.id] ?? inst.progress)}
 			<Card.Root>
 				<Card.Header>
 					<div class="flex min-w-0 items-center gap-3">
@@ -177,6 +178,18 @@
 								{inst.installMessage ?? 'The install failed.'}
 							</Tooltip.Content>
 						</Tooltip.Root>
+					</Card.Content>
+				{/if}
+				{#if writing}
+					<Card.Content class="grid gap-1">
+						<p class="truncate text-xs text-muted-foreground">
+							{writing.label}{progressDetail(writing)}
+						</p>
+						<Progress
+							value={counted(writing) ? writing.done : null}
+							max={counted(writing) ? writing.total : 1}
+							aria-label="Progress for {inst.name}"
+						/>
 					</Card.Content>
 				{/if}
 				<Card.Footer class="flex min-h-6 flex-wrap items-center gap-2">

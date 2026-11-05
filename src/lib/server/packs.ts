@@ -115,18 +115,12 @@ export function serverPack(instanceId: number): ServerPack {
 	};
 }
 
-/** Points the server at a Modrinth resource pack. Takes effect the next time the server starts. */
+/**
+ * Points the server at a Modrinth resource pack. Takes effect the next time the server starts. It
+ * waits on Modrinth, so the caller holds the instance: a page runs it as a `write` job, and a modpack
+ * install does it as a step of its own job.
+ */
 export async function useAsServerPack(instanceId: number, projectId: string, versionId?: string) {
-	assertWritable(instanceId);
-	return useAsServerPackHeld(instanceId, projectId, versionId);
-}
-
-/** The same for a job that already holds the instance (a modpack install), which `useAsServerPack` would refuse as busy. */
-export async function useAsServerPackHeld(
-	instanceId: number,
-	projectId: string,
-	versionId?: string
-) {
 	instanceRow(instanceId);
 	const { version, file } = await pickVersion(instanceId, projectId, versionId);
 	if (!file.url.startsWith('https://')) throw new Error('The pack has no public download URL');
