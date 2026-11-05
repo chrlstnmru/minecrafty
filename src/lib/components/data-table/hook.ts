@@ -23,13 +23,13 @@ import {
 	tableFeatures
 } from '@tanstack/svelte-table';
 
-export type FilterOption = {
+type FilterOption = {
 	value: string;
 	label: string;
 	icon?: Component;
 };
 
-export type DataTableColumnMeta = {
+type DataTableColumnMeta = {
 	/** Name used by the view menu, filter button and stacked rows. Defaults to a string `header`. */
 	label?: string;
 	align?: 'start' | 'end';
@@ -54,7 +54,7 @@ const oneOf = constructFilterFn({
 	autoRemove: (filterValue: unknown) => !Array.isArray(filterValue) || filterValue.length === 0
 });
 
-export const features = tableFeatures({
+const features = tableFeatures({
 	columnFilteringFeature,
 	globalFilteringFeature,
 	filteredRowModel: createFilteredRowModel(),
@@ -79,13 +79,7 @@ export const features = tableFeatures({
 
 export type Features = typeof features;
 
-export const {
-	createAppTable,
-	createAppColumnHelper,
-	useTableContext,
-	useCellContext,
-	useHeaderContext
-} = createTableHook({
+export const { createAppTable, createAppColumnHelper, useTableContext } = createTableHook({
 	features,
 	globalFilterFn: 'includesString',
 	// Filters, search and the page live in the URL, so the page index is reset by the controls

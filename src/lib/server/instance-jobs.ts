@@ -23,7 +23,7 @@ export type Progress = { label: string; done: number; total: number; bytes?: boo
 export type Report = (label: string, counts?: Omit<Progress, 'label'>) => void;
 
 /** How the last update of an instance ended; lost on restart, like the progress. */
-export type Outcome = {
+type Outcome = {
 	ok: boolean;
 	message: string;
 	/** extra lines worth showing, such as the files an update left alone */

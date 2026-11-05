@@ -3,7 +3,7 @@ import * as v from 'valibot';
 import { idSchema } from './common.js';
 
 /** A Java name (3 to 16 letters, digits and underscores), or a Bedrock one behind the "." prefix Floodgate adds. */
-export const playerName = v.pipe(
+const playerName = v.pipe(
 	v.string(),
 	v.regex(/^\.?[A-Za-z0-9_]{1,16}$/, 'Not a valid player name')
 );

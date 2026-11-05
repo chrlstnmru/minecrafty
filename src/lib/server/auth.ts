@@ -12,7 +12,7 @@ import { sessions, users } from './db/schema';
 import { COOKIE, hashToken, userFromToken, type SessionUser } from './sessions';
 import { createAccount } from './user-admin';
 
-export { sessionToken, userFromToken, type SessionUser } from './sessions';
+export { type SessionUser } from './sessions';
 
 const SESSION_MS = 30 * 24 * 60 * 60 * 1000;
 

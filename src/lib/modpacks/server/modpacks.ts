@@ -233,7 +233,7 @@ export async function downloadFiles(server: string, files: IndexFile[], progress
 	await Promise.all(Array.from({ length: Math.min(DOWNLOAD_CONCURRENCY, total) }, worker));
 }
 
-export async function downloadWithFallback(dest: string, file: IndexFile) {
+async function downloadWithFallback(dest: string, file: IndexFile) {
 	const hash = file.hashes.sha512
 		? ({ algo: 'sha512', value: file.hashes.sha512 } as const)
 		: file.hashes.sha1

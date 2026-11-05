@@ -18,7 +18,7 @@ import { installServer, launchArgs, type Loader } from './loaders';
 import { setProperties } from './server-properties';
 
 export type Instance = typeof instances.$inferSelect;
-export type InstanceState = 'stopped' | RunnerStatus['state'];
+type InstanceState = 'stopped' | RunnerStatus['state'];
 
 export const PORT_START = 25565;
 const RCON_PORT_START = 25575;
@@ -246,7 +246,7 @@ export function visibleProgress(user: Actor) {
 }
 
 /** The Java major version an instance runs on: the user's choice, else what its Minecraft version needs. */
-export async function javaFor(inst: Instance): Promise<JavaMajor> {
+async function javaFor(inst: Instance): Promise<JavaMajor> {
 	const chosen = JAVA_MAJORS.find((m) => m === inst.javaMajor);
 	return chosen ?? (await requiredJavaMajor(inst.mcVersion));
 }

@@ -46,7 +46,7 @@ const clean = (name: string) => {
 	return trimmed;
 };
 
-export const getRole = (id: number) =>
+const getRole = (id: number) =>
 	db
 		.select()
 		.from(roles)

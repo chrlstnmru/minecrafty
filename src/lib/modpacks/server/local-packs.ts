@@ -33,10 +33,9 @@ import { readMrpack, safeJoin, writeIndex, type IndexFile } from './mrpack';
 // downloads, each pinned to one version and its hashes) plus a folder of config files on disk.
 // It leaves the panel as a Modrinth .mrpack, and installs on a server through that same format.
 
-export { isResourcePack, PACK_LOADERS, RESOURCE_PACKS, type PackLoader };
+export { isResourcePack, type PackLoader };
 
 export type LocalPack = typeof localPacks.$inferSelect;
-export type LocalPackFile = typeof localPackFiles.$inferSelect;
 
 export const packDir = (id: number) => join(dataDir, 'packs', String(id));
 export const overridesDir = (id: number) => join(packDir(id), 'overrides');

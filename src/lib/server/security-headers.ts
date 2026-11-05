@@ -1,7 +1,7 @@
 // Sent with every response. The policy covers what cannot break the app: no framing (so a page
 // elsewhere cannot overlay the panel's buttons), no plugins, and forms and <base> kept to this
 // origin. Scripts are not restricted: mode-watcher's inline theme script would need a nonce.
-export const SECURITY_HEADERS: Record<string, string> = {
+const SECURITY_HEADERS: Record<string, string> = {
 	'Content-Security-Policy':
 		"frame-ancestors 'none'; base-uri 'self'; form-action 'self'; object-src 'none'",
 	'X-Frame-Options': 'DENY',

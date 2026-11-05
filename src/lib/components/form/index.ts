@@ -11,12 +11,6 @@ export {
 	Checkbox,
 	Select,
 	Textarea,
-	Errors,
+	Errors
 	//
-	Root as FormRoot,
-	Input as FormInput,
-	Checkbox as FormCheckbox,
-	Select as FormSelect,
-	Textarea as FormTextarea,
-	Errors as FormErrors
 };

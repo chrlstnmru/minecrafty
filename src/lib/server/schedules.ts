@@ -17,7 +17,7 @@ import { schedules } from './db/schema';
 import { getInstance, restartInstance, startInstance, stopInstance } from './instances';
 import { isRunning, sendLine } from './live-server';
 
-export type Schedule = typeof schedules.$inferSelect;
+type Schedule = typeof schedules.$inferSelect;
 
 export type ScheduleInput = {
 	name: string;
@@ -156,7 +156,7 @@ const realDeps: Deps = {
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? '' : 's'}`;
 
 /** Does what one task says, once. Never throws: the result is what the page shows. */
-export async function performAction(task: Schedule, deps: Deps = realDeps): Promise<Outcome> {
+async function performAction(task: Schedule, deps: Deps = realDeps): Promise<Outcome> {
 	const id = task.instanceId;
 	try {
 		const running = await deps.isRunning(id);
@@ -219,7 +219,7 @@ export async function runSchedule(instanceId: number, scheduleId: number, deps: 
 }
 
 /** The in-game message for a countdown to a stop or restart. */
-export const warningText = (action: ScheduleAction, minutes: number) =>
+const warningText = (action: ScheduleAction, minutes: number) =>
 	`say The server is ${action === 'restart' ? 'restarting' : 'stopping'} in ${plural(minutes, 'minute')}`;
 
 let lastMinute = -1;
