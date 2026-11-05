@@ -3,6 +3,7 @@ import { join } from 'node:path';
 
 import { db } from './db';
 import { installedMods } from './db/schema';
+import { removeRow, setServerPackRow } from './installed-mods';
 import { assertWritable } from './instance-jobs';
 import { getInstance, serverDir } from './instances';
 import * as modrinth from './modrinth';
@@ -136,26 +137,17 @@ export async function useAsServerPackHeld(
 	});
 
 	const [project] = await modrinth.getProjects([projectId]);
-	db.transaction((tx) => {
-		tx.delete(installedMods)
-			.where(and(eq(installedMods.instanceId, instanceId), eq(installedMods.kind, 'resourcepack')))
-			.run();
-		tx.insert(installedMods)
-			.values({
-				instanceId,
-				kind: 'resourcepack',
-				source: 'modrinth',
-				projectId,
-				versionId: version.id,
-				title: project?.title ?? projectId,
-				iconUrl: project?.icon_url ?? null,
-				versionNumber: version.version_number,
-				file: '',
-				url: file.url,
-				hash: file.hashes.sha1,
-				dependencyOf: null
-			})
-			.run();
+	setServerPackRow(instanceId, {
+		source: 'modrinth',
+		projectId,
+		versionId: version.id,
+		title: project?.title ?? projectId,
+		iconUrl: project?.icon_url ?? null,
+		versionNumber: version.version_number,
+		file: '',
+		url: file.url,
+		hash: file.hashes.sha1,
+		dependencyOf: null
 	});
 	return { title: project?.title ?? projectId, version: version.version_number };
 }
@@ -177,5 +169,5 @@ export function removePack(instanceId: number, rowId: number) {
 	const row = currentRow(instanceId);
 	if (!row || row.id !== rowId) throw new Error('Not in use');
 	setProperties(propsFile(instanceId), { 'resource-pack': '', 'resource-pack-sha1': '' });
-	db.delete(installedMods).where(eq(installedMods.id, row.id)).run();
+	removeRow(row.id);
 }

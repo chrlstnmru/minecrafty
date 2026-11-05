@@ -7,8 +7,9 @@ import type { Loader } from '#lib/server/loaders.js';
 import { sha1 } from '#lib/server/change-set.js';
 import { dataDir } from '#lib/server/config.js';
 import { db } from '#lib/server/db/index.js';
-import { installedMods, instances } from '#lib/server/db/schema.js';
+import { instances } from '#lib/server/db/schema.js';
 import { downloadFile } from '#lib/server/download.js';
+import { addNewMods, modRow } from '#lib/server/installed-mods.js';
 import * as jobs from '#lib/server/instance-jobs.js';
 import { installBase, insertInstance, serverDir, type NewInstance } from '#lib/server/instances.js';
 import * as modrinth from '#lib/server/modrinth.js';
@@ -298,29 +299,23 @@ export async function trackMods(instanceId: number, files: IndexFile[]) {
 	);
 
 	const seen = new Set<string>();
-	const rows: (typeof installedMods.$inferInsert)[] = [];
+	const rows: ReturnType<typeof modRow>[] = [];
 	for (const file of jars) {
 		const version = known[file.hashes.sha512!];
 		if (!version || seen.has(version.project_id)) continue;
 		seen.add(version.project_id);
-		const project = projects.get(version.project_id);
-		rows.push({
-			instanceId,
-			kind: 'mod',
-			source: 'modrinth',
-			projectId: version.project_id,
-			versionId: version.id,
-			title: project?.title ?? version.project_id,
-			iconUrl: project?.icon_url ?? null,
-			versionNumber: version.version_number,
-			clientSide: project?.client_side ?? null,
-			serverSide: project?.server_side ?? null,
-			file: file.path,
-			hash: file.hashes.sha512!,
-			dependencyOf: null
-		});
+		rows.push(
+			modRow({
+				instanceId,
+				projectId: version.project_id,
+				version,
+				project: projects.get(version.project_id),
+				file: file.path,
+				hash: file.hashes.sha512!
+			})
+		);
 	}
-	if (rows.length) db.insert(installedMods).values(rows).onConflictDoNothing().run();
+	addNewMods(rows);
 }
 
 export async function searchModpacks(query: string, limit: number) {
